@@ -1,26 +1,20 @@
 package com.chrionline.server;
 
-import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
+import com.chrionline.server.core.Server;
 
 /**
- * Entry point for the multi-threaded ServerSocket logic.
+ * Point d'entrée principal du serveur ChriOnline.
  */
 public class ServerApp {
     private static final int PORT = 12345;
 
     public static void main(String[] args) {
-        System.out.println("Starting ChriOnline Server on port " + PORT + "...");
+        System.out.println("=== ChriOnline Server — Initialisation ===");
         
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("New client connected: " + clientSocket.getInetAddress());
-                // Handle client connection in a new thread
-            }
-        } catch (IOException e) {
-            System.err.println("Server error: " + e.getMessage());
-        }
+        // On instancie la classe Server (qui gère ClientHandler, TCP et UDP)
+        Server server = new Server(PORT);
+        
+        // On démarre la boucle infinie d'écoute
+        server.demarrer();
     }
 }
