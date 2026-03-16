@@ -149,7 +149,7 @@ public class ConnexionView extends Application {
         footer.getChildren().addAll(txt, link);
 
         // Action contrôleur
-        ConnexionController ctrl = new ConnexionController(emailField, mdpField, msgLabel);
+        ConnexionController ctrl = new ConnexionController(emailField, mdpField, msgLabel, stage);
         btnLogin.setOnAction(e -> ctrl.connecter());
         link.setOnAction(e -> {
             try {

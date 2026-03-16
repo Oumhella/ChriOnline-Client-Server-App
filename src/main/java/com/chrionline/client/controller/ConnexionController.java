@@ -1,8 +1,10 @@
 package com.chrionline.client.controller;
 
 import com.chrionline.client.network.Client;
+import com.chrionline.client.view.HomeView;
 import javafx.application.Platform;
 import javafx.scene.control.*;
+import javafx.stage.Stage;
 import java.util.*;
 
 public class ConnexionController {
@@ -10,11 +12,13 @@ public class ConnexionController {
     private final TextField emailField;
     private final PasswordField mdpField;
     private final Label msgLabel;
+    private final Stage stage;
 
-    public ConnexionController(TextField email, PasswordField mdp, Label msg) {
+    public ConnexionController(TextField email, PasswordField mdp, Label msg, Stage stage) {
         this.emailField = email;
         this.mdpField = mdp;
         this.msgLabel = msg;
+        this.stage = stage;
     }
 
     public void connecter() {
@@ -46,7 +50,20 @@ public class ConnexionController {
                 Platform.runLater(() -> {
                     if ("OK".equals(rep.get("statut"))) {
                         succes((String) rep.get("message"));
-                        // Prochaine étape : redirection vers dashboard
+                        
+                        // Délais court pour que l'utilisateur voit le message de succès avant la redirection
+                        new Thread(() -> {
+                            try { Thread.sleep(800); } catch (InterruptedException ignored) {}
+                            Platform.runLater(() -> {
+                                try {
+                                    new HomeView().start(stage);
+                                } catch (Exception ex) {
+                                    ex.printStackTrace();
+                                    erreur("Erreur de redirection : " + ex.getMessage());
+                                }
+                            });
+                        }).start();
+
                     } else {
                         erreur((String) rep.get("message"));
                     }
