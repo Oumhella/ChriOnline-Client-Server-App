@@ -1,5 +1,6 @@
 package com.chrionline.client;
 
+import com.chrionline.client.view.CatalogueView;
 import com.chrionline.client.view.InscriptionView;
 import javafx.application.Application;
 
@@ -8,6 +9,6 @@ import javafx.application.Application;
  */
 public class ClientMain {
     public static void main(String[] args) {
-        Application.launch(InscriptionView.class, args);
+        Application.launch(CatalogueView.class, args);
     }
 }

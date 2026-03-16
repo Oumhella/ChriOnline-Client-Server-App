@@ -103,7 +103,15 @@ public class ClientHandler implements Runnable {
         }
     }
     private void handleListeProduits(Map<String, Object> req) {
-         envoyerMessage(creerReponse("OK", "Liste produits demandée"));
+        try {
+            List<com.chrionline.shared.models.Produit> produits = com.chrionline.server.dao.ProduitDAO.findAll();
+            Map<String, Object> reponse = new HashMap<>();
+            reponse.put("statut", "OK");
+            reponse.put("produits", produits);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur lors de la récupération des produits : " + e.getMessage()));
+        }
     }
 
     // ─── Gestion UDP ──────────────────────────────────────────────────────────
