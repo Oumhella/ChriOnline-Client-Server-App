@@ -1,5 +1,8 @@
 package com.chrionline.server.core;
 
+import com.chrionline.server.dao.UserDAO;
+import com.chrionline.shared.models.User;
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -86,11 +89,19 @@ public class ClientHandler implements Runnable {
         // Logique de base pour le test de connexion
         envoyerMessage(creerReponse("OK", "Commande reçue (Logique DAO à venir)"));
     }
-
     private void handleInscription(Map<String, Object> req) {
-        envoyerMessage(creerReponse("OK", "Inscription reçue (Logique DAO à venir)"));
+        System.out.println("[HANDLER] >>> handleInscription appelée");
+        System.out.println("[HANDLER] Données reçues : " + req);
+        try {
+            Map<String, Object> reponse = UserDAO.inscrire(req);
+            System.out.println("[HANDLER] Réponse DAO : " + reponse);
+            envoyerMessage(reponse);
+        } catch (Throwable t) {
+            System.err.println("[HANDLER] EXCEPTION FATALE : " + t.getMessage());
+            t.printStackTrace();
+            envoyerMessage(creerReponse("ERREUR", t.getMessage()));
+        }
     }
-
     private void handleListeProduits(Map<String, Object> req) {
          envoyerMessage(creerReponse("OK", "Liste produits demandée"));
     }
@@ -135,7 +146,10 @@ public class ClientHandler implements Runnable {
         }
     }
 
+
     // Getters/Setters session
     public int getUserId() { return userId; }
     public void setUserId(int userId) { this.userId = userId; }
+
+
 }
