@@ -15,26 +15,24 @@ public class ClientMain {
             Client client = Client.getInstance("localhost", 12345);
             client.connecter();
             System.out.println("[✓] Connecté au serveur.");
-
-            // 1. Préparer une requête (ex: test de connexion)
+            // 1. Préparer une requête de test
             Map<String, Object> requete = new HashMap<>();
             requete.put("commande", "CONNEXION");
-            requete.put("login", "admin");
-            requete.put("motDePasse", "admin123");
-
-            System.out.println("[>] Envoi requête CONNEXION...");
+            requete.put("email", "test@test.com");
+            
+            System.out.println("[>] Envoi requête de test...");
             client.envoyerRequete(requete);
 
             // 2. Lire la réponse
             Object reponse = client.lireReponse();
-            System.out.println("[<] Réponse reçue : " + reponse);
+            System.out.println("[<] Réponse du serveur : " + reponse);
 
-            // Pause pour voir les logs
-            Thread.sleep(1000);
-
-            client.deconnecter();
-            System.out.println("[✓] Test fini.");
-
+            System.out.println("[!] Connexion maintenue ouverte. Appuyez sur Ctrl+C pour quitter.");
+            
+            // On ne ferme pas la connexion pour tester le multi-client
+            while (true) {
+                Thread.sleep(10000);
+            }
         } catch (Exception e) {
             System.err.println("[✗] Erreur : " + e.getMessage());
             e.printStackTrace();
