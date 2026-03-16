@@ -86,8 +86,20 @@ public class ClientHandler implements Runnable {
     // ─── Placeholders pour la logique (À déplacer en DAO plus tard) ─────────────
 
     private void handleConnexion(Map<String, Object> req) {
-        // Logique de base pour le test de connexion
-        envoyerMessage(creerReponse("OK", "Commande reçue (Logique DAO à venir)"));
+        System.out.println("[HANDLER] >>> handleConnexion appelée");
+        try {
+            Map<String, Object> reponse = UserDAO.connexion(req);
+            
+            if ("OK".equals(reponse.get("statut"))) {
+                Map<String, Object> data = (Map<String, Object>) reponse.get("data");
+                this.userId = (int) data.get("userId");
+                this.userEmail = (String) data.get("email");
+            }
+            
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur technique : " + e.getMessage()));
+        }
     }
     private void handleInscription(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleInscription appelée");

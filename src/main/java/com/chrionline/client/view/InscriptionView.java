@@ -326,7 +326,14 @@ public class InscriptionView extends Application {
                 msgLabel
         );
         btnInscrire.setOnAction(e -> ctrl.inscrire());
-        lienCnx.setOnAction(e -> stage.close());
+        //lien vers la page de connexion
+        lienCnx.setOnAction(e -> {
+            try {
+                new ConnexionView().start(stage);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
 
         // ── ScrollPane ────────────────────────────────────────
         ScrollPane scroll = new ScrollPane(form);

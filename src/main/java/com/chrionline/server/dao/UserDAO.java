@@ -113,6 +113,42 @@ public class UserDAO {
         }
     }
 
+    /**
+     * Authentifie un utilisateur par email et mot de passe.
+     * @return Map avec "statut", "message" et éventuellement "data" (userId, nom, prenom)
+     */
+    public static Map<String, Object> connexion(Map<String, Object> data) {
+        String email = (String) data.get("email");
+        String mdp   = (String) data.get("mdp");
+
+        try (Connection conn = DatabaseConnection.getInstance().getConnection()) {
+            String sql = "SELECT * FROM utilisateur WHERE email = ?";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, email);
+                ResultSet rs = ps.executeQuery();
+
+                if (rs.next() && BCrypt.checkpw(mdp, rs.getString("password"))) {
+                    System.out.println("[DAO] ✓ Connexion réussie pour " + email);
+                    return Map.of(
+                        "statut", "OK",
+                        "message", "Bienvenue, " + rs.getString("prenom") + " !",
+                        "data", Map.of(
+                            "userId", rs.getInt("idUtilisateur"),
+                            "nom",    rs.getString("nom"),
+                            "prenom", rs.getString("prenom"),
+                            "email",  rs.getString("email")
+                        )
+                    );
+                } else {
+                    return Map.of("statut", "ERREUR", "message", "Email ou mot de passe incorrect.");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[DAO] Erreur connexion : " + e.getMessage());
+            return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
+        }
+    }
+
     private static void rollback(Connection conn) {
         if (conn != null) {
             try {
