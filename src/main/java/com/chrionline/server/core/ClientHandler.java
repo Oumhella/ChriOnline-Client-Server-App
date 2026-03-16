@@ -90,26 +90,18 @@ public class ClientHandler implements Runnable {
         envoyerMessage(creerReponse("OK", "Commande reçue (Logique DAO à venir)"));
     }
     private void handleInscription(Map<String, Object> req) {
-        String nom    = (String) req.get("nom");
-        String prenom = (String) req.get("prenom");
-        String email  = (String) req.get("email");
-        String mdp    = (String) req.get("mdp");
-
+        System.out.println("[HANDLER] >>> handleInscription appelée");
+        System.out.println("[HANDLER] Données reçues : " + req);
         try {
-            User user = new User(nom, prenom, email, mdp);
-            UserDAO dao = new UserDAO();
-            boolean ok = dao.inscrire(user);
-
-            if (ok) {
-                envoyerMessage(creerReponse("OK", "Inscription réussie !"));
-            } else {
-                envoyerMessage(creerReponse("ERREUR", "Cet email est déjà utilisé."));
-            }
-        } catch (Exception e) {
-            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
+            Map<String, Object> reponse = UserDAO.inscrire(req);
+            System.out.println("[HANDLER] Réponse DAO : " + reponse);
+            envoyerMessage(reponse);
+        } catch (Throwable t) {
+            System.err.println("[HANDLER] EXCEPTION FATALE : " + t.getMessage());
+            t.printStackTrace();
+            envoyerMessage(creerReponse("ERREUR", t.getMessage()));
         }
     }
-
     private void handleListeProduits(Map<String, Object> req) {
          envoyerMessage(creerReponse("OK", "Liste produits demandée"));
     }
