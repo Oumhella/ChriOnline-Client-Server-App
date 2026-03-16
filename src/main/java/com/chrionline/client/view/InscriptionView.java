@@ -29,6 +29,7 @@ public class InscriptionView extends Application {
     private static final String BRUN_LIGHT   = "#9A7B65";
     private static final String GOLD         = "#D4AA70";
     private static final String GOLD_LIGHT   = "#E8CFA0";
+    private static final String BORDER       = "#E8E0D5";
 
     private TextField     nomField;
     private TextField     prenomField;
@@ -46,7 +47,6 @@ public class InscriptionView extends Application {
     public void start(Stage stage) {
         stage.setTitle("ChriOnline — Créer un compte");
 
-        // ── Fond décoratif ────────────────────────────────────
         StackPane root = new StackPane();
         root.setStyle("-fx-background-color: " + CREME + ";");
 
@@ -60,16 +60,10 @@ public class InscriptionView extends Application {
         StackPane.setAlignment(bg2, Pos.BOTTOM_RIGHT);
         StackPane.setMargin(bg2, new Insets(0, -70, -70, 0));
 
-        Circle bg3 = new Circle(60);
-        bg3.setFill(Color.web(GOLD, 0.18));
-        StackPane.setAlignment(bg3, Pos.TOP_RIGHT);
-        StackPane.setMargin(bg3, new Insets(50, 90, 0, 0));
-
-        // ── CARD ──────────────────────────────────────────────
         HBox card = new HBox();
         card.setMaxWidth(980);
-        card.setMaxHeight(680);
-        card.setMinHeight(580);
+        card.setMaxHeight(700);
+        card.setMinHeight(600);
         card.setStyle(
                 "-fx-background-color: " + CREME_CARD + ";" +
                         "-fx-background-radius: 20;"
@@ -81,24 +75,20 @@ public class InscriptionView extends Application {
         card.setEffect(shadow);
         StackPane.setMargin(card, new Insets(30));
 
-        // ── Panneau gauche (fixe) ─────────────────────────────
-        VBox left = buildLeft();
-
-        // ── Panneau droit (scrollable) ────────────────────────
+        VBox left  = buildLeft();
         VBox right = buildRight(stage);
         HBox.setHgrow(right, Priority.ALWAYS);
 
         card.getChildren().addAll(left, right);
-        root.getChildren().addAll(bg1, bg2, bg3, card);
+        root.getChildren().addAll(bg1, bg2, card);
 
-        // Animation d'entrée
         card.setOpacity(0);
         card.setTranslateY(20);
 
-        Scene scene = new Scene(root, 980, 700);
+        Scene scene = new Scene(root, 980, 720);
         stage.setScene(scene);
-        stage.setMinWidth(800);
-        stage.setMinHeight(580);
+        stage.setMinWidth(820);
+        stage.setMinHeight(600);
         stage.show();
 
         FadeTransition fade = new FadeTransition(Duration.millis(500), card);
@@ -110,7 +100,7 @@ public class InscriptionView extends Application {
     }
 
     // ════════════════════════════════════════════════════════
-    //  PANNEAU GAUCHE
+    //  PANNEAU GAUCHE — inchangé
     // ════════════════════════════════════════════════════════
     private VBox buildLeft() {
         VBox left = new VBox();
@@ -137,7 +127,7 @@ public class InscriptionView extends Application {
         brand.setFont(Font.font("Georgia", FontWeight.BOLD, 36));
         brand.setFill(Color.web(BRUN));
 
-        Text tagline = new Text("Votre espace shopping\nnaturel & élégant.");
+        Text tagline = new Text("Votre espace shopping");
         tagline.setFont(Font.font("Georgia", FontPosture.ITALIC, 14));
         tagline.setFill(Color.web(BRUN, 0.73));
         tagline.setLineSpacing(6);
@@ -150,10 +140,9 @@ public class InscriptionView extends Application {
         VBox.setMargin(sepOr, new Insets(0, 0, 26, 0));
 
         VBox bullets = new VBox(15,
-                bullet("✦", "Inscription rapide & sécurisée"),
-                bullet("✦", "Suivi de commandes en temps réel"),
-                bullet("✦", "Livraison éco-responsable"),
-                bullet("✦", "Wishlist & offres personnalisées")
+                bullet("✦", "Inscription simple et sécurisée en quelques secondes"),
+                bullet("✦", "Suivi de commande en temps réel"),
+                bullet("✦", "Enregistrez vos favoris et recevez des offres exclusives")
         );
 
         Region sp = new Region();
@@ -181,127 +170,153 @@ public class InscriptionView extends Application {
     }
 
     // ════════════════════════════════════════════════════════
-    //  PANNEAU DROIT — VBox scrollable natif
+    //  PANNEAU DROIT — style professionnel
     // ════════════════════════════════════════════════════════
     private VBox buildRight(Stage stage) {
 
-        // Contenu interne
-        VBox content = new VBox(18);
-        content.setPadding(new Insets(44, 48, 44, 48));
+        VBox content = new VBox(0);
         content.setAlignment(Pos.TOP_LEFT);
+        content.setStyle("-fx-background-color: " + CREME_CARD + ";");
 
-        // ── En-tête ───────────────────────────────────────────
-        Text labelSmall = new Text("— Nouveau membre —");
-        labelSmall.setFont(Font.font("Georgia", FontPosture.ITALIC, 12));
-        labelSmall.setFill(Color.web(BRUN_LIGHT));
+        // ── Barre de progression des étapes ──────────────────
+        HBox stepBar = buildStepBar();
+        content.getChildren().add(stepBar);
 
-        Text titreForm = new Text("Créer un compte");
-        titreForm.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
+        // ── Zone de formulaire scrollable ─────────────────────
+        VBox form = new VBox(16);
+        form.setPadding(new Insets(32, 48, 32, 48));
+        form.setAlignment(Pos.TOP_LEFT);
+
+        // En-tête sobre
+        Text titreForm = new Text("Créer votre compte");
+        titreForm.setFont(Font.font("Georgia", FontWeight.BOLD, 24));
         titreForm.setFill(Color.web(BRUN));
 
-        Rectangle traitTitre = new Rectangle(55, 2);
-        traitTitre.setFill(new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
-                new Stop(0, Color.web(TERRACOTTA)),
-                new Stop(1, Color.web(TERRACOTTA, 0.0))
+        Text sousTitre = new Text("Tous les champs marqués * sont obligatoires.");
+        sousTitre.setFont(Font.font("Georgia", FontPosture.ITALIC, 12));
+        sousTitre.setFill(Color.web(BRUN_LIGHT));
+
+        VBox header = new VBox(6, titreForm, sousTitre);
+        header.setPadding(new Insets(0, 0, 12, 0));
+        form.getChildren().add(header);
+
+        // ══ Bloc 1 : Identité ═════════════════════════════════
+        form.getChildren().add(blocTitre("Informations personnelles"));
+
+        nomField    = inputField("ex: moeniss");
+        prenomField = inputField("ex: douae");
+        form.getChildren().add(row(
+                labelField("Nom *", nomField),
+                labelField("Prénom *", prenomField)
         ));
 
-        VBox header = new VBox(4, labelSmall, titreForm, traitTitre);
-        header.setPadding(new Insets(0, 0, 8, 0));
-        content.getChildren().add(header);
+        emailField = inputField("ex: douae@exemple.com");
+        telField   = inputField("ex: +212 6XX XXX XXX");
+        form.getChildren().add(row(
+                labelField("Adresse email *", emailField),
+                labelField("Téléphone", telField)
+        ));
 
-        // ── Section 1 ─────────────────────────────────────────
-        content.getChildren().add(sectionHeader("01", "Informations personnelles"));
+        // ══ Bloc 2 : Sécurité ═════════════════════════════════
+        form.getChildren().add(blocTitre("Mot de passe"));
 
-        nomField    = inputField("Dupont");
-        prenomField = inputField("Jean");
-        content.getChildren().add(row(wrap("Nom *", nomField), wrap("Prénom *", prenomField)));
-
-        emailField = inputField("jean@exemple.com");
-        telField   = inputField("+212 6XX XXX XXX");
-        content.getChildren().add(row(wrap("Email *", emailField), wrap("Téléphone", telField)));
-
-        // ── Section 2 ─────────────────────────────────────────
-        content.getChildren().add(sectionHeader("02", "Sécurité"));
-
-        mdpField     = passField("Minimum 6 caractères");
+        mdpField     = passField("Au moins 6 caractères");
         mdpConfField = passField("Répéter le mot de passe");
-        content.getChildren().add(row(wrap("Mot de passe *", mdpField), wrap("Confirmer *", mdpConfField)));
+        form.getChildren().add(row(
+                labelField("Mot de passe *", mdpField),
+                labelField("Confirmation *", mdpConfField)
+        ));
 
-        // Indicateur force
+        // Barre de force
         ProgressBar forceMdp = new ProgressBar(0);
         forceMdp.setMaxWidth(Double.MAX_VALUE);
-        forceMdp.setPrefHeight(5);
-        forceMdp.setStyle("-fx-accent: " + SAUGE_DARK + "; -fx-background-color: " + CREME_INPUT + ";");
+        forceMdp.setPrefHeight(4);
+        forceMdp.setStyle("-fx-accent: " + SAUGE_DARK + "; -fx-background-color: " + BORDER + ";");
 
         Label forceLbl = new Label("Saisissez un mot de passe");
         forceLbl.setFont(Font.font("Georgia", FontPosture.ITALIC, 11));
         forceLbl.setTextFill(Color.web(BRUN_LIGHT));
 
         mdpField.textProperty().addListener((obs, old, val) -> {
-            double force = calculerForce(val);
-            forceMdp.setProgress(force);
-            if (force < 0.34) {
-                forceLbl.setText("Faible");
-                forceMdp.setStyle("-fx-accent: #C0392B; -fx-background-color: " + CREME_INPUT + ";");
-            } else if (force < 0.67) {
-                forceLbl.setText("Moyen");
-                forceMdp.setStyle("-fx-accent: " + GOLD + "; -fx-background-color: " + CREME_INPUT + ";");
+            double f = calculerForce(val);
+            forceMdp.setProgress(f);
+            if (f < 0.34) {
+                forceLbl.setText("● Sécurité faible");
+                forceLbl.setTextFill(Color.web("#C0392B"));
+                forceMdp.setStyle("-fx-accent: #C0392B; -fx-background-color: " + BORDER + ";");
+            } else if (f < 0.67) {
+                forceLbl.setText("● Sécurité moyenne");
+                forceLbl.setTextFill(Color.web(GOLD));
+                forceMdp.setStyle("-fx-accent: " + GOLD + "; -fx-background-color: " + BORDER + ";");
             } else {
-                forceLbl.setText("Fort ✓");
-                forceMdp.setStyle("-fx-accent: " + SAUGE_DARK + "; -fx-background-color: " + CREME_INPUT + ";");
+                forceLbl.setText("✓ Mot de passe sécurisé");
+                forceLbl.setTextFill(Color.web(SAUGE_DARK));
+                forceMdp.setStyle("-fx-accent: " + SAUGE_DARK + "; -fx-background-color: " + BORDER + ";");
             }
         });
-        content.getChildren().add(new VBox(4, forceMdp, forceLbl));
+        form.getChildren().add(new VBox(5, forceMdp, forceLbl));
 
-        // ── Section 3 ─────────────────────────────────────────
-        content.getChildren().add(sectionHeader("03", "Adresse de livraison"));
+        // ══ Bloc 3 : Adresse ══════════════════════════════════
+        form.getChildren().add(blocTitre("Adresse de livraison"));
 
-        rueField = inputField("12 Rue Mohammed V");
-        content.getChildren().add(wrap("Rue", rueField));
+        rueField = inputField("Numéro et nom de rue");
+        form.getChildren().add(labelField("Rue", rueField));
 
-        villeField = inputField("Casablanca");
-        cpField    = inputField("20000");
-        content.getChildren().add(row(wrap("Ville", villeField), wrap("Code postal", cpField)));
+        villeField = inputField("Ville");
+        cpField    = inputField("Code postal");
+        form.getChildren().add(row(
+                labelField("Ville", villeField),
+                labelField("Code postal", cpField)
+        ));
 
         paysField = inputField("Maroc");
-        content.getChildren().add(wrap("Pays", paysField));
+        form.getChildren().add(labelField("Pays", paysField));
 
-        // ── Message ───────────────────────────────────────────
+        // ── Message retour ────────────────────────────────────
         msgLabel = new Label();
         msgLabel.setFont(Font.font("Georgia", FontPosture.ITALIC, 12));
         msgLabel.setWrapText(true);
         msgLabel.setMaxWidth(Double.MAX_VALUE);
-        content.getChildren().add(msgLabel);
+        msgLabel.setPadding(new Insets(4, 12, 4, 12));
+        form.getChildren().add(msgLabel);
 
-        // ── Bouton ────────────────────────────────────────────
-        Button btnInscrire = new Button("S'inscrire");
+        // ── Bouton principal ──────────────────────────────────
+        Button btnInscrire = new Button("Créer mon compte");
         btnInscrire.setMaxWidth(Double.MAX_VALUE);
-        btnInscrire.setFont(Font.font("Georgia", FontWeight.BOLD, 15));
-        btnInscrire.setStyle(btnStyle(TERRACOTTA));
+        btnInscrire.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
+        btnInscrire.setStyle(btnPrimary(TERRACOTTA));
         btnInscrire.setCursor(javafx.scene.Cursor.HAND);
-        btnInscrire.setOnMouseEntered(e -> btnInscrire.setStyle(btnStyle(TERRA_HOVER)));
-        btnInscrire.setOnMouseExited(e  -> btnInscrire.setStyle(btnStyle(TERRACOTTA)));
-        content.getChildren().add(btnInscrire);
-
-        // ── Séparateur "ou" ───────────────────────────────────
-        Line l1 = new Line(0, 0, 100, 0); l1.setStroke(Color.web(SAUGE, 0.5));
-        Line l2 = new Line(0, 0, 100, 0); l2.setStroke(Color.web(SAUGE, 0.5));
-        Text ou = new Text("  ou  ");
-        ou.setFont(Font.font("Georgia", FontPosture.ITALIC, 12));
-        ou.setFill(Color.web(BRUN_LIGHT));
-        HBox sepRow = new HBox(l1, ou, l2);
-        sepRow.setAlignment(Pos.CENTER);
-        content.getChildren().add(sepRow);
+        btnInscrire.setOnMouseEntered(e -> btnInscrire.setStyle(btnPrimary(TERRA_HOVER)));
+        btnInscrire.setOnMouseExited(e  -> btnInscrire.setStyle(btnPrimary(TERRACOTTA)));
 
         // ── Lien connexion ────────────────────────────────────
-        Hyperlink lienCnx = new Hyperlink("Déjà un compte ? Se connecter →");
-        lienCnx.setFont(Font.font("Georgia", FontPosture.ITALIC, 13));
+        Label dejaMembre = new Label("Vous avez déjà un compte ?");
+        dejaMembre.setFont(Font.font("Georgia", 12));
+        dejaMembre.setTextFill(Color.web(BRUN_LIGHT));
+
+        Hyperlink lienCnx = new Hyperlink("Se connecter");
+        lienCnx.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
         lienCnx.setTextFill(Color.web(SAUGE_DARK));
-        lienCnx.setStyle("-fx-border-color: transparent; -fx-padding: 0;");
+        lienCnx.setStyle("-fx-border-color: transparent; -fx-padding: 0 0 0 4;");
         lienCnx.setCursor(javafx.scene.Cursor.HAND);
-        HBox lienBox = new HBox(lienCnx);
+        lienCnx.setUnderline(true);
+
+        HBox lienBox = new HBox(4, dejaMembre, lienCnx);
         lienBox.setAlignment(Pos.CENTER);
-        content.getChildren().add(lienBox);
+        lienBox.setPadding(new Insets(4, 0, 0, 0));
+
+        // ── Mentions légales ──────────────────────────────────
+        Text mentions = new Text(
+                "En créant un compte, vous acceptez nos Conditions générales\n" +
+                        "d'utilisation et notre Politique de confidentialité."
+        );
+        mentions.setFont(Font.font("Georgia", FontPosture.ITALIC, 10));
+        mentions.setFill(Color.web(BRUN_LIGHT, 0.7));
+        HBox mentionsBox = new HBox(mentions);
+        mentionsBox.setAlignment(Pos.CENTER);
+        mentionsBox.setPadding(new Insets(6, 0, 0, 0));
+
+        form.getChildren().addAll(btnInscrire, lienBox, mentionsBox);
 
         // ── Contrôleur ────────────────────────────────────────
         InscriptionController ctrl = new InscriptionController(
@@ -313,8 +328,8 @@ public class InscriptionView extends Application {
         btnInscrire.setOnAction(e -> ctrl.inscrire());
         lienCnx.setOnAction(e -> stage.close());
 
-        // ── Wrapper avec scroll interne ───────────────────────
-        ScrollPane scroll = new ScrollPane(content);
+        // ── ScrollPane ────────────────────────────────────────
+        ScrollPane scroll = new ScrollPane(form);
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
@@ -323,16 +338,103 @@ public class InscriptionView extends Application {
                         "-fx-background-color: " + CREME_CARD + ";" +
                         "-fx-border-color: transparent;"
         );
-
-        // VBox container qui contient le scroll et prend tout l'espace
-        VBox right = new VBox(scroll);
         VBox.setVgrow(scroll, Priority.ALWAYS);
-        right.setStyle(
-                "-fx-background-color: " + CREME_CARD + ";" +
-                        "-fx-background-radius: 0 20 20 0;"
+
+        content.getChildren().add(scroll);
+        HBox.setHgrow(content, Priority.ALWAYS);
+        return content;
+    }
+
+    // ── Barre d'étapes en haut ────────────────────────────────
+    private HBox buildStepBar() {
+        HBox bar = new HBox(0);
+        bar.setStyle(
+                "-fx-background-color: " + CREME_INPUT + ";" +
+                        "-fx-border-color: transparent transparent " + BORDER + " transparent;" +
+                        "-fx-border-width: 0 0 1 0;"
         );
-        HBox.setHgrow(right, Priority.ALWAYS);
-        return right;
+        bar.setPadding(new Insets(14, 48, 14, 48));
+        bar.setAlignment(Pos.CENTER_LEFT);
+        bar.setSpacing(8);
+
+        bar.getChildren().addAll(
+                stepItem("1", "Informations", true),
+                stepArrow(),
+                stepItem("2", "Sécurité", false),
+                stepArrow(),
+                stepItem("3", "Adresse", false)
+        );
+        return bar;
+    }
+
+    private HBox stepItem(String num, String label, boolean actif) {
+        Circle circle = new Circle(12);
+        circle.setFill(actif ? Color.web(TERRACOTTA) : Color.web(BORDER));
+        circle.setStroke(actif ? Color.web(TERRACOTTA) : Color.web(SAUGE));
+        circle.setStrokeWidth(1.5);
+
+        Text numTxt = new Text(num);
+        numTxt.setFont(Font.font("Georgia", FontWeight.BOLD, 11));
+        numTxt.setFill(actif ? Color.WHITE : Color.web(BRUN_LIGHT));
+
+        StackPane cercle = new StackPane(circle, numTxt);
+
+        Text lbl = new Text(label);
+        lbl.setFont(Font.font("Georgia", actif ? FontWeight.BOLD : FontWeight.NORMAL, 12));
+        lbl.setFill(actif ? Color.web(BRUN) : Color.web(BRUN_LIGHT));
+
+        HBox item = new HBox(8, cercle, lbl);
+        item.setAlignment(Pos.CENTER_LEFT);
+        return item;
+    }
+
+    private Text stepArrow() {
+        Text arrow = new Text("  ›  ");
+        arrow.setFont(Font.font("Georgia", 14));
+        arrow.setFill(Color.web(SAUGE));
+        return arrow;
+    }
+
+    // ── Titre de bloc ─────────────────────────────────────────
+    private HBox blocTitre(String titre) {
+        Rectangle bar = new Rectangle(3, 14);
+        bar.setFill(Color.web(SAUGE_DARK));
+        bar.setArcWidth(2); bar.setArcHeight(2);
+
+        Text t = new Text(titre);
+        t.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+        t.setFill(Color.web(BRUN_MED));
+
+        // Ligne séparatrice
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Rectangle ligne = new Rectangle(1, 1);
+        ligne.setFill(Color.TRANSPARENT);
+
+        HBox h = new HBox(10, bar, t);
+        h.setAlignment(Pos.CENTER_LEFT);
+        h.setPadding(new Insets(10, 0, 4, 0));
+
+        // Séparateur complet
+        Separator sep = new Separator();
+        sep.setStyle("-fx-background-color: " + BORDER + ";");
+
+        VBox bloc = new VBox(2, sep, h);
+        HBox wrapper = new HBox(bloc);
+        HBox.setHgrow(bloc, Priority.ALWAYS);
+        return wrapper;
+    }
+
+    // ── Champ avec label intégré ──────────────────────────────
+    private VBox labelField(String label, Control field) {
+        Label lbl = new Label(label);
+        lbl.setFont(Font.font("Georgia", FontWeight.BOLD, 11));
+        lbl.setTextFill(Color.web(BRUN_MED));
+        VBox box = new VBox(5, lbl, field);
+        field.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(box, Priority.ALWAYS);
+        return box;
     }
 
     // ════════════════════════════════════════════════════════
@@ -343,9 +445,17 @@ public class InscriptionView extends Application {
         TextField f = new TextField();
         f.setPromptText(prompt);
         f.setFont(Font.font("Georgia", 13));
-        f.setStyle(fieldStyle(SAUGE));
+        f.setStyle(fieldStyle(BORDER));
         f.focusedProperty().addListener((o, old, focused) ->
-                f.setStyle(focused ? fieldStyle(TERRACOTTA) + "-fx-border-width:1.5;" : fieldStyle(SAUGE))
+                f.setStyle(focused
+                        ? "-fx-background-color:" + CREME_CARD + ";" +
+                        "-fx-border-color:" + SAUGE_DARK + ";" +
+                        "-fx-border-radius:6;" +
+                        "-fx-background-radius:6;" +
+                        "-fx-padding:10 13 10 13;" +
+                        "-fx-text-fill:" + BRUN + ";" +
+                        "-fx-border-width:1.5;"
+                        : fieldStyle(BORDER))
         );
         return f;
     }
@@ -354,9 +464,17 @@ public class InscriptionView extends Application {
         PasswordField f = new PasswordField();
         f.setPromptText(prompt);
         f.setFont(Font.font("Georgia", 13));
-        f.setStyle(fieldStyle(SAUGE));
+        f.setStyle(fieldStyle(BORDER));
         f.focusedProperty().addListener((o, old, focused) ->
-                f.setStyle(focused ? fieldStyle(TERRACOTTA) + "-fx-border-width:1.5;" : fieldStyle(SAUGE))
+                f.setStyle(focused
+                        ? "-fx-background-color:" + CREME_CARD + ";" +
+                        "-fx-border-color:" + SAUGE_DARK + ";" +
+                        "-fx-border-radius:6;" +
+                        "-fx-background-radius:6;" +
+                        "-fx-padding:10 13 10 13;" +
+                        "-fx-text-fill:" + BRUN + ";" +
+                        "-fx-border-width:1.5;"
+                        : fieldStyle(BORDER))
         );
         return f;
     }
@@ -370,16 +488,6 @@ public class InscriptionView extends Application {
                 "-fx-text-fill:" + BRUN + ";";
     }
 
-    private VBox wrap(String label, Control field) {
-        Label lbl = new Label(label);
-        lbl.setFont(Font.font("Georgia", FontWeight.BOLD, 11));
-        lbl.setTextFill(Color.web(BRUN_MED));
-        VBox box = new VBox(5, lbl, field);
-        field.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(box, Priority.ALWAYS);
-        return box;
-    }
-
     private HBox row(VBox a, VBox b) {
         HBox h = new HBox(16, a, b);
         h.setMaxWidth(Double.MAX_VALUE);
@@ -388,23 +496,8 @@ public class InscriptionView extends Application {
         return h;
     }
 
-    private HBox sectionHeader(String num, String titre) {
-        Rectangle bar = new Rectangle(3, 16);
-        bar.setFill(Color.web(TERRACOTTA));
-        bar.setArcWidth(3); bar.setArcHeight(3);
-
-        Text numTxt = new Text(num);
-        numTxt.setFont(Font.font("Georgia", FontWeight.BOLD, 11));
-        numTxt.setFill(Color.web(TERRACOTTA));
-
-        Text titTxt = new Text("  " + titre);
-        titTxt.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
-        titTxt.setFill(Color.web(BRUN_MED));
-
-        HBox h = new HBox(10, bar, new TextFlow(numTxt, titTxt));
-        h.setAlignment(Pos.CENTER_LEFT);
-        h.setPadding(new Insets(6, 0, 2, 0));
-        return h;
+    private VBox wrap(String label, Control field) {
+        return labelField(label, field);
     }
 
     private VBox bullet(String icon, String txt) {
@@ -417,12 +510,12 @@ public class InscriptionView extends Application {
         return new VBox(new TextFlow(ic, tx));
     }
 
-    private String btnStyle(String color) {
+    private String btnPrimary(String color) {
         return "-fx-background-color:" + color + ";" +
                 "-fx-text-fill:white;" +
                 "-fx-padding:13 0 13 0;" +
                 "-fx-background-radius:8;" +
-                "-fx-font-size:15px;";
+                "-fx-font-size:14px;";
     }
 
     private double calculerForce(String mdp) {
