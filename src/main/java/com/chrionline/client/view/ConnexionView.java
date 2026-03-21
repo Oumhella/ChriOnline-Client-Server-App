@@ -1,6 +1,7 @@
 package com.chrionline.client.view;
 
 import com.chrionline.client.controller.ConnexionController;
+import com.chrionline.client.view.MdpOublieView;
 import javafx.animation.*;
 import javafx.application.Application;
 import javafx.geometry.*;
@@ -139,6 +140,14 @@ public class ConnexionView extends Application {
         btnLogin.setOnMouseEntered(e -> btnLogin.setStyle(btnStyle(TERRA_HOVER)));
         btnLogin.setOnMouseExited(e -> btnLogin.setStyle(btnStyle(TERRACOTTA)));
 
+        Hyperlink linkOublie = new Hyperlink("Mot de passe oublié ?");
+        linkOublie.setFont(Font.font("Georgia", 11));
+        linkOublie.setTextFill(Color.web(BRUN_LIGHT));
+        linkOublie.setUnderline(true);
+        linkOublie.setPadding(new Insets(-10, 0, 0, 0));
+        linkOublie.setAlignment(Pos.CENTER_RIGHT);
+        VBox.setMargin(linkOublie, new Insets(-10, 0, 0, 0));
+
         HBox footer = new HBox(5);
         footer.setAlignment(Pos.CENTER);
         Text txt = new Text("Pas encore membre ?");
@@ -159,7 +168,15 @@ public class ConnexionView extends Application {
             }
         });
 
-        right.getChildren().addAll(title, emailBox, mdpBox, msgLabel, btnLogin, footer);
+        linkOublie.setOnAction(e -> {
+            try {
+                new MdpOublieView().start(stage);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        right.getChildren().addAll(title, emailBox, mdpBox, linkOublie, msgLabel, btnLogin, footer);
         return right;
     }
 

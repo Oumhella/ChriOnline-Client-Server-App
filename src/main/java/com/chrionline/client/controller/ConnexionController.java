@@ -1,6 +1,7 @@
 package com.chrionline.client.controller;
 
 import com.chrionline.client.network.Client;
+import com.chrionline.client.view.ConfirmationView;
 import com.chrionline.client.view.HomeView;
 import javafx.application.Platform;
 import javafx.scene.control.*;
@@ -64,6 +65,19 @@ public class ConnexionController {
                             });
                         }).start();
 
+                    } else if ("EN_ATTENTE".equals(rep.get("statut"))) {
+                        // Rediriger vers la page de confirmation
+                        erreur((String) rep.get("message"));
+                        new Thread(() -> {
+                            try { Thread.sleep(1500); } catch (InterruptedException ignored) {}
+                            Platform.runLater(() -> {
+                                try {
+                                    new ConfirmationView().start(stage);
+                                } catch (Exception ex) {
+                                    ex.printStackTrace();
+                                }
+                            });
+                        }).start();
                     } else {
                         erreur((String) rep.get("message"));
                     }

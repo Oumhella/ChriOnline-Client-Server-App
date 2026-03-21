@@ -323,7 +323,7 @@ public class InscriptionView extends Application {
                 nomField, prenomField, emailField, telField,
                 mdpField, mdpConfField,
                 rueField, villeField, cpField, paysField,
-                msgLabel
+                msgLabel, stage
         );
         btnInscrire.setOnAction(e -> ctrl.inscrire());
         //lien vers la page de connexion

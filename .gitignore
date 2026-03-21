@@ -48,3 +48,5 @@ Thumbs.db
 *.bak
 *.swp
 *~
+# Application Config
+src/main/resources/email.properties

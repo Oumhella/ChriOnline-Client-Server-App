@@ -51,7 +51,7 @@ public class UserDAO {
             // ── Étape 2 : INSERT client ────────────────────────
             String sqlClient = """
                 INSERT INTO client (idUtilisateur, telephone, statut_compte)
-                VALUES (?, ?, 'actif')
+                VALUES (?, ?, 'en_attente')
             """;
 
             int idClient;
@@ -94,7 +94,12 @@ public class UserDAO {
             // ── Tout OK → COMMIT ──────────────────────────────
             conn.commit();
             System.out.println("[DAO] ✓ Inscription complète pour " + data.get("email"));
-            return Map.of("statut", "OK", "message", "Inscription réussie !");
+            
+            Map<String, Object> succes = new java.util.HashMap<>();
+            succes.put("statut", "OK");
+            succes.put("message", "Inscription réussie !");
+            succes.put("idUtilisateur", idUtilisateur);
+            return succes;
 
         } catch (SQLIntegrityConstraintViolationException e) {
             rollback(conn);
@@ -122,23 +127,37 @@ public class UserDAO {
         String mdp   = (String) data.get("mdp");
 
         try (Connection conn = DatabaseConnection.getInstance().getConnection()) {
-            String sql = "SELECT * FROM utilisateur WHERE email = ?";
+            String sql = """
+                SELECT u.*, c.statut_compte
+                FROM utilisateur u
+                JOIN client c ON c.idUtilisateur = u.idUtilisateur
+                WHERE u.email = ?
+            """;
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, email);
                 ResultSet rs = ps.executeQuery();
 
-                if (rs.next() && BCrypt.checkpw(mdp, rs.getString("password"))) {
-                    System.out.println("[DAO] ✓ Connexion réussie pour " + email);
-                    return Map.of(
-                        "statut", "OK",
-                        "message", "Bienvenue, " + rs.getString("prenom") + " !",
-                        "data", Map.of(
-                            "userId", rs.getInt("idUtilisateur"),
-                            "nom",    rs.getString("nom"),
-                            "prenom", rs.getString("prenom"),
-                            "email",  rs.getString("email")
-                        )
-                    );
+                if (rs.next()) {
+                    if (BCrypt.checkpw(mdp, rs.getString("password"))) {
+                        String statut = rs.getString("statut_compte");
+                        if ("en_attente".equals(statut)) {
+                            return Map.of("statut", "EN_ATTENTE", "message", "Confirmez votre email avant de vous connecter.");
+                        }
+
+                        System.out.println("[DAO] ✓ Connexion réussie pour " + email);
+                        return Map.of(
+                            "statut", "OK",
+                            "message", "Bienvenue, " + rs.getString("prenom") + " !",
+                            "data", Map.of(
+                                "userId", rs.getInt("idUtilisateur"),
+                                "nom",    rs.getString("nom"),
+                                "prenom", rs.getString("prenom"),
+                                "email",  rs.getString("email")
+                            )
+                        );
+                    } else {
+                        return Map.of("statut", "ERREUR", "message", "Email ou mot de passe incorrect.");
+                    }
                 } else {
                     return Map.of("statut", "ERREUR", "message", "Email ou mot de passe incorrect.");
                 }
@@ -157,6 +176,57 @@ public class UserDAO {
             } catch (SQLException e) {
                 System.err.println("[DAO] Erreur rollback : " + e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Active le compte après validation du token email.
+     */
+    public static Map<String, Object> activerCompte(int idUtilisateur) {
+        String sql = "UPDATE client SET statut_compte = 'actif' WHERE idUtilisateur = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idUtilisateur);
+            ps.executeUpdate();
+            System.out.println("[DAO] Compte activé — idUtilisateur=" + idUtilisateur);
+            return Map.of("statut", "OK", "message", "Compte confirmé ! Vous pouvez vous connecter.");
+        } catch (Exception e) {
+            System.err.println("[DAO] Erreur activation : " + e.getMessage());
+            return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Met à jour le mot de passe avec un nouveau hash BCrypt.
+     */
+    public static Map<String, Object> majMotDePasse(int idUtilisateur, String nouveauMdp) {
+        String hash = BCrypt.hashpw(nouveauMdp, BCrypt.gensalt());
+        String sql  = "UPDATE utilisateur SET password = ? WHERE idUtilisateur = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, hash);
+            ps.setInt(2, idUtilisateur);
+            ps.executeUpdate();
+            System.out.println("[DAO] Mot de passe mis à jour — idUtilisateur=" + idUtilisateur);
+            return Map.of("statut", "OK", "message", "Mot de passe réinitialisé avec succès !");
+        } catch (Exception e) {
+            System.err.println("[DAO] Erreur maj mdp : " + e.getMessage());
+            return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Retrouve l'idUtilisateur à partir d'un email (pour le flux reset mdp).
+     */
+    public static int findIdByEmail(String email) {
+        String sql = "SELECT idUtilisateur FROM utilisateur WHERE email = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
+            return rs.next() ? rs.getInt("idUtilisateur") : -1;
+        } catch (Exception e) {
+            return -1;
         }
     }
 }

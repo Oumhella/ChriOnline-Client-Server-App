@@ -1,6 +1,7 @@
 package com.chrionline.server.core;
 
 import com.chrionline.server.dao.UserDAO;
+import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.shared.models.User;
 
 import java.io.*;
@@ -16,6 +17,7 @@ public class ClientHandler implements Runnable {
 
     private final Socket socket;
     private final Server server;
+    private final AuthenticationService authService;
 
     private ObjectOutputStream out;
     private ObjectInputStream  in;
@@ -27,6 +29,7 @@ public class ClientHandler implements Runnable {
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
         this.server = server;
+        this.authService = new AuthenticationService();
     }
 
     // ─── Gestion de la Connexion TCP ──────────────────────────────────────────
@@ -78,6 +81,9 @@ public class ClientHandler implements Runnable {
             case "CONNEXION" -> handleConnexion(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
+            case "CONFIRMER_EMAIL"       -> handleConfirmerEmail(req);
+            case "OUBLIER_MOT_DE_PASSE" -> handleOublierMotDePasse(req);
+            case "REINITIALISER_MDP"     -> handleReinitialiserMdp(req);
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -88,7 +94,7 @@ public class ClientHandler implements Runnable {
     private void handleConnexion(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleConnexion appelée");
         try {
-            Map<String, Object> reponse = UserDAO.connexion(req);
+            Map<String, Object> reponse = authService.login(req);
             
             if ("OK".equals(reponse.get("statut"))) {
                 Map<String, Object> data = (Map<String, Object>) reponse.get("data");
@@ -103,15 +109,41 @@ public class ClientHandler implements Runnable {
     }
     private void handleInscription(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleInscription appelée");
-        System.out.println("[HANDLER] Données reçues : " + req);
         try {
-            Map<String, Object> reponse = UserDAO.inscrire(req);
-            System.out.println("[HANDLER] Réponse DAO : " + reponse);
+            Map<String, Object> reponse = authService.register(req);
             envoyerMessage(reponse);
-        } catch (Throwable t) {
-            System.err.println("[HANDLER] EXCEPTION FATALE : " + t.getMessage());
-            t.printStackTrace();
-            envoyerMessage(creerReponse("ERREUR", t.getMessage()));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur lors de l'inscription : " + e.getMessage()));
+        }
+    }
+
+    private void handleConfirmerEmail(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleConfirmerEmail");
+        try {
+            Map<String, Object> reponse = authService.confirmerEmail(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur confirmation : " + e.getMessage()));
+        }
+    }
+
+    private void handleOublierMotDePasse(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleOublierMotDePasse");
+        try {
+            Map<String, Object> reponse = authService.oublierMotDePasse(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur : " + e.getMessage()));
+        }
+    }
+
+    private void handleReinitialiserMdp(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleReinitialiserMdp");
+        try {
+            Map<String, Object> reponse = authService.reinitialiserMotDePasse(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur : " + e.getMessage()));
         }
     }
     private void handleListeProduits(Map<String, Object> req) {

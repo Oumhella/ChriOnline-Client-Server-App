@@ -1,7 +1,10 @@
 package com.chrionline.client.controller;
 
 import com.chrionline.client.network.Client;
+import com.chrionline.client.view.ConfirmationView;
+import javafx.application.Platform;
 import javafx.scene.control.*;
+import javafx.stage.Stage;
 import java.util.*;
 
 public class InscriptionController {
@@ -17,12 +20,13 @@ public class InscriptionController {
     private final TextField     cpField;
     private final TextField     paysField;
     private final Label         msgLabel;
+    private final Stage         stage;
 
     public InscriptionController(
             TextField nom, TextField prenom, TextField email, TextField tel,
             PasswordField mdp, PasswordField mdpConf,
             TextField rue, TextField ville, TextField cp, TextField pays,
-            Label msg
+            Label msg, Stage stage
     ) {
         this.nomField     = nom;
         this.prenomField  = prenom;
@@ -35,6 +39,7 @@ public class InscriptionController {
         this.cpField      = cp;
         this.paysField    = pays;
         this.msgLabel     = msg;
+        this.stage        = stage;
     }
 
     public void inscrire() {
@@ -99,9 +104,18 @@ public class InscriptionController {
             Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
             System.out.println("[CLIENT] Réponse : " + rep);
 
-            if ("OK".equals(rep.get("statut"))) {
-                succes("✓ Compte créé avec succès !");
-                viderChamps();
+            if ("OK".equals(rep.get("statut")) || "EN_ATTENTE".equals(rep.get("statut"))) {
+                succes("✓ " + rep.get("message"));
+                new Thread(() -> {
+                    try { Thread.sleep(1500); } catch (InterruptedException ignored) {}
+                    Platform.runLater(() -> {
+                        try {
+                            new ConfirmationView().start(stage);
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    });
+                }).start();
             } else {
                 erreur((String) rep.get("message"));
             }
