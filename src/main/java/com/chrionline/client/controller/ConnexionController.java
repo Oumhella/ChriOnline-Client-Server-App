@@ -3,6 +3,7 @@ package com.chrionline.client.controller;
 import com.chrionline.client.network.Client;
 import com.chrionline.client.view.ConfirmationView;
 import com.chrionline.client.view.HomeView;
+import com.chrionline.admin.view.AdminDashboardView;
 import javafx.application.Platform;
 import javafx.scene.control.*;
 import javafx.stage.Stage;
@@ -10,21 +11,22 @@ import java.util.*;
 
 public class ConnexionController {
 
-    private final TextField emailField;
+    private final TextField     emailField;
     private final PasswordField mdpField;
-    private final Label msgLabel;
-    private final Stage stage;
+    private final Label         msgLabel;
+    private final Stage         stage;
 
     public ConnexionController(TextField email, PasswordField mdp, Label msg, Stage stage) {
         this.emailField = email;
-        this.mdpField = mdp;
-        this.msgLabel = msg;
-        this.stage = stage;
+        this.mdpField   = mdp;
+        this.msgLabel   = msg;
+        this.stage      = stage;
     }
 
+    @SuppressWarnings("unchecked")
     public void connecter() {
         String email = emailField.getText().trim();
-        String mdp = mdpField.getText();
+        String mdp   = mdpField.getText();
 
         if (email.isEmpty() || mdp.isEmpty()) {
             erreur("Veuillez remplir tous les champs.");
@@ -45,19 +47,25 @@ public class ConnexionController {
                 req.put("mdp", mdp);
 
                 client.envoyerRequete(req);
-
                 Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
 
                 Platform.runLater(() -> {
                     if ("OK".equals(rep.get("statut"))) {
                         succes((String) rep.get("message"));
-                        
-                        // Délais court pour que l'utilisateur voit le message de succès avant la redirection
+
+                        // Lire le rôle retourné par le serveur
+                        Map<String, Object> data = (Map<String, Object>) rep.get("data");
+                        String role = data != null ? (String) data.getOrDefault("role", "client") : "client";
+
                         new Thread(() -> {
                             try { Thread.sleep(800); } catch (InterruptedException ignored) {}
                             Platform.runLater(() -> {
                                 try {
-                                    new HomeView().start(stage);
+                                    if ("admin".equals(role)) {
+                                        new AdminDashboardView().start(stage);
+                                    } else {
+                                        new HomeView().start(stage);
+                                    }
                                 } catch (Exception ex) {
                                     ex.printStackTrace();
                                     erreur("Erreur de redirection : " + ex.getMessage());
@@ -66,16 +74,12 @@ public class ConnexionController {
                         }).start();
 
                     } else if ("EN_ATTENTE".equals(rep.get("statut"))) {
-                        // Rediriger vers la page de confirmation
                         erreur((String) rep.get("message"));
                         new Thread(() -> {
                             try { Thread.sleep(1500); } catch (InterruptedException ignored) {}
                             Platform.runLater(() -> {
-                                try {
-                                    new ConfirmationView().start(stage);
-                                } catch (Exception ex) {
-                                    ex.printStackTrace();
-                                }
+                                try { new ConfirmationView().start(stage); }
+                                catch (Exception ex) { ex.printStackTrace(); }
                             });
                         }).start();
                     } else {
