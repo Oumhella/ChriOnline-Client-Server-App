@@ -16,11 +16,13 @@ public class Produit implements Serializable {
 
     private Categorie categorie;
     private List<ProductFormat> formats;
+    private String imageUrl;
+    private float prix;
 
     public Produit() {
     }
 
-    public Produit(int idProduit, int idCategorie, String nom, String description, Timestamp dateAjout, Categorie categorie, List<ProductFormat> formats) {
+    public Produit(int idProduit, int idCategorie, String nom, String description, Timestamp dateAjout, Categorie categorie, List<ProductFormat> formats , String imageUrl, float prix) {
         this.idProduit = idProduit;
         this.idCategorie = idCategorie;
         this.nom = nom;
@@ -28,6 +30,8 @@ public class Produit implements Serializable {
         this.dateAjout = dateAjout;
         this.categorie = categorie;
         this.formats = formats;
+        this.imageUrl = imageUrl;
+        this.prix = prix;
     }
 
     public int getIdProduit() {
@@ -85,4 +89,19 @@ public class Produit implements Serializable {
     public void setFormats(List<ProductFormat> formats) {
         this.formats = formats;
     }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+    public float getPrix() {
+        return prix;
+    }
+    public void setPrix(float prix) {
+        this.prix = prix;
+    }
+
 }

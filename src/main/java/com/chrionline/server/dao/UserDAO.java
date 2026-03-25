@@ -43,15 +43,11 @@ public class UserDAO {
                 INSERT INTO client (idUtilisateur, telephone, statut_compte)
                 VALUES (?, ?, 'en_attente')
             """;
-            int idClient;
-            try (PreparedStatement ps = conn.prepareStatement(sqlClient, Statement.RETURN_GENERATED_KEYS)) {
+            try (PreparedStatement ps = conn.prepareStatement(sqlClient)) {
                 ps.setInt(1, idUtilisateur);
                 String tel = (String) data.getOrDefault("telephone", "");
                 ps.setString(2, tel.isBlank() ? null : tel);
                 ps.executeUpdate();
-                ResultSet keys = ps.getGeneratedKeys();
-                if (!keys.next()) throw new SQLException("Échec récupération id_client");
-                idClient = keys.getInt(1);
             }
 
             String rue   = (String) data.getOrDefault("rue", "");

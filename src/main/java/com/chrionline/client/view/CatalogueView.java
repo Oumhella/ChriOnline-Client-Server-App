@@ -174,7 +174,7 @@ public class CatalogueView extends Application {
         name.setFill(Color.web(BRUN));
         name.setWrappingWidth(190);
 
-        Text price = new Text(p.getPrix().toString() + " MAD");
+        Text price = new Text(p.getPrix() + " MAD");
         price.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
         price.setFill(Color.web(BRUN_LIGHT));
 
