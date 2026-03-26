@@ -56,7 +56,7 @@ public class ConnexionController {
                         Map<String, Object> data = (Map<String, Object>) rep.get("data");
                         String role = data != null ? (String) data.getOrDefault("role", "client") : "client";
 
-                        // ✅ Stockage dans le SessionManager
+                        //  Stockage dans le SessionManager
                         com.chrionline.client.session.SessionManager.getInstance().setUser(data);
 
                         System.out.println("[ConnexionController] userId=" + 

@@ -2,6 +2,7 @@
 package com.chrionline.client.controller;
 
 import com.chrionline.client.network.Client;
+import com.chrionline.shared.dto.CommandeDTO;
 import com.chrionline.shared.dto.PanierDTO;
 
 import java.util.HashMap;
@@ -80,9 +81,9 @@ public class PanierController {
 
     /**
      * Valide le panier et crée une commande.
-     * @return la référence de la commande (ex: CMD-2026-00042) ou null si erreur.
+     * @return un objet CommandeDTO contenant le récapitulatif ou null si erreur.
      */
-    public String validerPanier() {
+    public CommandeDTO validerPanier() {
         try {
             Map<String, Object> req = new HashMap<>();
             req.put("commande",      "PANIER_VALIDER");
@@ -95,7 +96,7 @@ public class PanierController {
             Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
 
             if ("OK".equals(rep.get("statut"))) {
-                return (String) rep.get("reference");
+                return (CommandeDTO) rep.get("recap");
             } else {
                 System.err.println("[PanierController] Erreur validation : " + rep.get("message"));
                 return null;

@@ -41,7 +41,7 @@ public class UserDAO {
 
             String sqlClient = """
                 INSERT INTO client (idUtilisateur, telephone, statut_compte)
-                VALUES (?, ?, 'en_attente')
+                VALUES (?, ?, 'non actif')
             """;
             try (PreparedStatement ps = conn.prepareStatement(sqlClient)) {
                 ps.setInt(1, idUtilisateur);
@@ -142,7 +142,13 @@ public class UserDAO {
                 if (rs.next()) {
                     if (BCrypt.checkpw(mdp, rs.getString("password"))) {
                         String statut = rs.getString("statut_compte");
-                        if ("en_attente".equals(statut)) {
+                        if ("bloque".equals(statut)) {
+                            Map<String, Object> rep = new java.util.HashMap<>();
+                            // Compte explicitement bloqué par l'admin
+                            rep.put("statut",  "ERREUR");
+                            rep.put("message", "Votre compte a été bloqué par un administrateur.");
+                            return rep;
+                        } else if ("non actif".equals(statut)) {
                             Map<String, Object> rep = new java.util.HashMap<>();
                             rep.put("statut",  "EN_ATTENTE");
                             rep.put("message", "Confirmez votre email avant de vous connecter.");
@@ -213,6 +219,49 @@ public class UserDAO {
             return rs.next() ? rs.getInt("idUtilisateur") : -1;
         } catch (Exception e) {
             return -1;
+        }
+    }
+
+    public static java.util.List<Map<String, Object>> listerClients() {
+        java.util.List<Map<String, Object>> clients = new java.util.ArrayList<>();
+        String sql = """
+            SELECT u.idUtilisateur, u.nom, u.prenom, u.email, c.statut_compte 
+            FROM utilisateur u 
+            JOIN client c ON u.idUtilisateur = c.idUtilisateur
+            ORDER BY u.idUtilisateur DESC
+        """;
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                Map<String, Object> cli = new java.util.HashMap<>();
+                cli.put("idUtilisateur", rs.getInt("idUtilisateur"));
+                cli.put("nom", rs.getString("nom"));
+                cli.put("prenom", rs.getString("prenom"));
+                cli.put("email", rs.getString("email"));
+                cli.put("statut_compte", rs.getString("statut_compte"));
+                clients.add(cli);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return clients;
+    }
+
+    public static Map<String, Object> changerStatutCompte(int idUtilisateur, String nouveauStatut) {
+        String sql = "UPDATE client SET statut_compte = ? WHERE idUtilisateur = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nouveauStatut); // 'actif' ou 'non actif'
+            ps.setInt(2, idUtilisateur);
+            int rows = ps.executeUpdate();
+            if (rows > 0) {
+                return Map.of("statut", "OK", "message", "Statut mis à jour avec succès.");
+            } else {
+                return Map.of("statut", "ERREUR", "message", "Client introuvable.");
+            }
+        } catch (Exception e) {
+            return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
         }
     }
 

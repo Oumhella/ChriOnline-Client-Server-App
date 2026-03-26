@@ -36,7 +36,7 @@ public class ClientHandler implements Runnable {
     // État de la session client
     private int    userId   = -1;
     private String userEmail = null;
-    private String userRole = null;
+    private String userRole      = null;
 
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
@@ -127,8 +127,8 @@ public class ClientHandler implements Runnable {
             case "GET_ALL_ORDERS",
                  "GET_ORDER_DETAILS",
                  "UPDATE_ORDER_STATUS" -> {
-                // /!\ On doit commenter ce bloc jusqu'à ce que `AdminCommandeClient` 
-                //     envoie son `idUtilisateur` ou maintienne une session, sinon `this.userId` 
+                // /!\ On doit commenter ce bloc jusqu'à ce que `AdminCommandeClient`
+                //     envoie son `idUtilisateur` ou maintienne une session, sinon `this.userId`
                 //     vaut 0 (car c'est une toute nouvelle socket) et bloque l'affichage !
                 /*
                 if (!isAdmin()) {
@@ -138,6 +138,8 @@ public class ClientHandler implements Runnable {
                 */
                 handleAdminCommande(commande, req);
             }
+            case "ADMIN_LISTE_USERS" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
+            case "ADMIN_CHANGER_STATUT_USER" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -156,6 +158,7 @@ public class ClientHandler implements Runnable {
                 Map<String, Object> data = (Map<String, Object>) reponse.get("data");
                 this.userId = (int) data.get("userId");
                 this.userEmail = (String) data.get("email");
+                this.userRole = (String) data.get("role");
             }
             
             envoyerMessage(reponse);
@@ -204,6 +207,25 @@ public class ClientHandler implements Runnable {
             envoyerMessage(creerReponse("ERREUR", "Erreur : " + e.getMessage()));
         }
     }
+
+    private void handlePanierValider(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handlePanierValider");
+        try {
+            Map<String, Object> reponse = panierService.validerPanier(req);
+
+            // Si la commande est validée avec succès, on notifie les administrateurs via UDP
+            if ("OK".equals(reponse.get("statut"))) {
+                String ref = (String) reponse.get("reference");
+                String messageAdmin = "NOUVELLE_COMMANDE:" + (ref != null ? ref : "Inconnue") + ":Utilisateur " + this.userId;
+                server.notifierAdmins(messageAdmin);
+            }
+
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
     private void handleListeProduits(Map<String, Object> req) {
         try {
 
@@ -350,7 +372,7 @@ public class ClientHandler implements Runnable {
 
     private boolean isAdmin() {
         if (this.userId <= 0) return false;
-        
+
         try (java.sql.Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
              java.sql.PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM admin WHERE idAdmin = ?")) {
             ps.setInt(1, this.userId);
@@ -445,6 +467,9 @@ public class ClientHandler implements Runnable {
     // Getters/Setters session
     public int getUserId() { return userId; }
     public void setUserId(int userId) { this.userId = userId; }
+
+    public String getRole() { return userRole; }
+    public Socket getSocket() { return socket; }
 
 
 }

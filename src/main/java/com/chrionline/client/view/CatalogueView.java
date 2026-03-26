@@ -38,14 +38,19 @@ public class CatalogueView extends Application {
     private FlowPane    productGrid;
     Stage               primaryStage; // package-private pour ProductDetailView
     private int         userId;
+    private boolean     isWishlistMode = false;
 
     public CatalogueView() {
         this.userId = com.chrionline.client.session.SessionManager.getInstance().getUserId();
     }
 
     public CatalogueView(int explicitUserId) {
+        this(explicitUserId, false);
+    }
+
+    public CatalogueView(int explicitUserId, boolean isWishlistMode) {
         this.userId = explicitUserId;
-        // Si explicitUserId est passé, on force la session
+        this.isWishlistMode = isWishlistMode;
         if (explicitUserId > 0) {
             com.chrionline.client.session.SessionManager.getInstance().setUser(
                 java.util.Map.of("userId", explicitUserId)
@@ -58,7 +63,7 @@ public class CatalogueView extends Application {
         this.primaryStage = stage;
         this.userId = com.chrionline.client.session.SessionManager.getInstance().getUserId();
         this.controller   = new CatalogueController(userId);
-        stage.setTitle("ChriOnline — Catalogue");
+        stage.setTitle(isWishlistMode ? "ChriOnline — Mes Favoris" : "ChriOnline — Catalogue");
         stage.setScene(new Scene(buildCatalogueRoot(), 1100, 800));
         stage.show();
     }
@@ -91,11 +96,19 @@ public class CatalogueView extends Application {
         // Chargement dans un thread séparé → UI non bloquée
         new Thread(() -> {
             List<Integer> ids = (userId != -1) ? controller.recupererWishlistIds(userId) : new java.util.ArrayList<>();
-            List<Produit> produits = controller.recupererProduits();
+            List<Produit> produitsInit = controller.recupererProduits();
             Platform.runLater(() -> {
                 wishlistIds.clear();
                 if (ids != null) wishlistIds.addAll(ids);
-                afficherProduits(produits);
+                
+                List<Produit> produitsAffiches = produitsInit;
+                if (isWishlistMode) {
+                    produitsAffiches = produitsInit.stream()
+                            .filter(p -> wishlistIds.contains(p.getIdProduit()))
+                            .toList();
+                }
+                
+                afficherProduits(produitsAffiches);
             });
         }).start();
 
@@ -122,10 +135,31 @@ public class CatalogueView extends Application {
 
         HBox nav = new HBox(30);
         nav.setAlignment(Pos.CENTER);
-        nav.getChildren().addAll(navLink("Accueil"), navLink("Assortiment"), navLink("Livraison"));
+        
+        Hyperlink hAccueil = navLink("Accueil");
+        hAccueil.setOnAction(e -> {
+            try { new HomeView().start(primaryStage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
+        
+        Hyperlink hAssortiment = navLink("Assortiment");
+        hAssortiment.setOnAction(e -> {
+            try { new CatalogueView(userId, false).start(primaryStage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
+        
+        nav.getChildren().addAll(hAccueil, hAssortiment, navLink("Livraison"));
 
-        // Bouton panier — visible seulement si connecté
+        // Boutons supplémentaires — variable selon si connecté ou non
         if (userId != -1) {
+            Button btnFavoris = new Button("♥ Mes favoris");
+            btnFavoris.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+            btnFavoris.setStyle(panierBtnStyle(SAUGE_DARK));
+            btnFavoris.setCursor(Cursor.HAND);
+            btnFavoris.setOnMouseEntered(e -> btnFavoris.setStyle(panierBtnStyle("#4E7A5C")));
+            btnFavoris.setOnMouseExited(e  -> btnFavoris.setStyle(panierBtnStyle(SAUGE_DARK)));
+            btnFavoris.setOnAction(e -> {
+                try { new CatalogueView(userId, true).start(primaryStage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+            
             Button btnPanier = new Button("🛒 Mon panier");
             btnPanier.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
             btnPanier.setStyle(panierBtnStyle(TERRACOTTA));
@@ -133,11 +167,45 @@ public class CatalogueView extends Application {
             btnPanier.setOnMouseEntered(e -> btnPanier.setStyle(panierBtnStyle(TERRA_HOVER)));
             btnPanier.setOnMouseExited(e  -> btnPanier.setStyle(panierBtnStyle(TERRACOTTA)));
             btnPanier.setOnAction(e -> ouvrirPanier());
-            nav.getChildren().add(btnPanier);
+
+            Button btnLogout = new Button("🚪 Déconnexion");
+            btnLogout.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+            btnLogout.setStyle(panierBtnStyle(BRUN_LIGHT));
+            btnLogout.setCursor(Cursor.HAND);
+            btnLogout.setOnMouseEntered(e -> btnLogout.setStyle(panierBtnStyle(BRUN)));
+            btnLogout.setOnMouseExited(e  -> btnLogout.setStyle(panierBtnStyle(BRUN_LIGHT)));
+            btnLogout.setOnAction(e -> deconnecter());
+
+            nav.getChildren().addAll(btnFavoris, btnPanier, btnLogout);
+        } else {
+            Button btnLogin = new Button("🔑 Connexion");
+            btnLogin.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+            btnLogin.setStyle(panierBtnStyle(SAUGE_DARK));
+            btnLogin.setCursor(Cursor.HAND);
+            btnLogin.setOnMouseEntered(e -> btnLogin.setStyle(panierBtnStyle(SAUGE)));
+            btnLogin.setOnMouseExited(e  -> btnLogin.setStyle(panierBtnStyle(SAUGE_DARK)));
+            btnLogin.setOnAction(e -> {
+                try {
+                    new com.chrionline.client.view.ConnexionView().start(primaryStage);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            });
+
+            nav.getChildren().add(btnLogin);
         }
 
         header.getChildren().addAll(logo, spacer, nav);
         return header;
+    }
+
+    private void deconnecter() {
+        com.chrionline.client.session.SessionManager.getInstance().clear();
+        try {
+            new com.chrionline.client.view.ConnexionView().start(primaryStage);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private Hyperlink navLink(String text) {
@@ -154,7 +222,7 @@ public class CatalogueView extends Application {
     private void afficherProduits(List<Produit> produits) {
         productGrid.getChildren().clear();
         if (produits == null || produits.isEmpty()) {
-            Text empty = new Text("Aucun produit disponible pour le moment.");
+            Text empty = new Text(isWishlistMode ? "Votre liste de favoris est vide." : "Aucun produit disponible pour le moment.");
             empty.setFont(Font.font("Georgia", 16));
             empty.setFill(Color.web(BRUN_LIGHT));
             productGrid.getChildren().add(empty);
@@ -231,6 +299,16 @@ public class CatalogueView extends Application {
                     wishlistIds.remove(p.getIdProduit());
                     heartIcon.setText("♡");
                     heartIcon.setFill(Color.web(BRUN_LIGHT, 0.7));
+                    
+                    if (isWishlistMode) {
+                        productGrid.getChildren().remove(card);
+                        if (productGrid.getChildren().isEmpty()) {
+                            Text empty = new Text("Votre liste de favoris est vide.");
+                            empty.setFont(Font.font("Georgia", 16));
+                            empty.setFill(Color.web(BRUN_LIGHT));
+                            productGrid.getChildren().add(empty);
+                        }
+                    }
                 }
             } else {
                 if (controller.ajouterWishlist(userId, p.getIdProduit())) {
