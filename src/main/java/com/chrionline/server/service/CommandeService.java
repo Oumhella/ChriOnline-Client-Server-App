@@ -68,6 +68,25 @@ public class CommandeService {
         return dto;
     }
 
+    public CommandeDTO getCommandeByReference(String reference) throws SQLException {
+        Commande c = commandeDAO.findByReference(reference);
+        if (c == null) {
+            throw new IllegalArgumentException("Commande introuvable avec la reference : " + reference);
+        }
+        CommandeDTO dto = convertToDTO(c);
+        List<LigneCommande> lignes = ligneCommandeDAO.findByCommande(c.getIdCommande());
+        for (LigneCommande ligne : lignes) {
+            dto.getLignes().add(new LigneCommandeDTO(
+                    ligne.getIdLigne(),
+                    ligne.getIdProduit(),
+                    ligne.getNomProduit(),
+                    ligne.getQuantite(),
+                    ligne.getPrixUnitaire()
+            ));
+        }
+        return dto;
+    }
+
     // ───── Mettre à jour le statut ─────
     public String updateStatut(String idCommande, String nouveauStatut) throws SQLException {
 

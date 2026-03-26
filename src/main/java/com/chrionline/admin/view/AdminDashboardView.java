@@ -64,13 +64,14 @@ public class AdminDashboardView extends Application {
         Scene scene = new Scene(rootPane, 1100, 700);
         String css = getClass().getResource("/styles/admin.css").toExternalForm();
         scene.getStylesheets().add(css);
-        
+
         stage.setScene(scene);
         stage.setTitle("ChriOnline - Administration Premium");
         stage.setMinWidth(960);
-        stage.setMinHeight(650);        // --- Inscription à l'écouteur UDP pour les notifications Administrateur ---
+        stage.setMinHeight(650); // --- Inscription à l'écouteur UDP pour les notifications Administrateur ---
         try {
-            com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("127.0.0.1", 12345);
+            com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("127.0.0.1",
+                    12345);
 
             // Connecter + enregistrer UDP dans le même thread (évite la race condition)
             Thread udpThread = new Thread(() -> {
@@ -112,8 +113,8 @@ public class AdminDashboardView extends Application {
                     btnNotifications.setText("🔔 (" + count + ")");
                     btnNotifications.setStyle(
                             "-fx-background-color: " + TERRA_LIGHT + "; -fx-border-color: " + TERRACOTTA + ";"
-                            + "-fx-border-radius: 6; -fx-text-fill: " + TERRACOTTA
-                            + "; -fx-padding: 7 14; -fx-font-weight: bold;");
+                                    + "-fx-border-radius: 6; -fx-text-fill: " + TERRACOTTA
+                                    + "; -fx-padding: 7 14; -fx-font-weight: bold;");
                 }
 
                 // Rafraîchir les statistiques du dashboard
@@ -276,7 +277,7 @@ public class AdminDashboardView extends Application {
                 item.setStyle("");
             }
         });
-        
+
         return item;
     }
 

@@ -20,16 +20,16 @@ import javafx.stage.Stage;
 
 public class CheckoutView extends Application {
 
-    private static final String CREME = "#FDFBF7";
-    private static final String CREME_CARD = "#FFFEFB";
-    private static final String SAUGE_DARK = "#6B9E7A";
-    private static final String SAUGE = "#A8C4B0";
-    private static final String TERRACOTTA = "#C96B4A";
+    private static final String CREME       = "#FDFBF7";
+    private static final String CREME_CARD  = "#FFFEFB";
+    private static final String SAUGE_DARK  = "#6B9E7A";
+    private static final String SAUGE       = "#A8C4B0";
+    private static final String TERRACOTTA  = "#C96B4A";
     private static final String TERRA_HOVER = "#A0522D";
-    private static final String BRUN = "#3E2C1E";
-    private static final String BRUN_MED = "#6B4F3A";
-    private static final String BRUN_LIGHT = "#9A7B65";
-    private static final String BORDER = "#E8E0D5";
+    private static final String BRUN        = "#3E2C1E";
+    private static final String BRUN_MED    = "#6B4F3A";
+    private static final String BRUN_LIGHT  = "#9A7B65";
+    private static final String BORDER      = "#E8E0D5";
 
     private final int idUtilisateur;
     private final CommandeDTO recap;
@@ -56,10 +56,11 @@ public class CheckoutView extends Application {
         VBox root = new VBox(0);
         root.setStyle("-fx-background-color: " + CREME + ";");
 
-        root.getChildren().addAll(buildNavigationBar(), buildBanner());
+        // Header (Same as HomeView)
+        root.getChildren().addAll(buildHeader(stage), buildBanner());
 
         VBox content = new VBox(30);
-        content.setPadding(new Insets(40, 60, 50, 60));
+        content.setPadding(new Insets(30, 60, 50, 60));
         content.setAlignment(Pos.TOP_CENTER);
         content.setMaxWidth(900);
 
@@ -87,52 +88,82 @@ public class CheckoutView extends Application {
 
         root.getChildren().add(scroll);
 
-        stage.setScene(new Scene(root, 1000, 800));
+        stage.setScene(new Scene(root, 1000, 700));
         stage.centerOnScreen();
         stage.show();
     }
 
-    private HBox buildNavigationBar() {
+    // --- EXACT REPRODUCTION OF HOMEVIEW HEADER ---
+    private HBox buildHeader(Stage stage) {
         HBox header = new HBox(40);
-        header.setPadding(new Insets(22, 48, 22, 48));
+        header.setPadding(new Insets(25, 60, 25, 60));
         header.setAlignment(Pos.CENTER_LEFT);
-        header.setStyle("-fx-background-color: " + CREME_CARD + ";" +
-                        "-fx-border-color: transparent transparent " + BORDER + " transparent;" +
-                        "-fx-border-width: 0 0 1 0;");
+        header.setStyle("-fx-background-color: " + CREME + "; -fx-border-color: transparent transparent " + BORDER + " transparent; -fx-border-width: 0 0 1 0;");
 
         Text logo = new Text("ChriOnline");
-        logo.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
+        logo.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
         logo.setFill(Color.web(BRUN));
         logo.setCursor(javafx.scene.Cursor.HAND);
-        logo.setOnMouseClicked(e -> {
-            try { new CatalogueView(idUtilisateur).start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-        });
+        logo.setOnMouseClicked(e -> { try { new HomeView().start(stage); } catch (Exception ex) {} });
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox nav = new HBox(28);
+        HBox nav = new HBox(35);
         nav.setAlignment(Pos.CENTER);
         
-        Hyperlink lAccueil = new Hyperlink("Accueil");
-        lAccueil.setFont(Font.font("Georgia", 14));
-        lAccueil.setTextFill(Color.web(BRUN));
-        lAccueil.setStyle("-fx-border-color: transparent;");
-        lAccueil.setOnAction(e -> { try { new CatalogueView(idUtilisateur).start(stage); } catch (Exception ex) { ex.printStackTrace(); } });
+        Hyperlink hAcc = navLink("Accueil", false);
+        Hyperlink hCat = navLink("Catalogue", false);
+        Hyperlink hOrd = navLink("Mes Commandes", false);
+        Hyperlink hAbo = navLink("À propos", false);
+        
+        hAcc.setOnAction(e -> { try { new HomeView().start(stage); } catch (Exception ex) {} });
+        hCat.setOnAction(e -> { try { new CatalogueView().start(stage); } catch (Exception ex) {} });
+        hOrd.setOnAction(e -> { try { new MesCommandesView().start(stage); } catch (Exception ex) {} });
 
-        Hyperlink lCatalogue = new Hyperlink("Catalogue");
-        lCatalogue.setFont(Font.font("Georgia", 14));
-        lCatalogue.setTextFill(Color.web(BRUN));
-        lCatalogue.setStyle("-fx-border-color: transparent;");
-        lCatalogue.setOnAction(e -> { try { new CatalogueView(idUtilisateur).start(stage); } catch (Exception ex) { ex.printStackTrace(); } });
+        nav.getChildren().addAll(hAcc, hCat, hOrd, hAbo);
+        
+        HBox rightControls = new HBox(20);
+        rightControls.setAlignment(Pos.CENTER);
+        
+        boolean isLogged = com.chrionline.client.session.SessionManager.getInstance().isLogged();
+        if (isLogged) {
+            String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
+            String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
+            String initials = (prenom != null && !prenom.isEmpty() ? prenom.toUpperCase().substring(0,1) : "") + 
+                              (nom != null && !nom.isEmpty() ? nom.toUpperCase().substring(0,1) : "");
+            if (initials.isEmpty()) initials = "U";
+            
+            StackPane avatar = new StackPane();
+            Circle circle = new Circle(18, Color.web(TERRACOTTA));
+            Text initText = new Text(initials);
+            initText.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
+            initText.setFill(Color.WHITE);
+            avatar.getChildren().addAll(circle, initText);
+            avatar.setCursor(javafx.scene.Cursor.HAND);
+            avatar.setOnMouseClicked(e -> { try { new ProfilView().start(stage); } catch (Exception ex) {} });
+            rightControls.getChildren().add(avatar);
+        }
 
-        Text tAction = new Text("Paiement");
-        tAction.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-        tAction.setFill(Color.web(SAUGE_DARK));
+        Button btnAuth = new Button(isLogged ? "Déconnexion" : "Connexion");
+        btnAuth.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BRUN + "; -fx-border-color: " + BRUN + "; -fx-border-radius: 20; -fx-padding: 8 20; -fx-font-family: 'Georgia';");
+        btnAuth.setOnAction(e -> {
+            if (isLogged) com.chrionline.client.session.SessionManager.getInstance().clear();
+            try { new ConnexionView().start(stage); } catch (Exception ex) {}
+        });
+        rightControls.getChildren().add(btnAuth);
 
-        nav.getChildren().addAll(lAccueil, lCatalogue, tAction);
-        header.getChildren().addAll(logo, spacer, nav);
+        header.getChildren().addAll(logo, spacer, nav, rightControls);
         return header;
+    }
+
+    private Hyperlink navLink(String text, boolean actif) {
+        Hyperlink link = new Hyperlink(text);
+        link.setFont(Font.font("Georgia", actif ? FontWeight.BOLD : FontWeight.NORMAL, 16));
+        link.setTextFill(Color.web(actif ? SAUGE_DARK : BRUN));
+        link.setUnderline(false);
+        link.setStyle("-fx-border-color: transparent;");
+        return link;
     }
 
     private VBox buildBanner() {
@@ -336,9 +367,7 @@ public class CheckoutView extends Application {
                 if (res != null) {
                     try {
                         new ConfirmationCommandeView(idUtilisateur, res).start(stage);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                    } catch (Exception e) { e.printStackTrace(); }
                 } else {
                     msgLabel.setTextFill(Color.web("#D32F2F"));
                     msgLabel.setText("⚠ Erreur lors de la confirmation de votre paiement.");

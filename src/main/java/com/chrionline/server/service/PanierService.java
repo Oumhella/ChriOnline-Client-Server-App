@@ -17,8 +17,6 @@ import java.util.Map;
  */
 public class PanierService {
 
-
-
     public Map<String, Object> getPanier(Map<String, Object> req) {
         int idUtilisateur = getInt(req, "idUtilisateur");
         if (idUtilisateur == -1)
@@ -32,16 +30,15 @@ public class PanierService {
         }
     }
 
-
-
     public Map<String, Object> ajouterProduit(Map<String, Object> req) {
-        int idUtilisateur    = getInt(req, "idUtilisateur");
+        int idUtilisateur = getInt(req, "idUtilisateur");
         int idProductFormats = getInt(req, "idProductFormats");
-        int quantite         = getInt(req, "quantite");
+        int quantite = getInt(req, "quantite");
 
         if (idUtilisateur == -1 || idProductFormats == -1)
             return erreur("Paramètres manquants.");
-        if (quantite <= 0) quantite = 1;
+        if (quantite <= 0)
+            quantite = 1;
 
         try {
             Panier panier = PanierDAO.ajouterProduit(idUtilisateur, idProductFormats, quantite);
@@ -51,12 +48,10 @@ public class PanierService {
         }
     }
 
-
-
     public Map<String, Object> modifierQuantite(Map<String, Object> req) {
-        int idUtilisateur    = getInt(req, "idUtilisateur");
+        int idUtilisateur = getInt(req, "idUtilisateur");
         int idProductFormats = getInt(req, "idProductFormats");
-        int nouvelleQte      = getInt(req, "quantite");
+        int nouvelleQte = getInt(req, "quantite");
 
         if (idUtilisateur == -1 || idProductFormats == -1)
             return erreur("Paramètres manquants.");
@@ -69,10 +64,8 @@ public class PanierService {
         }
     }
 
-
-
     public Map<String, Object> retirerProduit(Map<String, Object> req) {
-        int idUtilisateur    = getInt(req, "idUtilisateur");
+        int idUtilisateur = getInt(req, "idUtilisateur");
         int idProductFormats = getInt(req, "idProductFormats");
 
         if (idUtilisateur == -1 || idProductFormats == -1)
@@ -99,8 +92,6 @@ public class PanierService {
         }
     }
 
-
-
     public Map<String, Object> validerPanier(Map<String, Object> req) {
         int idUtilisateur = getInt(req, "idUtilisateur");
         if (idUtilisateur == -1)
@@ -109,9 +100,9 @@ public class PanierService {
         try {
             CommandeDTO recap = PanierDAO.validerPanier(idUtilisateur);
             return Map.of(
-                    "statut",    "OK",
-                    "message",   "Commande créée avec succès !",
-                    "recap",     recap,
+                    "statut", "OK",
+                    "message", "Commande créée avec succès !",
+                    "recap", recap,
                     "reference", recap.getReference() // Backwards compatibility if needed
             );
         } catch (Exception e) {
@@ -119,23 +110,21 @@ public class PanierService {
         }
     }
 
-
     public Map<String, Object> confirmerCommande(Map<String, Object> req) {
         int idUtilisateur = getInt(req, "idUtilisateur");
         String methodePaiement = (String) req.get("methodePaiement");
         String nomCarte = (String) req.get("nomCarte");
         String numeroCarte = (String) req.get("numeroCarte");
-        
+
         if (idUtilisateur == -1 || methodePaiement == null)
             return erreur("Parametres manquants.");
 
         try {
             CommandeDTO recap = PanierDAO.confirmerCommande(idUtilisateur, methodePaiement, nomCarte, numeroCarte);
             return Map.of(
-                    "statut",    "OK",
-                    "message",   "Commande confirmee avec succes !",
-                    "commandeResult", recap
-            );
+                    "statut", "OK",
+                    "message", "Commande confirmee avec succes !",
+                    "commandeResult", recap);
         } catch (Exception e) {
             return erreur(e.getMessage());
         }
@@ -163,12 +152,15 @@ public class PanierService {
         return dto;
     }
 
-
     private int getInt(Map<String, Object> req, String key) {
         Object val = req.get(key);
-        if (val instanceof Integer) return (Integer) val;
-        if (val instanceof String)  {
-            try { return Integer.parseInt((String) val); } catch (NumberFormatException ignored) {}
+        if (val instanceof Integer)
+            return (Integer) val;
+        if (val instanceof String) {
+            try {
+                return Integer.parseInt((String) val);
+            } catch (NumberFormatException ignored) {
+            }
         }
         return -1;
     }
