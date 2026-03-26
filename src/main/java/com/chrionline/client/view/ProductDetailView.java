@@ -231,9 +231,13 @@ public class ProductDetailView {
             }
         }
 
-        // ── Add to Cart Button ──
+        // ── Actions (Cart + Wishlist) ──
+        HBox actionsRow = new HBox(15);
+        actionsRow.setAlignment(Pos.CENTER_LEFT);
+        VBox.setMargin(actionsRow, new Insets(10, 0, 0, 0));
+
         Button btnAcheter = new Button("Ajouter au panier");
-        btnAcheter.setMaxWidth(Double.MAX_VALUE);
+        btnAcheter.setPrefWidth(200);
         btnAcheter.setCursor(Cursor.HAND);
         btnAcheter.setFont(Font.font("Georgia", FontWeight.BOLD, 15));
         btnAcheter.setStyle(
@@ -244,8 +248,48 @@ public class ProductDetailView {
         );
         btnAcheter.setOnAction(e -> System.out.println("[Detail] Ajout au panier : " + produit.getNom()));
 
-        VBox.setMargin(btnAcheter, new Insets(10, 0, 0, 0));
-        info.getChildren().add(btnAcheter);
+        // Wishlist Button
+        Button btnWishlist = new Button();
+        btnWishlist.setPrefSize(48, 48);
+        btnWishlist.setMinSize(48, 48);
+        btnWishlist.setCursor(Cursor.HAND);
+        
+        int userId = com.chrionline.client.session.SessionManager.getInstance().getUserId();
+        com.chrionline.client.controller.CatalogueController controller = new com.chrionline.client.controller.CatalogueController();
+        java.util.List<Integer> initialWishlist = (userId != -1) ? controller.recupererWishlistIds(userId) : java.util.Collections.emptyList();
+        boolean estDansWishlist = initialWishlist.contains(produit.getIdProduit());
+
+        Text heartIcon = new Text(estDansWishlist ? "♥" : "♡");
+        heartIcon.setFont(Font.font("Arial", FontWeight.BOLD, 24));
+        heartIcon.setFill(estDansWishlist ? Color.web(TERRACOTTA) : Color.web(BRUN_LIGHT));
+        btnWishlist.setGraphic(heartIcon);
+        btnWishlist.setStyle(
+            "-fx-background-color: white;" +
+            "-fx-border-color: " + BORDER + ";" +
+            "-fx-border-radius: 8;" +
+            "-fx-background-radius: 8;"
+        );
+
+        btnWishlist.setOnAction(e -> {
+            if (userId == -1) {
+                System.out.println("Veuillez vous connecter pour utiliser la wishlist.");
+                return;
+            }
+            if (heartIcon.getText().equals("♥")) {
+                if (controller.supprimerWishlist(userId, produit.getIdProduit())) {
+                    heartIcon.setText("♡");
+                    heartIcon.setFill(Color.web(BRUN_LIGHT));
+                }
+            } else {
+                if (controller.ajouterWishlist(userId, produit.getIdProduit())) {
+                    heartIcon.setText("♥");
+                    heartIcon.setFill(Color.web(TERRACOTTA));
+                }
+            }
+        });
+
+        actionsRow.getChildren().addAll(btnWishlist, btnAcheter);
+        info.getChildren().add(actionsRow);
 
         return info;
     }

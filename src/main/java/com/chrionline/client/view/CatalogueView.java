@@ -110,7 +110,17 @@ public class CatalogueView extends Application {
         return link;
     }
 
+    private java.util.Set<Integer> wishlistIds = new java.util.HashSet<>();
+
     private void chargerProduits() {
+        // Load wishlist if logged in
+        int userId = com.chrionline.client.session.SessionManager.getInstance().getUserId();
+        if (userId != -1) {
+            List<Integer> ids = controller.recupererWishlistIds(userId);
+            wishlistIds.clear();
+            wishlistIds.addAll(ids);
+        }
+
         List<Produit> produits = controller.recupererProduits();
         productGrid.getChildren().clear();
 
@@ -175,6 +185,43 @@ public class CatalogueView extends Application {
         } else {
             imageContainer.getChildren().add(initial);
         }
+
+        // --- Heart Icon for Wishlist ---
+        Text heartIcon = new Text(wishlistIds.contains(p.getIdProduit()) ? "♥" : "♡");
+        heartIcon.setFont(Font.font("Arial", FontWeight.BOLD, 24));
+        // Use an accent color if filled, else soft brown
+        heartIcon.setFill(wishlistIds.contains(p.getIdProduit()) ? Color.web(TERRACOTTA) : Color.web(BRUN_LIGHT, 0.7));
+        heartIcon.setCursor(Cursor.HAND);
+        
+        StackPane.setAlignment(heartIcon, Pos.TOP_RIGHT);
+        StackPane.setMargin(heartIcon, new Insets(10, 10, 0, 0));
+        
+        // Wishlist click handler
+        heartIcon.setOnMouseClicked(e -> {
+            e.consume(); // prevent opening detail view
+            int userId = com.chrionline.client.session.SessionManager.getInstance().getUserId();
+            if (userId == -1) {
+                System.out.println("Veuillez vous connecter pour utiliser la wishlist.");
+                return;
+            }
+            
+            boolean currentlyInWishlist = wishlistIds.contains(p.getIdProduit());
+            if (currentlyInWishlist) {
+                if (controller.supprimerWishlist(userId, p.getIdProduit())) {
+                    wishlistIds.remove(p.getIdProduit());
+                    heartIcon.setText("♡");
+                    heartIcon.setFill(Color.web(BRUN_LIGHT, 0.7));
+                }
+            } else {
+                if (controller.ajouterWishlist(userId, p.getIdProduit())) {
+                    wishlistIds.add(p.getIdProduit());
+                    heartIcon.setText("♥");
+                    heartIcon.setFill(Color.web(TERRACOTTA));
+                }
+            }
+        });
+        
+        imageContainer.getChildren().add(heartIcon);
 
         // ── Info ─────────────────────────────
         VBox info = new VBox(8);

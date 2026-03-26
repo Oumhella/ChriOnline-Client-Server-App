@@ -2,6 +2,8 @@ package com.chrionline.client.controller;
 
 import com.chrionline.client.network.Client;
 import com.chrionline.shared.models.Produit;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,6 +63,58 @@ public class CatalogueController {
             e.printStackTrace();
         }
         return null;
+    }
+
+
+
+    public boolean ajouterWishlist(int userId, int produitId) {
+        try {
+            client.connecter();
+            Map<String, Object> req = new HashMap<>();
+            req.put("commande", "AJOUTER_WISHLIST");
+            req.put("userId", userId);
+            req.put("produitId", produitId);
+            client.envoyerRequete(req);
+            Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
+            return "OK".equals(rep.get("statut"));
+        } catch (Exception e) {
+            System.err.println("[CatalogueController] Erreur réseau (ajout wishlist) : " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean supprimerWishlist(int userId, int produitId) {
+        try {
+            client.connecter();
+            Map<String, Object> req = new HashMap<>();
+            req.put("commande", "SUPPRIMER_WISHLIST");
+            req.put("userId", userId);
+            req.put("produitId", produitId);
+            client.envoyerRequete(req);
+            Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
+            return "OK".equals(rep.get("statut"));
+        } catch (Exception e) {
+            System.err.println("[CatalogueController] Erreur réseau (suppression wishlist) : " + e.getMessage());
+            return false;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Integer> recupererWishlistIds(int userId) {
+        try {
+            client.connecter();
+            Map<String, Object> req = new HashMap<>();
+            req.put("commande", "LISTE_WISHLIST");
+            req.put("userId", userId);
+            client.envoyerRequete(req);
+            Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
+            if ("OK".equals(rep.get("statut"))) {
+                return (List<Integer>) rep.get("wishlistIds");
+            }
+        } catch (Exception e) {
+            System.err.println("[CatalogueController] Erreur réseau (liste wishlist) : " + e.getMessage());
+        }
+        return new ArrayList<>();
     }
 
     public void ajouterAuPanier(Produit p) {

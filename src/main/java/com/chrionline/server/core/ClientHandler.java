@@ -84,6 +84,9 @@ public class ClientHandler implements Runnable {
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
             case "DETAIL_PRODUIT" -> handleDetailProduit(req);
+            case "AJOUTER_WISHLIST"  -> handleAjouterWishlist(req);
+            case "SUPPRIMER_WISHLIST"-> handleSupprimerWishlist(req);
+            case "LISTE_WISHLIST"    -> handleListeWishlist(req);
             case "CONFIRMER_EMAIL"       -> handleConfirmerEmail(req);
             case "OUBLIER_MOT_DE_PASSE" -> handleOublierMotDePasse(req);
             case "REINITIALISER_MDP"     -> handleReinitialiserMdp(req);
@@ -165,6 +168,33 @@ public class ClientHandler implements Runnable {
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur lors de la récupération du produit : " + e.getMessage()));
+        }
+    }
+
+    private void handleAjouterWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleAjouterWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleSupprimerWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleSupprimerWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleListeWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleGetWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
         }
     }
 

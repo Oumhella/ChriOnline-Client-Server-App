@@ -57,6 +57,9 @@ public class ConnexionController {
                         Map<String, Object> data = (Map<String, Object>) rep.get("data");
                         String role = data != null ? (String) data.getOrDefault("role", "client") : "client";
 
+                        // Sauvegarder la session client
+                        com.chrionline.client.session.SessionManager.getInstance().setUser(data);
+
                         new Thread(() -> {
                             try { Thread.sleep(800); } catch (InterruptedException ignored) {}
                             Platform.runLater(() -> {
