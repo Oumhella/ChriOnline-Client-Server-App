@@ -1,6 +1,8 @@
 package com.chrionline.shared.models;
 
-public class LabelValue {
+import java.io.Serializable;
+
+public class LabelValue implements Serializable {
 
     private int id;
     private String valeur;

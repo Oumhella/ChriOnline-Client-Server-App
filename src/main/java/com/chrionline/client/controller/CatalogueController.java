@@ -39,6 +39,30 @@ public class CatalogueController {
         return new ArrayList<>();
     }
 
+    @SuppressWarnings("unchecked")
+    public Produit recupererProduitDetail(int id) {
+        try {
+            client.connecter();
+            Map<String, Object> req = new HashMap<>();
+            req.put("commande", "DETAIL_PRODUIT");
+            req.put("id", id);
+
+            client.envoyerRequete(req);
+
+            Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
+
+            if ("OK".equals(rep.get("statut"))) {
+                return (Produit) rep.get("produit");
+            } else {
+                System.err.println("[CatalogueController] Erreur détail : " + rep.get("message"));
+            }
+        } catch (Exception e) {
+            System.err.println("[CatalogueController] Erreur réseau (détail) : " + e.getMessage());
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     public void ajouterAuPanier(Produit p) {
         // Logique panier à venir
         System.out.println("[CatalogueController] Ajout au panier : " + p.getNom());

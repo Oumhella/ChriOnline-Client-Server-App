@@ -5,9 +5,9 @@ import com.chrionline.shared.models.Produit;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.effect.DropShadow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
@@ -22,7 +22,7 @@ import java.util.List;
 
 public class CatalogueView extends Application {
 
-    // Palette Organique & Minimaliste (Inspirée de l'image)
+    // Palette Organique & Minimaliste
     private static final String CREME       = "#FDFBF7";
     private static final String SAUGE       = "#A8C4B0";
     private static final String SAUGE_DARK  = "#6B9E7A";
@@ -33,13 +33,22 @@ public class CatalogueView extends Application {
 
     private CatalogueController controller;
     private FlowPane productGrid;
+    private Stage primaryStage;
 
     @Override
     public void start(Stage stage) {
+        this.primaryStage = stage;
         this.controller = new CatalogueController();
         
         stage.setTitle("ChriOnline — Catalogue");
 
+        Scene scene = new Scene(buildCatalogueRoot(), 1100, 800);
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    /** Builds the full catalogue root layout. */
+    public VBox buildCatalogueRoot() {
         VBox root = new VBox(0);
         root.setStyle("-fx-background-color: " + CREME + ";");
 
@@ -63,9 +72,7 @@ public class CatalogueView extends Application {
         // ── Chargement des produits ──────────────────────────
         chargerProduits();
 
-        Scene scene = new Scene(root, 1100, 800);
-        stage.setScene(scene);
-        stage.show();
+        return root;
     }
 
     private HBox buildHeader() {
@@ -120,44 +127,48 @@ public class CatalogueView extends Application {
     }
 
     private VBox createProductCard(Produit p) {
+
         VBox card = new VBox(15);
         card.setPrefWidth(220);
         card.setPadding(new Insets(0, 0, 20, 0));
         card.setAlignment(Pos.TOP_CENTER);
         card.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
-        
-        // ── Gestion de l'image ────────────────────────────────
+        card.setCursor(Cursor.HAND);
+
+        // Use direct imageUrl and prix from Produit
+        String imageUrl = p.getImageUrl();
+        String prix = (p.getPrix() > 0) ? String.format("%.2f MAD", p.getPrix()) : "N/A";
+
+        // ── Image ─────────────────────────────
         StackPane imageContainer = new StackPane();
         imageContainer.setPrefSize(220, 260);
         imageContainer.setStyle("-fx-background-color: #F5EFEB; -fx-background-radius: 10 10 0 0;");
-        
-        // Placeholder pendant le chargement ou si URL vide
+
         Text initial = new Text(p.getNom().substring(0, 1).toUpperCase());
         initial.setFont(Font.font("Georgia", 40));
         initial.setFill(Color.web(BRUN_LIGHT, 0.5));
-        
-        if (p.getImageUrl() != null && !p.getImageUrl().isBlank()) {
+
+        if (imageUrl != null && !imageUrl.isBlank()) {
             try {
-                // Chargement asynchrone pour ne pas figer l'UI
-                Image img = new Image(p.getImageUrl(), 220, 260, true, true, true);
+                Image img = new Image(imageUrl, 220, 260, true, true, true);
                 ImageView iv = new ImageView(img);
-                iv.setPreserveRatio(true);
+
                 iv.setFitWidth(220);
                 iv.setFitHeight(260);
-                
-                // On cache l'initiale si l'image charge
+
                 img.progressProperty().addListener((obs, old, progress) -> {
                     if (progress.doubleValue() >= 1.0 && !img.isError()) {
                         initial.setVisible(false);
                     }
                 });
-                
-                // Clip pour arrondir le haut de l'image
+
                 Rectangle clip = new Rectangle(220, 260);
-                clip.setArcWidth(20); clip.setArcHeight(20);
+                clip.setArcWidth(20);
+                clip.setArcHeight(20);
                 iv.setClip(clip);
-                
+
                 imageContainer.getChildren().addAll(initial, iv);
+
             } catch (Exception e) {
                 imageContainer.getChildren().add(initial);
             }
@@ -165,38 +176,75 @@ public class CatalogueView extends Application {
             imageContainer.getChildren().add(initial);
         }
 
+        // ── Info ─────────────────────────────
         VBox info = new VBox(8);
         info.setPadding(new Insets(0, 15, 0, 15));
-        info.setAlignment(Pos.CENTER_LEFT);
 
         Text name = new Text(p.getNom());
         name.setFont(Font.font("Georgia", FontWeight.BOLD, 15));
         name.setFill(Color.web(BRUN));
-        name.setWrappingWidth(190);
 
-        Text price = new Text(p.getPrix() + " MAD");
-        price.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-        price.setFill(Color.web(BRUN_LIGHT));
+        // Category label
+        if (p.getCategorie() != null && p.getCategorie().getNom() != null) {
+            Text categoryLabel = new Text(p.getCategorie().getNom());
+            categoryLabel.setFont(Font.font("Georgia", 12));
+            categoryLabel.setFill(Color.web(SAUGE_DARK));
+            info.getChildren().add(categoryLabel);
+        }
 
-        Button btnBuy = new Button("Acheter");
-        btnBuy.setMaxWidth(Double.MAX_VALUE);
-        btnBuy.setStyle("-fx-background-color: transparent; -fx-border-color: " + BORDER + "; -fx-border-radius: 5; -fx-text-fill: " + BRUN + "; -fx-font-family: 'Georgia';");
-        btnBuy.setOnAction(e -> controller.ajouterAuPanier(p));
-        btnBuy.setCursor(javafx.scene.Cursor.HAND);
-        
-        // Hover effect for button
-        btnBuy.setOnMouseEntered(e -> btnBuy.setStyle("-fx-background-color: " + SAUGE + "; -fx-text-fill: white; -fx-border-color: " + SAUGE + "; -fx-border-radius: 5; -fx-font-family: 'Georgia';"));
-        btnBuy.setOnMouseExited(e -> btnBuy.setStyle("-fx-background-color: transparent; -fx-border-color: " + BORDER + "; -fx-border-radius: 5; -fx-text-fill: " + BRUN + "; -fx-font-family: 'Georgia';"));
+        Text priceText = new Text(prix);
+        priceText.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
+        priceText.setFill(Color.web(BRUN_LIGHT));
 
-        info.getChildren().addAll(name, price, btnBuy);
+        Button btnDetail = new Button("Voir détails");
+        btnDetail.setMaxWidth(Double.MAX_VALUE);
+        btnDetail.setStyle(
+            "-fx-background-color: " + SAUGE + ";" +
+            "-fx-text-fill: white;" +
+            "-fx-font-family: Georgia;" +
+            "-fx-font-size: 13px;" +
+            "-fx-background-radius: 6;" +
+            "-fx-cursor: hand;"
+        );
+        btnDetail.setOnAction(e -> ouvrirDetailProduit(p.getIdProduit()));
+
+        info.getChildren().addAll(name, priceText, btnDetail);
+
+        // Click anywhere on card to open detail
+        card.setOnMouseClicked(e -> ouvrirDetailProduit(p.getIdProduit()));
+
+        // Hover effect
+        card.setOnMouseEntered(e -> card.setStyle(
+            "-fx-background-color: white; -fx-background-radius: 10; " +
+            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 15, 0, 0, 4);"
+        ));
+        card.setOnMouseExited(e -> card.setStyle(
+            "-fx-background-color: white; -fx-background-radius: 10;"
+        ));
 
         card.getChildren().addAll(imageContainer, info);
 
-        // Shadow effect
-        DropShadow shadow = new DropShadow(10, Color.web(BRUN, 0.05));
-        card.setEffect(shadow);
-
         return card;
+    }
+
+    /** Opens the ProductDetailView for the given product ID. */
+    private void ouvrirDetailProduit(int idProduit) {
+        Produit detail = controller.recupererProduitDetail(idProduit);
+        if (detail != null && primaryStage != null) {
+            ProductDetailView detailView = new ProductDetailView(detail, primaryStage, this);
+            Scene detailScene = new Scene(detailView.build(), 1100, 800);
+            primaryStage.setScene(detailScene);
+        } else {
+            System.err.println("[CatalogueView] Impossible de charger le détail du produit #" + idProduit);
+        }
+    }
+
+    /** Called by ProductDetailView to return to the catalogue. */
+    public void retourCatalogue() {
+        if (primaryStage != null) {
+            Scene catalogueScene = new Scene(buildCatalogueRoot(), 1100, 800);
+            primaryStage.setScene(catalogueScene);
+        }
     }
 
     public static void main(String[] args) {

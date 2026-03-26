@@ -83,6 +83,7 @@ public class ClientHandler implements Runnable {
             case "CONNEXION" -> handleConnexion(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
+            case "DETAIL_PRODUIT" -> handleDetailProduit(req);
             case "CONFIRMER_EMAIL"       -> handleConfirmerEmail(req);
             case "OUBLIER_MOT_DE_PASSE" -> handleOublierMotDePasse(req);
             case "REINITIALISER_MDP"     -> handleReinitialiserMdp(req);
@@ -155,6 +156,15 @@ public class ClientHandler implements Runnable {
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur lors de la récupération des produits : " + e.getMessage()));
+        }
+    }
+
+    private void handleDetailProduit(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = produitService.handleGetProduitById(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur lors de la récupération du produit : " + e.getMessage()));
         }
     }
 

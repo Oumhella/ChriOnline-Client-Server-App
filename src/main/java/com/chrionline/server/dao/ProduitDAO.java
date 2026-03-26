@@ -14,29 +14,50 @@ import java.util.*;
 public class ProduitDAO {
 
     public static List<Produit> findAll() {
-        List<Produit> produits = new ArrayList<>();
-        String sql = "SELECT * FROM produit";
+        Map<Integer, Produit> produitsMap = new LinkedHashMap<>();
+        String sql = "SELECT p.id_produit, p.nom, p.description, p.date_ajout, p.id_categorie, " +
+                     "pf.id_product_formats, pf.prix, pf.image_url " +
+                     "FROM produit p LEFT JOIN product_formats pf ON p.id_produit = pf.id_produit " +
+                     "ORDER BY p.id_produit";
 
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
 
             while (rs.next()) {
-                Produit p = new Produit();
-                p.setIdProduit(rs.getInt("id_produit"));
-                p.setIdCategorie(rs.getInt("id_categorie"));
-                p.setNom(rs.getString("nom"));
-                p.setDescription(rs.getString("description"));
-                p.setDateAjout(rs.getTimestamp("date_ajout"));
+                int idProduit = rs.getInt("id_produit");
 
-                produits.add(p);
+                Produit p = produitsMap.get(idProduit);
+                if (p == null) {
+                    p = new Produit();
+                    p.setIdProduit(idProduit);
+                    p.setIdCategorie(rs.getInt("id_categorie"));
+                    p.setNom(rs.getString("nom"));
+                    p.setDescription(rs.getString("description"));
+                    p.setDateAjout(rs.getTimestamp("date_ajout"));
+                    produitsMap.put(idProduit, p);
+                }
+
+                // Set imageUrl and prix from the first format that has them
+                if (p.getImageUrl() == null) {
+                    String imgUrl = rs.getString("image_url");
+                    if (imgUrl != null) {
+                        p.setImageUrl(imgUrl);
+                    }
+                }
+                if (p.getPrix() == 0) {
+                    double prix = rs.getDouble("prix");
+                    if (!rs.wasNull()) {
+                        p.setPrix((float) prix);
+                    }
+                }
             }
 
         } catch (SQLException e) {
             System.err.println("[ProduitDAO] Erreur findAll : " + e.getMessage());
         }
 
-        return produits;
+        return new ArrayList<>(produitsMap.values());
     }
 
     public static Produit findById(int id) {
@@ -67,7 +88,7 @@ public class ProduitDAO {
 
             while (rs.next()) {
 
-                // 🔹 Produit
+                //  Produit
                 if (produit == null) {
                     produit = new Produit();
                     produit.setIdProduit(rs.getInt("id_produit"));
@@ -79,7 +100,7 @@ public class ProduitDAO {
                     produit.setFormats(new ArrayList<>());
                 }
 
-                // 🔹 Format
+                //  Format
                 int formatId = rs.getInt("id_product_formats");
 
                 ProductFormat format = formatsMap.get(formatId);
@@ -98,12 +119,12 @@ public class ProduitDAO {
                     produit.getFormats().add(format);
                 }
 
-                // 🔹 LabelValue
+                //  LabelValue
                 LabelValue lv = new LabelValue();
                 lv.setId(rs.getInt("id_labelValues"));
                 lv.setValeur(rs.getString("valeur"));
 
-                // 🔹 Label
+                //  Label
                 Label label = new Label();
                 label.setId(rs.getInt("id_label"));
                 label.setNom(rs.getString("label_nom"));
