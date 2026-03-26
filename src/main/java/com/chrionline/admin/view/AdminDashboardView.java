@@ -109,7 +109,8 @@ public class AdminDashboardView extends Application {
 
     private void afficherVue(Node node) {
         node.setOpacity(0);
-        rootPane.setCenter(node);
+        HBox.setHgrow(node, Priority.ALWAYS);
+        rootPane.getChildren().set(1, node);
         FadeTransition ft = new FadeTransition(Duration.millis(400), node);
         ft.setFromValue(0);
         ft.setToValue(1);
