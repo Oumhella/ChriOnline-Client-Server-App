@@ -9,6 +9,7 @@ public class CommandeDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String idCommande;
+    private String reference;       // ex: CMD-2026-00042
     private String nomUtilisateur;
     private double montantTotal;
     private String statut;
@@ -33,6 +34,7 @@ public class CommandeDTO implements Serializable {
 
     // ───── Getters ─────
     public String getIdCommande() { return idCommande; }
+    public String getReference() { return reference; }
     public String getNomUtilisateur() { return nomUtilisateur; }
     public double getMontantTotal() { return montantTotal; }
     public String getStatut() { return statut; }
@@ -41,6 +43,7 @@ public class CommandeDTO implements Serializable {
 
     // ───── Setters ─────
     public void setIdCommande(String idCommande) { this.idCommande = idCommande; }
+    public void setReference(String reference) { this.reference = reference; }
     public void setNomUtilisateur(String nomUtilisateur) { this.nomUtilisateur = nomUtilisateur; }
     public void setMontantTotal(double montantTotal) { this.montantTotal = montantTotal; }
     public void setStatut(String statut) { this.statut = statut; }

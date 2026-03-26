@@ -114,16 +114,27 @@ public class ClientHandler implements Runnable {
         System.out.println("[HANDLER] >>> handleConnexion appelée");
         try {
             Map<String, Object> reponse = authService.login(req);
-            
+
+            System.out.println("[HANDLER] Login statut = " + reponse.get("statut"));
+
             if ("OK".equals(reponse.get("statut"))) {
-                Map<String, Object> data = (Map<String, Object>) reponse.get("data");
-                this.userId = (int) data.get("userId");
-                this.userEmail = (String) data.get("email");
-                this.userRole  = (String) data.get("role");
+                Object dataObj = reponse.get("data");
+                if (dataObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = (Map<String, Object>) dataObj;
+                    this.userId    = (int) data.get("userId");
+                    this.userEmail = (String) data.get("email");
+                    this.userRole  = (String) data.get("role");
+                    System.out.println("[HANDLER] Session ouverte : userId=" + userId + " role=" + userRole);
+                }
+            } else {
+                System.out.println("[HANDLER] Echec connexion : " + reponse.get("message"));
             }
-            
+
             envoyerMessage(reponse);
         } catch (Exception e) {
+            System.err.println("[HANDLER] Exception handleConnexion : " + e.getMessage());
+            e.printStackTrace();
             envoyerMessage(creerReponse("ERREUR", "Erreur technique : " + e.getMessage()));
         }
     }
@@ -209,7 +220,8 @@ public class ClientHandler implements Runnable {
     }
 
     private boolean isAdmin() {
-        return "ADMIN".equals(userRole);
+        // UserDAO retourne le rôle en minuscule ('admin'), on compare sans sensibilité à la casse
+        return userRole != null && userRole.equalsIgnoreCase("ADMIN");
     }
 
     public void fermerConnexion() {
@@ -234,6 +246,7 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleGetAllOrders(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleGetAllOrders appelée — userId=" + userId + " role=" + userRole);
         try {
             Connection conn = DatabaseConnection.getInstance().getConnection();
             CommandeService service = new CommandeService(
@@ -241,12 +254,15 @@ public class ClientHandler implements Runnable {
                     new LigneCommandeDAO(conn)
             );
             List<CommandeDTO> commandes = service.getAllCommandes();
+            System.out.println("[HANDLER] commandes trouvées : " + commandes.size());
             Map<String, Object> reponse = new HashMap<>();
             reponse.put("statut", "OK");
-            reponse.put("commandes", commandes);
+            reponse.put("commandes", new java.util.ArrayList<>(commandes)); // ArrayList est sérialisable
             envoyerMessage(reponse);
         } catch (Exception e) {
-            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+            System.err.println("[HANDLER] ERREUR handleGetAllOrders : " + e.getMessage());
+            e.printStackTrace(); // Stack trace complet dans la console du serveur
+            envoyerMessage(creerReponse("ERREUR", e.getClass().getSimpleName() + " : " + e.getMessage()));
         }
     }
 

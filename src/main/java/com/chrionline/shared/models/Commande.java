@@ -8,7 +8,9 @@ import java.util.List;
 public class Commande {
 
     private String idCommande;
+    private String reference;          // ex: CMD-2026-00042
     private int idUtilisateur;
+    private String nomClient;          // ← prénom + nom récupérés via JOIN utilisateur
     private double montantTotal;
     private StatutCommande statut;
     private LocalDateTime dateCommande;
@@ -32,7 +34,9 @@ public class Commande {
 
     // ───── Getters ─────
     public String getIdCommande() { return idCommande; }
+    public String getReference() { return reference; }
     public int getIdUtilisateur() { return idUtilisateur; }
+    public String getNomClient() { return nomClient; }
     public double getMontantTotal() { return montantTotal; }
     public StatutCommande getStatut() { return statut; }
     public LocalDateTime getDateCommande() { return dateCommande; }
@@ -40,7 +44,9 @@ public class Commande {
 
     // ───── Setters ─────
     public void setIdCommande(String idCommande) { this.idCommande = idCommande; }
+    public void setReference(String reference) { this.reference = reference; }
     public void setIdUtilisateur(int idUtilisateur) { this.idUtilisateur = idUtilisateur; }
+    public void setNomClient(String nomClient) { this.nomClient = nomClient; }
     public void setMontantTotal(double montantTotal) { this.montantTotal = montantTotal; }
     public void setStatut(StatutCommande statut) { this.statut = statut; }
     public void setDateCommande(LocalDateTime dateCommande) { this.dateCommande = dateCommande; }

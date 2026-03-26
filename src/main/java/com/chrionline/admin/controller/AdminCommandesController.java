@@ -17,6 +17,10 @@ public class AdminCommandesController {
         return apiClient.fetchAllCommandes();
     }
 
+    public CommandeDTO getDetailsCommande(String idCommande) {
+        return apiClient.fetchOrderDetails(idCommande);
+    }
+
     public boolean changerStatutCommande(String idCommande, String statutActuel, String nouveauStatut) {
         // Empêcher des changements inutiles ou interdits avant même de contacter le serveur
         if (nouveauStatut.equals(statutActuel)) return false;

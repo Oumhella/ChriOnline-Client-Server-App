@@ -15,84 +15,95 @@ public class CommandeDAO {
         this.connection = connection;
     }
 
-    // ───── Lister toutes les commandes ─────
+    // ───── Lister toutes les commandes ─────────────────────────────────────────
     public List<Commande> findAll() throws SQLException {
         List<Commande> commandes = new ArrayList<>();
 
-        // On fait une jointure pour calculer le montant total qui n'est pas dans la table commande
-        // et on utilise les noms de tables EXACTS du script (commande, ligne_commande, utilisateur)
-        String sql = "SELECT c.id_commande, c.idUtilisateur, c.statut, c.date_commande, " +
-                     "COALESCE(SUM(lc.quantite * lc.prix_unitaire), 0) AS montant_total " +
-                     "FROM commande c " +
-                     "LEFT JOIN ligne_commande lc ON c.id_commande = lc.id_commande " +
-                     "GROUP BY c.id_commande, c.idUtilisateur, c.statut, c.date_commande " +
-                     "ORDER BY c.date_commande DESC";
+        String sql =
+            "SELECT c.id_commande, c.reference, c.idUtilisateur, c.statut, c.date_commande, " +
+            "COALESCE(SUM(lc.quantite * lc.prix_unitaire), 0) AS montant_total, " +
+            "CONCAT(u.prenom, ' ', u.nom) AS nom_client " +
+            "FROM commande c " +
+            "JOIN utilisateur u ON c.idUtilisateur = u.idUtilisateur " +
+            "LEFT JOIN ligne_commande lc ON c.id_commande = lc.id_commande " +
+            "GROUP BY c.id_commande, c.reference, c.idUtilisateur, c.statut, c.date_commande, u.nom, u.prenom " +
+            "ORDER BY c.date_commande DESC";
 
-        PreparedStatement ps = connection.prepareStatement(sql);
-        ResultSet rs = ps.executeQuery();
+        try (PreparedStatement ps = connection.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
 
-        while (rs.next()) {
-            Commande c = new Commande();
-            c.setIdCommande(rs.getString("id_commande"));
-            c.setIdUtilisateur(rs.getInt("idUtilisateur"));
-            c.setMontantTotal(rs.getDouble("montant_total"));
-            
-            String statutDB = rs.getString("statut");
-            if(statutDB != null) {
+            while (rs.next()) {
+                Commande c = new Commande();
+                c.setIdCommande(rs.getString("id_commande"));
+                c.setReference(rs.getString("reference"));
+                c.setIdUtilisateur(rs.getInt("idUtilisateur"));
+                c.setNomClient(rs.getString("nom_client"));
+                c.setMontantTotal(rs.getDouble("montant_total"));
+
+                String statutDB = rs.getString("statut");
                 try {
-                    c.setStatut(StatutCommande.valueOf(statutDB.toUpperCase()));
-                } catch(Exception e) {
+                    c.setStatut(StatutCommande.valueOf(
+                        statutDB != null ? statutDB.toUpperCase() : "EN_PREPARATION"));
+                } catch (Exception e) {
                     c.setStatut(StatutCommande.EN_PREPARATION);
                 }
-            } else {
-                c.setStatut(StatutCommande.EN_PREPARATION);
+
+                Timestamp ts = rs.getTimestamp("date_commande");
+                if (ts != null) c.setDateCommande(ts.toLocalDateTime());
+                commandes.add(c);
             }
-            c.setDateCommande(rs.getTimestamp("date_commande").toLocalDateTime());
-            commandes.add(c);
         }
         return commandes;
     }
 
-    // ───── Trouver une commande par ID ─────
+    // ───── Trouver une commande par ID ──────────────────────────────────────────
     public Commande findById(String idCommande) throws SQLException {
-        String sql = "SELECT c.id_commande, c.idUtilisateur, c.statut, c.date_commande, " +
-                     "COALESCE(SUM(lc.quantite * lc.prix_unitaire), 0) AS montant_total " +
-                     "FROM commande c " +
-                     "LEFT JOIN ligne_commande lc ON c.id_commande = lc.id_commande " +
-                     "WHERE c.id_commande = ? " +
-                     "GROUP BY c.id_commande, c.idUtilisateur, c.statut, c.date_commande";
+        String sql =
+            "SELECT c.id_commande, c.reference, c.idUtilisateur, c.statut, c.date_commande, " +
+            "COALESCE(SUM(lc.quantite * lc.prix_unitaire), 0) AS montant_total, " +
+            "CONCAT(u.prenom, ' ', u.nom) AS nom_client " +
+            "FROM commande c " +
+            "JOIN utilisateur u ON c.idUtilisateur = u.idUtilisateur " +
+            "LEFT JOIN ligne_commande lc ON c.id_commande = lc.id_commande " +
+            "WHERE c.id_commande = ? " +
+            "GROUP BY c.id_commande, c.reference, c.idUtilisateur, c.statut, c.date_commande, u.nom, u.prenom";
 
-        PreparedStatement ps = connection.prepareStatement(sql);
-        ps.setString(1, idCommande);
-        ResultSet rs = ps.executeQuery();
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, Integer.parseInt(idCommande)); // id_commande est INT en BDD
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Commande c = new Commande();
+                    c.setIdCommande(rs.getString("id_commande"));
+                    c.setReference(rs.getString("reference"));
+                    c.setIdUtilisateur(rs.getInt("idUtilisateur"));
+                    c.setNomClient(rs.getString("nom_client"));
+                    c.setMontantTotal(rs.getDouble("montant_total"));
 
-        if (rs.next()) {
-            Commande c = new Commande();
-            c.setIdCommande(rs.getString("id_commande"));
-            c.setIdUtilisateur(rs.getInt("idUtilisateur"));
-            c.setMontantTotal(rs.getDouble("montant_total"));
-            
-            String statutDB = rs.getString("statut");
-            if(statutDB != null) {
-                try {
-                    c.setStatut(StatutCommande.valueOf(statutDB.toUpperCase()));
-                } catch(Exception e) {
-                    c.setStatut(StatutCommande.EN_PREPARATION);
+                    String statutDB = rs.getString("statut");
+                    try {
+                        c.setStatut(StatutCommande.valueOf(
+                            statutDB != null ? statutDB.toUpperCase() : "EN_PREPARATION"));
+                    } catch (Exception e) {
+                        c.setStatut(StatutCommande.EN_PREPARATION);
+                    }
+
+                    Timestamp ts = rs.getTimestamp("date_commande");
+                    if (ts != null) c.setDateCommande(ts.toLocalDateTime());
+                    return c;
                 }
             }
-            c.setDateCommande(rs.getTimestamp("date_commande").toLocalDateTime());
-            return c;
         }
         return null;
     }
 
-    // ───── Mettre à jour le statut ─────
+    // ───── Mettre à jour le statut ──────────────────────────────────────────────
     public boolean updateStatus(String idCommande, StatutCommande nouveauStatut)
             throws SQLException {
         String sql = "UPDATE commande SET statut = ? WHERE id_commande = ?";
-        PreparedStatement ps = connection.prepareStatement(sql);
-        ps.setString(1, nouveauStatut.name().toLowerCase());
-        ps.setString(2, idCommande);
-        return ps.executeUpdate() > 0;
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, nouveauStatut.name().toLowerCase()); // stocké en minuscule en BDD
+            ps.setInt(2, Integer.parseInt(idCommande));           // id_commande est INT
+            return ps.executeUpdate() > 0;
+        }
     }
 }

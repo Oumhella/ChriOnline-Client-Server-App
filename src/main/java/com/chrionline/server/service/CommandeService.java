@@ -61,13 +61,7 @@ public class CommandeService {
     // ───── Mettre à jour le statut ─────
     public String updateStatut(String idCommande, String nouveauStatut) throws SQLException {
 
-        // 1️⃣ Vérifier que la commande existe
-        Commande commande = commandeDAO.findById(idCommande);
-        if (commande == null) {
-            return "ERREUR: Commande introuvable";
-        }
-
-        // 2️⃣ Convertir le statut
+        // 1️⃣ Convertir le statut d'abord (fail-fast)
         StatutCommande statut;
         try {
             statut = StatutCommande.valueOf(nouveauStatut.toUpperCase());
@@ -75,22 +69,19 @@ public class CommandeService {
             return "ERREUR: Statut invalide → " + nouveauStatut;
         }
 
-        // 3️⃣ Vérifier les transitions valides
-        StatutCommande statutActuel = commande.getStatut();
+        // 2️⃣ Vérifier que la commande existe
+        Commande commande = commandeDAO.findById(idCommande);
+        if (commande == null) {
+            return "ERREUR: Commande introuvable : " + idCommande;
+        }
 
+        // 3️⃣ Bloquer uniquement si la commande est déjà terminale
+        StatutCommande statutActuel = commande.getStatut();
         if (statutActuel == StatutCommande.LIVREE) {
             return "ERREUR: Commande déjà livrée, aucune modification possible";
         }
         if (statutActuel == StatutCommande.ANNULEE) {
             return "ERREUR: Commande déjà annulée, aucune modification possible";
-        }
-        if (statut == StatutCommande.EXPEDIEE &&
-                statutActuel != StatutCommande.EN_PREPARATION) {
-            return "ERREUR: La commande doit être EN_PREPARATION pour être expédiée";
-        }
-        if (statut == StatutCommande.LIVREE &&
-                statutActuel != StatutCommande.EXPEDIEE) {
-            return "ERREUR: La commande doit être EXPEDIEE pour être livrée";
         }
 
         // 4️⃣ Si annulation → restaurer le stock
@@ -101,9 +92,10 @@ public class CommandeService {
         // 5️⃣ Mettre à jour en BDD
         boolean ok = commandeDAO.updateStatus(idCommande, statut);
         if (ok) {
+            System.out.println("[SERVICE] Statut commande " + idCommande + " mis à jour : " + statut.name());
             return "SUCCESS: Statut mis à jour → " + statut.name();
         } else {
-            return "ERREUR: Mise à jour échouée";
+            return "ERREUR: Mise à jour échouée (0 ligne affectée)";
         }
     }
 
@@ -111,10 +103,11 @@ public class CommandeService {
     private CommandeDTO convertToDTO(Commande c) {
         CommandeDTO dto = new CommandeDTO();
         dto.setIdCommande(c.getIdCommande());
-        dto.setNomUtilisateur(String.valueOf(c.getIdUtilisateur())); // temporaire
+        dto.setReference(c.getReference());  // ← numéro de commande (ex: CMD-2026-00042)
+        dto.setNomUtilisateur(c.getNomClient() != null ? c.getNomClient() : "Client #" + c.getIdUtilisateur());
         dto.setMontantTotal(c.getMontantTotal());
-        dto.setStatut(c.getStatut().name());
-        dto.setDateCommande(c.getDateCommande().toString());
+        dto.setStatut(c.getStatut() != null ? c.getStatut().name() : "EN_PREPARATION");
+        dto.setDateCommande(c.getDateCommande() != null ? c.getDateCommande().toString() : "");
         return dto;
     }
 }
