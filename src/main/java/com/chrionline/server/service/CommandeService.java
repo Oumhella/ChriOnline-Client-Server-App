@@ -34,6 +34,16 @@ public class CommandeService {
         return dtos;
     }
 
+    public List<CommandeDTO> getCommandesByClient(int userId) throws SQLException {
+        List<Commande> commandes = commandeDAO.findByUser(userId);
+        List<CommandeDTO> dtos = new ArrayList<>();
+
+        for (Commande c : commandes) {
+            dtos.add(convertToDTO(c));
+        }
+        return dtos;
+    }
+
     // ───── Détail d'une commande ─────
     public CommandeDTO getCommandeById(String idCommande) throws SQLException {
         Commande c = commandeDAO.findById(idCommande);

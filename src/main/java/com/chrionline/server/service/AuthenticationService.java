@@ -107,4 +107,15 @@ public class AuthenticationService {
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
         }
     }
+
+    public Map<String, Object> getProfil(Map<String, Object> req) {
+        int userId = (int) req.get("userId");
+        return UserDAO.getInfosProfil(userId);
+    }
+
+    public Map<String, Object> updateProfil(Map<String, Object> req) {
+        int userId = (int) req.get("userId");
+        Map<String, Object> data = (Map<String, Object>) req.get("data");
+        return UserDAO.majProfil(userId, data);
+    }
 }

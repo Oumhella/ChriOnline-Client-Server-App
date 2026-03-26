@@ -118,10 +118,43 @@ public class PanierView extends Application {
 
         HBox nav = new HBox(28);
         nav.setAlignment(Pos.CENTER);
-        nav.getChildren().addAll(
-                navLink("Accueil"),
-                navLink("Catalogue"),
-                navLinkActif("Mon Panier"));
+
+        Hyperlink hAcc = navLink("Accueil");
+        hAcc.setOnAction(e -> {
+            try { new HomeView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
+
+        Hyperlink hCat = navLink("Catalogue");
+        hCat.setOnAction(e -> {
+            try { new CatalogueView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
+
+        String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
+        String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
+        String initials = "";
+        if (prenom != null && !prenom.isEmpty()) initials += prenom.toUpperCase().charAt(0);
+        if (nom != null && !nom.isEmpty()) initials += nom.toUpperCase().charAt(0);
+        if (initials.isEmpty()) initials = "U";
+        
+        javafx.scene.layout.StackPane avatar = new javafx.scene.layout.StackPane();
+        javafx.scene.shape.Circle circle = new javafx.scene.shape.Circle(15, Color.web(TERRACOTTA));
+        Text initText = new Text(initials);
+        initText.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
+        initText.setFill(Color.WHITE);
+        avatar.getChildren().addAll(circle, initText);
+        avatar.setCursor(javafx.scene.Cursor.HAND);
+        avatar.setOnMouseClicked(e -> {
+            try { new ProfilView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
+        avatar.setOnMouseEntered(e -> circle.setFill(Color.web(SAUGE_DARK)));
+        avatar.setOnMouseExited(e -> circle.setFill(Color.web(TERRACOTTA)));
+
+        Hyperlink hOrd = navLink("Mes Commandes");
+        hOrd.setOnAction(e -> {
+            try { new MesCommandesView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
+
+        nav.getChildren().addAll(hAcc, hCat, hOrd, navLinkActif("Mon Panier"), avatar);
 
         header.getChildren().addAll(logo, spacer, nav);
         return header;
@@ -302,12 +335,9 @@ public class PanierView extends Application {
 
         if (panier == null) {
             afficherErreur("Impossible de charger le panier. Vérifiez votre connexion.");
-            totalText.setText("0,00 MAD");
-            nbArticlesText.setText("");
             return;
         }
 
-        msgLabel.setText("");
         int nbArticles = panier.getNombreArticles();
         nbArticlesText.setText("(" + nbArticles + " article" + (nbArticles > 1 ? "s" : "") + ")");
         totalText.setText(formatMonnaie(panier.getMontantTotal()) + " MAD");

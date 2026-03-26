@@ -36,6 +36,7 @@ public class ClientHandler implements Runnable {
     private int    userId   = -1;
     private String userEmail = null;
     private String userRole      = null;
+    private int    udpPort       = 9092; // Port de notification par défaut
 
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
@@ -101,24 +102,22 @@ public class ClientHandler implements Runnable {
             case "CONFIRMER_EMAIL"       -> handleConfirmerEmail(req);
             case "OUBLIER_MOT_DE_PASSE" -> handleOublierMotDePasse(req);
             case "REINITIALISER_MDP"     -> handleReinitialiserMdp(req);
+            case "UDP_REGISTER" -> {
+                this.udpPort = (int) req.getOrDefault("port", 9092);
+                System.out.println("[HANDLER] Port UDP enregistré pour client " + userId + " : " + udpPort);
+            }
             case "PANIER_GET"            -> envoyerMessage(panierService.getPanier(req));
             case "PANIER_AJOUTER"        -> envoyerMessage(panierService.ajouterProduit(req));
             case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
             case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
             case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
             case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
+            case "GET_PROFIL"            -> handleGetProfil(req);
+            case "UPDATE_PROFIL"         -> handleUpdateProfil(req);
+            case "GET_MY_ORDERS"         -> handleGetMyOrders(req);
             case "GET_ALL_ORDERS",
                  "GET_ORDER_DETAILS",
                  "UPDATE_ORDER_STATUS" -> {
-                // /!\ On doit commenter ce bloc jusqu'à ce que `AdminCommandeClient`
-                //     envoie son `idUtilisateur` ou maintienne une session, sinon `this.userId`
-                //     vaut 0 (car c'est une toute nouvelle socket) et bloque l'affichage !
-                /*
-                if (!isAdmin()) {
-                    envoyerMessage(creerReponse("ERREUR", "Accès refusé : réservé à l'admin"));
-                    return;
-                }
-                */
                 handleAdminCommande(commande, req);
             }
             // ... autres commandes ...
@@ -253,6 +252,30 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    private void handleGetProfil(Map<String, Object> req) {
+        req.put("userId", this.userId);
+        envoyerMessage(authService.getProfil(req));
+    }
+
+    private void handleUpdateProfil(Map<String, Object> req) {
+        req.put("userId", this.userId);
+        envoyerMessage(authService.updateProfil(req));
+    }
+
+    private void handleGetMyOrders(Map<String, Object> req) {
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            CommandeService service = new CommandeService(new CommandeDAO(conn), new LigneCommandeDAO(conn));
+            List<CommandeDTO> orders = service.getCommandesByClient(this.userId);
+            Map<String, Object> res = new HashMap<>();
+            res.put("statut", "OK");
+            res.put("commandes", new ArrayList<>(orders));
+            envoyerMessage(res);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
     // ─── Gestion UDP ──────────────────────────────────────────────────────────
 
     /**
@@ -382,6 +405,7 @@ public class ClientHandler implements Runnable {
     public void setUserId(int userId) { this.userId = userId; }
 
     public String getRole() { return userRole; }
+    public int getUdpPort() { return udpPort; }
     public Socket getSocket() { return socket; }
 
 
