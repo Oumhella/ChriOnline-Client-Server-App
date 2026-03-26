@@ -97,6 +97,13 @@ public class ProduitDAO {
                     produit.setDescription(rs.getString("description"));
                     produit.setDateAjout(rs.getTimestamp("date_ajout"));
 
+                    // Set top-level imageUrl and prix from first row
+                    produit.setImageUrl(rs.getString("image_url"));
+                    double firstPrix = rs.getDouble("prix");
+                    if (!rs.wasNull()) {
+                        produit.setPrix((float) firstPrix);
+                    }
+
                     produit.setFormats(new ArrayList<>());
                 }
 
