@@ -114,7 +114,8 @@ public class ClientHandler implements Runnable {
             case "GET_PROFIL"            -> handleGetProfil(req);
             case "UPDATE_PROFIL"         -> handleUpdateProfil(req);
             case "GET_MY_ORDERS"         -> handleGetMyOrders(req);
-            
+            case "SUIVRE_COMMANDE"       -> handleSuivreCommande(req);
+
             // Admin Produits
             case "AJOUTER_PRODUIT"       -> handleAjouterProduit(req);
             case "MODIFIER_PRODUIT"      -> handleModifierProduit(req);
@@ -165,7 +166,7 @@ public class ClientHandler implements Runnable {
                 this.userEmail = (String) data.get("email");
                 this.userRole = (String) data.get("role");
             }
-            
+
             envoyerMessage(reponse);
         } catch (Exception e) {
             System.err.println("[HANDLER] Exception handleConnexion : " + e.getMessage());
@@ -440,6 +441,30 @@ public class ClientHandler implements Runnable {
 
 
     // ─── Gestion des Commandes Admin ─────────────────────────────────────────
+
+    private void handleSuivreCommande(Map<String, Object> req) {
+        try {
+            String reference = (String) req.get("reference");
+            if (reference == null || reference.trim().isEmpty()) {
+                envoyerMessage(creerReponse("ERREUR", "Reference non fournie."));
+                return;
+            }
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            CommandeService service = new CommandeService(
+                    new CommandeDAO(conn),
+                    new LigneCommandeDAO(conn)
+            );
+            CommandeDTO dto = service.getCommandeByReference(reference);
+            Map<String, Object> reponse = new HashMap<>();
+            reponse.put("statut", "OK");
+            reponse.put("commande", dto);
+            envoyerMessage(reponse);
+        } catch (IllegalArgumentException e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
+        }
+    }
 
     private void handleAdminCommande(String commande, Map<String, Object> req) {
         switch (commande) {

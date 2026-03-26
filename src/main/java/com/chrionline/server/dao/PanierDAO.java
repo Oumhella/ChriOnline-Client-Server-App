@@ -19,7 +19,8 @@ import java.util.List;
  */
 public class PanierDAO {
 
-    // â”€â”€â”€ RÃ©cupÃ©rer ou crÃ©er le panier actif â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€â”€ RÃ©cupÃ©rer ou crÃ©er le panier actif
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Retourne le panier actif de l'utilisateur avec ses lignes.
@@ -54,7 +55,8 @@ public class PanierDAO {
             ps.setInt(1, idUtilisateur);
             ps.executeUpdate();
             ResultSet keys = ps.getGeneratedKeys();
-            if (!keys.next()) throw new SQLException("Ã‰chec crÃ©ation panier");
+            if (!keys.next())
+                throw new SQLException("Ã‰chec crÃ©ation panier");
 
             Panier p = new Panier();
             p.setIdPanier(keys.getInt(1));
@@ -66,7 +68,8 @@ public class PanierDAO {
         }
     }
 
-    // â”€â”€â”€ Ajouter un produit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€â”€ Ajouter un produit
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Ajoute un format produit au panier.
@@ -127,7 +130,8 @@ public class PanierDAO {
         }
     }
 
-    // â”€â”€â”€ Modifier la quantitÃ© â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€â”€ Modifier la quantitÃ©
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Modifie la quantitÃ© d'une ligne.
@@ -172,13 +176,15 @@ public class PanierDAO {
         }
     }
 
-    // â”€â”€â”€ Retirer un produit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€â”€ Retirer un produit
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public static Panier retirerProduit(int idUtilisateur, int idProductFormats) throws SQLException {
         return modifierQuantite(idUtilisateur, idProductFormats, 0);
     }
 
-    // â”€â”€â”€ Vider le panier â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€â”€ Vider le panier
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public static Panier viderPanier(int idUtilisateur) throws SQLException {
         Connection conn = DatabaseConnection.getInstance().getConnection();
@@ -209,7 +215,8 @@ public class PanierDAO {
         }
     }
 
-    // â”€â”€â”€ Valider le panier â†’ gÃ©nÃ¨re un rÃ©capitulatif â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€â”€ Valider le panier â†’ gÃ©nÃ¨re un rÃ©capitulatif
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Valide le panier : gÃ©nÃ¨re un rÃ©capitulatif (CommandeDTO) et marque
@@ -273,10 +280,12 @@ public class PanierDAO {
 
     /**
      * Confirme la commande après choix du paiement.
-     * Crée la commande, les lignes, met à jour le stock, crée le paiement, génère la facture, 
+     * Crée la commande, les lignes, met à jour le stock, crée le paiement, génère
+     * la facture,
      * et marque le panier actif comme 'valide'.
      */
-    public static CommandeDTO confirmerCommande(int idUtilisateur, String methodePaiement, String nomCarte, String numeroCarte) throws SQLException {
+    public static CommandeDTO confirmerCommande(int idUtilisateur, String methodePaiement, String nomCarte,
+            String numeroCarte) throws SQLException {
         Connection conn = DatabaseConnection.getInstance().getConnection();
         conn.setAutoCommit(false);
         try {
@@ -296,24 +305,25 @@ public class PanierDAO {
                 ps.setString(2, reference);
                 ps.executeUpdate();
                 ResultSet keys = ps.getGeneratedKeys();
-                if (!keys.next()) throw new SQLException("Echec creation commande");
+                if (!keys.next())
+                    throw new SQLException("Echec creation commande");
                 idCommande = keys.getInt(1);
             }
 
             // --- 3. Inserer les lignes de commande et MAJ stock ---
             String sqlLigne = "INSERT INTO ligne_commande (id_commande, id_product_formats, quantite, prix_unitaire) VALUES (?, ?, ?, ?)";
             String sqlStock = "UPDATE product_formats SET stock = stock - ? WHERE id_product_formats = ? AND stock >= ?";
-            
+
             try (PreparedStatement psLigne = conn.prepareStatement(sqlLigne);
-                 PreparedStatement psStock = conn.prepareStatement(sqlStock)) {
-                 
+                    PreparedStatement psStock = conn.prepareStatement(sqlStock)) {
+
                 for (LignePanier ligne : panier.getLignes()) {
                     // Update stock
                     psStock.setInt(1, ligne.getQuantite());
                     psStock.setInt(2, ligne.getIdProductFormats());
                     psStock.setInt(3, ligne.getQuantite());
                     int updated = psStock.executeUpdate();
-                    if(updated == 0) {
+                    if (updated == 0) {
                         throw new SQLException("Stock insuffisant pour le produit " + ligne.getNomProduit());
                     }
 
@@ -328,12 +338,13 @@ public class PanierDAO {
 
             // --- 4. Inserer le paiement et generer facture ---
             java.io.File dirFactures = new java.io.File("factures");
-            if (!dirFactures.exists()) dirFactures.mkdir();
+            if (!dirFactures.exists())
+                dirFactures.mkdir();
             String cheminFacture = "factures/" + reference + ".pdf";
             genererFacturePDF(cheminFacture, reference, panier, methodePaiement, idUtilisateur, conn);
-            
+
             String sqlPaiement = "INSERT INTO paiement (id_commande, methode_paiement, statut_paiement, montant, date_paiement, chemin_facture, nom_carte, numero_carte) VALUES (?, ?, 'paye', ?, NOW(), ?, ?, ?)";
-            try(PreparedStatement psPaiement = conn.prepareStatement(sqlPaiement)) {
+            try (PreparedStatement psPaiement = conn.prepareStatement(sqlPaiement)) {
                 psPaiement.setInt(1, idCommande);
                 psPaiement.setString(2, methodePaiement);
                 psPaiement.setBigDecimal(3, panier.getMontantTotal());
@@ -352,7 +363,7 @@ public class PanierDAO {
 
             conn.commit();
             System.out.println("[PanierDAO] Commande confirmee - ref=" + reference);
-            
+
             // --- 6. Fetch user info for DTO ---
             String sqlUser = "SELECT nom, prenom FROM utilisateur WHERE idUtilisateur = ?";
             String nomUtilisateur = "Client";
@@ -365,7 +376,8 @@ public class PanierDAO {
             }
 
             String dateStr = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date());
-            CommandeDTO recap = new CommandeDTO(reference, nomUtilisateur, panier.getMontantTotal().doubleValue(), "en_preparation", dateStr);
+            CommandeDTO recap = new CommandeDTO(reference, nomUtilisateur, panier.getMontantTotal().doubleValue(),
+                    "en_preparation", dateStr);
             recap.setReference(reference);
 
             java.util.List<LigneCommandeDTO> lignesRecap = new java.util.ArrayList<>();
@@ -388,28 +400,29 @@ public class PanierDAO {
         }
     }
 
-    // â”€â”€â”€ Utilitaires privÃ©s â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€â”€ Utilitaires privÃ©s
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Charge les lignes d'un panier avec JOIN sur produit et product_formats.
      */
     private static List<LignePanier> getLignes(int idPanier, Connection conn) throws SQLException {
         String sql = """
-            SELECT lp.id_product_formats,
-                   lp.quantite,
-                   pf.prix           AS prix_unitaire,
-                   pf.image_url,
-                   p.nom             AS nom_produit,
-                   GROUP_CONCAT(lv.valeur ORDER BY l.nom SEPARATOR ' â€“ ') AS variants
-            FROM ligne_panier lp
-            JOIN product_formats pf ON pf.id_product_formats = lp.id_product_formats
-            JOIN produit p           ON p.id_produit = pf.id_produit
-            LEFT JOIN product_formats_values pfv ON pfv.id_product_formats = pf.id_product_formats
-            LEFT JOIN label_values lv  ON lv.id_labelValues = pfv.id_labelValues
-            LEFT JOIN label l          ON l.id_label = lv.id_label
-            WHERE lp.id_panier = ?
-            GROUP BY lp.id_product_formats, lp.quantite, pf.prix, pf.image_url, p.nom
-        """;
+                    SELECT lp.id_product_formats,
+                           lp.quantite,
+                           pf.prix           AS prix_unitaire,
+                           pf.image_url,
+                           p.nom             AS nom_produit,
+                           GROUP_CONCAT(lv.valeur ORDER BY l.nom SEPARATOR ' â€“ ') AS variants
+                    FROM ligne_panier lp
+                    JOIN product_formats pf ON pf.id_product_formats = lp.id_product_formats
+                    JOIN produit p           ON p.id_produit = pf.id_produit
+                    LEFT JOIN product_formats_values pfv ON pfv.id_product_formats = pf.id_product_formats
+                    LEFT JOIN label_values lv  ON lv.id_labelValues = pfv.id_labelValues
+                    LEFT JOIN label l          ON l.id_label = lv.id_label
+                    WHERE lp.id_panier = ?
+                    GROUP BY lp.id_product_formats, lp.quantite, pf.prix, pf.image_url, p.nom
+                """;
         List<LignePanier> lignes = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idPanier);
@@ -432,15 +445,15 @@ public class PanierDAO {
     /** Recalcule et met Ã  jour le montant_total dans la table panier. */
     private static void mettreAJourTotal(int idPanier, Connection conn) throws SQLException {
         String sql = """
-            UPDATE panier p
-            SET montant_total = (
-                SELECT COALESCE(SUM(lp.quantite * pf.prix), 0)
-                FROM ligne_panier lp
-                JOIN product_formats pf ON pf.id_product_formats = lp.id_product_formats
-                WHERE lp.id_panier = p.id_panier
-            )
-            WHERE id_panier = ?
-        """;
+                    UPDATE panier p
+                    SET montant_total = (
+                        SELECT COALESCE(SUM(lp.quantite * pf.prix), 0)
+                        FROM ligne_panier lp
+                        JOIN product_formats pf ON pf.id_product_formats = lp.id_product_formats
+                        WHERE lp.id_panier = p.id_panier
+                    )
+                    WHERE id_panier = ?
+                """;
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idPanier);
             ps.executeUpdate();
@@ -481,30 +494,48 @@ public class PanierDAO {
     }
 
     /** Genere un fichier PDF de facture super professionnel en utilisant iText */
-    private static void genererFacturePDF(String chemin, String reference, Panier panier, String methodePaiement, int idUtilisateur, Connection conn) {
+    private static void genererFacturePDF(String chemin, String reference, Panier panier, String methodePaiement,
+            int idUtilisateur, Connection conn) {
         String nomClient = "Client " + idUtilisateur;
-        try (PreparedStatement ps = conn.prepareStatement("SELECT nom, prenom FROM utilisateur WHERE idUtilisateur = ?")) {
+        try (PreparedStatement ps = conn
+                .prepareStatement("SELECT nom, prenom FROM utilisateur WHERE idUtilisateur = ?")) {
             ps.setInt(1, idUtilisateur);
             ResultSet rs = ps.executeQuery();
-            if (rs.next()) nomClient = rs.getString("prenom") + " " + rs.getString("nom");
-        } catch (Exception ignored) {}
+            if (rs.next())
+                nomClient = rs.getString("prenom") + " " + rs.getString("nom");
+        } catch (Exception ignored) {
+        }
 
-        com.itextpdf.text.Document document = new com.itextpdf.text.Document(com.itextpdf.text.PageSize.A4, 40, 40, 50, 50);
+        com.itextpdf.text.Document document = new com.itextpdf.text.Document(com.itextpdf.text.PageSize.A4, 40, 40, 50,
+                50);
         try {
             com.itextpdf.text.pdf.PdfWriter.getInstance(document, new java.io.FileOutputStream(chemin));
             document.open();
-            
+
             // Polices
-            com.itextpdf.text.Font titleFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 28, com.itextpdf.text.Font.BOLD, new com.itextpdf.text.BaseColor(62, 44, 30)); // BRUN
-            com.itextpdf.text.Font subTitleFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 14, com.itextpdf.text.Font.NORMAL, new com.itextpdf.text.BaseColor(154, 123, 101)); // BRUN_LIGHT
-            com.itextpdf.text.Font normalFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 11, com.itextpdf.text.Font.NORMAL, com.itextpdf.text.BaseColor.DARK_GRAY);
-            com.itextpdf.text.Font boldFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 11, com.itextpdf.text.Font.BOLD, com.itextpdf.text.BaseColor.DARK_GRAY);
-            
-            com.itextpdf.text.Font tableHeaderFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 11, com.itextpdf.text.Font.BOLD, com.itextpdf.text.BaseColor.WHITE);
-            com.itextpdf.text.Font tableRowFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 11, com.itextpdf.text.Font.NORMAL, com.itextpdf.text.BaseColor.DARK_GRAY);
-            
-            com.itextpdf.text.Font totalTitleFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 11, com.itextpdf.text.Font.BOLD, new com.itextpdf.text.BaseColor(107, 158, 122)); // SAUGE_DARK
-            com.itextpdf.text.Font totalValueFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 18, com.itextpdf.text.Font.BOLD, new com.itextpdf.text.BaseColor(201, 107, 74)); // TERRACOTTA
+            com.itextpdf.text.Font titleFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA,
+                    28, com.itextpdf.text.Font.BOLD, new com.itextpdf.text.BaseColor(62, 44, 30)); // BRUN
+            com.itextpdf.text.Font subTitleFont = new com.itextpdf.text.Font(
+                    com.itextpdf.text.Font.FontFamily.HELVETICA, 14, com.itextpdf.text.Font.NORMAL,
+                    new com.itextpdf.text.BaseColor(154, 123, 101)); // BRUN_LIGHT
+            com.itextpdf.text.Font normalFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA,
+                    11, com.itextpdf.text.Font.NORMAL, com.itextpdf.text.BaseColor.DARK_GRAY);
+            com.itextpdf.text.Font boldFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA,
+                    11, com.itextpdf.text.Font.BOLD, com.itextpdf.text.BaseColor.DARK_GRAY);
+
+            com.itextpdf.text.Font tableHeaderFont = new com.itextpdf.text.Font(
+                    com.itextpdf.text.Font.FontFamily.HELVETICA, 11, com.itextpdf.text.Font.BOLD,
+                    com.itextpdf.text.BaseColor.WHITE);
+            com.itextpdf.text.Font tableRowFont = new com.itextpdf.text.Font(
+                    com.itextpdf.text.Font.FontFamily.HELVETICA, 11, com.itextpdf.text.Font.NORMAL,
+                    com.itextpdf.text.BaseColor.DARK_GRAY);
+
+            com.itextpdf.text.Font totalTitleFont = new com.itextpdf.text.Font(
+                    com.itextpdf.text.Font.FontFamily.HELVETICA, 11, com.itextpdf.text.Font.BOLD,
+                    new com.itextpdf.text.BaseColor(107, 158, 122)); // SAUGE_DARK
+            com.itextpdf.text.Font totalValueFont = new com.itextpdf.text.Font(
+                    com.itextpdf.text.Font.FontFamily.HELVETICA, 18, com.itextpdf.text.Font.BOLD,
+                    new com.itextpdf.text.BaseColor(201, 107, 74)); // TERRACOTTA
 
             // Couleurs
             com.itextpdf.text.BaseColor headerColor = new com.itextpdf.text.BaseColor(107, 158, 122); // SAUGE_DARK
@@ -520,12 +551,15 @@ public class PanierDAO {
             com.itextpdf.text.pdf.PdfPCell leftHeaderCell = new com.itextpdf.text.pdf.PdfPCell();
             leftHeaderCell.setBorder(com.itextpdf.text.Rectangle.NO_BORDER);
             leftHeaderCell.addElement(new com.itextpdf.text.Paragraph("ChriOnline", titleFont));
-            leftHeaderCell.addElement(new com.itextpdf.text.Paragraph("Vente de produits naturels & cosmétiques", subTitleFont));
-            
+            leftHeaderCell.addElement(
+                    new com.itextpdf.text.Paragraph("Vente de produits naturels & cosmétiques", subTitleFont));
+
             com.itextpdf.text.pdf.PdfPCell rightHeaderCell = new com.itextpdf.text.pdf.PdfPCell();
             rightHeaderCell.setBorder(com.itextpdf.text.Rectangle.NO_BORDER);
             rightHeaderCell.setHorizontalAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
-            com.itextpdf.text.Paragraph pFacture = new com.itextpdf.text.Paragraph("FACTURE", new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 24, com.itextpdf.text.Font.NORMAL, com.itextpdf.text.BaseColor.LIGHT_GRAY));
+            com.itextpdf.text.Paragraph pFacture = new com.itextpdf.text.Paragraph("FACTURE",
+                    new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 24,
+                            com.itextpdf.text.Font.NORMAL, com.itextpdf.text.BaseColor.LIGHT_GRAY));
             pFacture.setAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
             rightHeaderCell.addElement(pFacture);
 
@@ -551,7 +585,7 @@ public class PanierDAO {
             clientInfo.add(new com.itextpdf.text.Chunk(nomClient + "\n", normalFont));
             clientInfo.add(new com.itextpdf.text.Chunk("\nMode de paiement :\n", boldFont));
             clientInfo.add(new com.itextpdf.text.Chunk(methodeStr, normalFont));
-            
+
             String dateFormatted = new java.text.SimpleDateFormat("dd MMMM yyyy").format(new java.util.Date());
             com.itextpdf.text.Paragraph invoiceInfo = new com.itextpdf.text.Paragraph();
             invoiceInfo.setAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
@@ -562,7 +596,7 @@ public class PanierDAO {
 
             com.itextpdf.text.pdf.PdfPCell cClient = new com.itextpdf.text.pdf.PdfPCell(clientInfo);
             cClient.setBorder(com.itextpdf.text.Rectangle.NO_BORDER);
-            
+
             com.itextpdf.text.pdf.PdfPCell cInvoice = new com.itextpdf.text.pdf.PdfPCell(invoiceInfo);
             cInvoice.setBorder(com.itextpdf.text.Rectangle.NO_BORDER);
             cInvoice.setHorizontalAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
@@ -575,11 +609,12 @@ public class PanierDAO {
             // Tableau des Articles
             com.itextpdf.text.pdf.PdfPTable table = new com.itextpdf.text.pdf.PdfPTable(4);
             table.setWidthPercentage(100);
-            table.setWidths(new float[]{3.5f, 1f, 1.5f, 1.5f});
-            
-            String[] headers = {"Désignation de l'article", "Quantité", "Prix Unitaire", "Total TTC"};
+            table.setWidths(new float[] { 3.5f, 1f, 1.5f, 1.5f });
+
+            String[] headers = { "Désignation de l'article", "Quantité", "Prix Unitaire", "Total TTC" };
             for (String h : headers) {
-                com.itextpdf.text.pdf.PdfPCell cell = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(h, tableHeaderFont));
+                com.itextpdf.text.pdf.PdfPCell cell = new com.itextpdf.text.pdf.PdfPCell(
+                        new com.itextpdf.text.Phrase(h, tableHeaderFont));
                 cell.setBackgroundColor(headerColor);
                 cell.setPadding(10);
                 cell.setBorderColor(headerColor);
@@ -589,17 +624,21 @@ public class PanierDAO {
             boolean isEven = false;
             for (com.chrionline.shared.models.LignePanier l : panier.getLignes()) {
                 com.itextpdf.text.BaseColor rowColor = isEven ? rowEvenColor : rowOddColor;
-                
-                com.itextpdf.text.pdf.PdfPCell c1 = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(l.getNomProduit(), tableRowFont));
-                com.itextpdf.text.pdf.PdfPCell c2 = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(String.valueOf(l.getQuantite()), tableRowFont));
-                com.itextpdf.text.pdf.PdfPCell c3 = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(String.format("%.2f MAD", l.getPrix().doubleValue()), tableRowFont));
-                com.itextpdf.text.pdf.PdfPCell c4 = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(String.format("%.2f MAD", l.getSousTotal().doubleValue()), tableRowFont));
-                
+
+                com.itextpdf.text.pdf.PdfPCell c1 = new com.itextpdf.text.pdf.PdfPCell(
+                        new com.itextpdf.text.Phrase(l.getNomProduit(), tableRowFont));
+                com.itextpdf.text.pdf.PdfPCell c2 = new com.itextpdf.text.pdf.PdfPCell(
+                        new com.itextpdf.text.Phrase(String.valueOf(l.getQuantite()), tableRowFont));
+                com.itextpdf.text.pdf.PdfPCell c3 = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(
+                        String.format("%.2f MAD", l.getPrix().doubleValue()), tableRowFont));
+                com.itextpdf.text.pdf.PdfPCell c4 = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(
+                        String.format("%.2f MAD", l.getSousTotal().doubleValue()), tableRowFont));
+
                 c2.setHorizontalAlignment(com.itextpdf.text.Element.ALIGN_CENTER);
                 c3.setHorizontalAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
                 c4.setHorizontalAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
 
-                com.itextpdf.text.pdf.PdfPCell[] cells = {c1, c2, c3, c4};
+                com.itextpdf.text.pdf.PdfPCell[] cells = { c1, c2, c3, c4 };
                 for (com.itextpdf.text.pdf.PdfPCell c : cells) {
                     c.setBorderColor(borderColor);
                     c.setBackgroundColor(rowColor);
@@ -614,19 +653,21 @@ public class PanierDAO {
             // Zone du Total
             com.itextpdf.text.pdf.PdfPTable totalTable = new com.itextpdf.text.pdf.PdfPTable(2);
             totalTable.setWidthPercentage(100);
-            totalTable.setWidths(new float[]{6f, 3f});
-            totalTable.addCell(new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(""))); // Cellule vide à gauche
-            
+            totalTable.setWidths(new float[] { 6f, 3f });
+            totalTable.addCell(new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Phrase(""))); // Cellule vide à
+                                                                                                      // gauche
+
             com.itextpdf.text.pdf.PdfPCell totalCell = new com.itextpdf.text.pdf.PdfPCell();
             totalCell.setBorderColor(borderColor);
             totalCell.setBackgroundColor(rowEvenColor);
             totalCell.setPadding(15);
-            
+
             com.itextpdf.text.Paragraph tTitle = new com.itextpdf.text.Paragraph("NET À PAYER", totalTitleFont);
             tTitle.setAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
-            com.itextpdf.text.Paragraph tValue = new com.itextpdf.text.Paragraph(String.format("%.2f MAD", panier.getMontantTotal().doubleValue()), totalValueFont);
+            com.itextpdf.text.Paragraph tValue = new com.itextpdf.text.Paragraph(
+                    String.format("%.2f MAD", panier.getMontantTotal().doubleValue()), totalValueFont);
             tValue.setAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
-            
+
             totalCell.addElement(tTitle);
             totalCell.addElement(tValue);
             totalTable.addCell(totalCell);
@@ -635,8 +676,9 @@ public class PanierDAO {
             // Footer de la page
             com.itextpdf.text.Paragraph footer = new com.itextpdf.text.Paragraph(
                     "\n\nMerci pour votre confiance ! Pour toute question concernant cette facture,\n" +
-                    "veuillez nous contacter via support@chrionline.com", 
-                    new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 10, com.itextpdf.text.Font.ITALIC, com.itextpdf.text.BaseColor.GRAY));
+                            "veuillez nous contacter via support@chrionline.com",
+                    new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 10,
+                            com.itextpdf.text.Font.ITALIC, com.itextpdf.text.BaseColor.GRAY));
             footer.setAlignment(com.itextpdf.text.Element.ALIGN_CENTER);
             footer.setSpacingBefore(60);
             document.add(footer);

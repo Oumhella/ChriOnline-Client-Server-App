@@ -96,6 +96,46 @@ public class CommandeDAO {
         return null;
     }
 
+    // ───── Trouver une commande par Reference ──────────────────────────────────
+    public Commande findByReference(String reference) throws SQLException {
+        String sql = "SELECT c.id_commande, c.reference, c.idUtilisateur, c.status, c.date_commande, " +
+                "COALESCE(SUM(lc.quantite * lc.prix_unitaire), 0) AS montant_total, " +
+                "CONCAT(u.prenom, ' ', u.nom) AS nom_client " +
+                "FROM commande c " +
+                "JOIN utilisateur u ON c.idUtilisateur = u.idUtilisateur " +
+                "LEFT JOIN ligne_commande lc ON c.id_commande = lc.id_commande " +
+                "WHERE c.reference = ? " +
+                "GROUP BY c.id_commande, c.reference, c.idUtilisateur, c.status, c.date_commande, u.nom, u.prenom";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, reference);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Commande c = new Commande();
+                    c.setIdCommande(rs.getString("id_commande"));
+                    c.setReference(rs.getString("reference"));
+                    c.setIdUtilisateur(rs.getInt("idUtilisateur"));
+                    c.setNomClient(rs.getString("nom_client"));
+                    c.setMontantTotal(rs.getDouble("montant_total"));
+
+                    String statutDB = rs.getString("status");
+                    try {
+                        c.setStatut(StatutCommande.valueOf(
+                                statutDB != null ? statutDB.toUpperCase() : "EN_PREPARATION"));
+                    } catch (Exception e) {
+                        c.setStatut(StatutCommande.EN_PREPARATION);
+                    }
+
+                    Timestamp ts = rs.getTimestamp("date_commande");
+                    if (ts != null)
+                        c.setDateCommande(ts.toLocalDateTime());
+                    return c;
+                }
+            }
+        }
+        return null;
+    }
+
     // ───── Mettre à jour le statut ──────────────────────────────────────────────
     public boolean updateStatus(String idCommande, StatutCommande nouveauStatut)
             throws SQLException {

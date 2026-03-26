@@ -97,11 +97,35 @@ public class MesCommandesView {
 
         header.getChildren().addAll(logo, spacer, nav);
 
+        // Titre et bouton Suivre ma commande
+        HBox topSection = new HBox(20);
+        topSection.setPadding(new Insets(30, 60, 0, 60));
+        topSection.setAlignment(Pos.CENTER_LEFT);
+        
+        Text titleText = new Text("Historique de vos commandes");
+        titleText.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
+        titleText.setFill(Color.web(BRUN));
+        
+        Region sectionSpacer = new Region();
+        HBox.setHgrow(sectionSpacer, Priority.ALWAYS);
+        
+        Button btnSuivre = new Button("🧭 Suivre ma commande");
+        btnSuivre.setStyle("-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; -fx-font-family: Arial; -fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 5;");
+        btnSuivre.setCursor(javafx.scene.Cursor.HAND);
+        btnSuivre.setOnAction(e -> {
+            try { new SuiviCommandeView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
+        
+        topSection.getChildren().addAll(titleText, sectionSpacer, btnSuivre);
+
         // Liste des commandes
         listContainer = new VBox(15);
-        listContainer.setPadding(new Insets(30, 60, 30, 60));
+        listContainer.setPadding(new Insets(20, 60, 30, 60));
         
-        ScrollPane scrollPane = new ScrollPane(listContainer);
+        VBox mainContent = new VBox(10);
+        mainContent.getChildren().addAll(topSection, listContainer);
+        
+        ScrollPane scrollPane = new ScrollPane(mainContent);
         scrollPane.setFitToWidth(true);
         scrollPane.setStyle("-fx-background: " + CREME + "; -fx-border-color: transparent;");
 
