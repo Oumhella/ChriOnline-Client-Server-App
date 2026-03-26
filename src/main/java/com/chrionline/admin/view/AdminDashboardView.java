@@ -55,7 +55,7 @@ public class AdminDashboardView extends Application {
 
         HBox root = new HBox(0);
         root.setStyle("-fx-background-color: " + CREME + ";");
-        root.getChildren().addAll(buildSidebar(stage), buildMainArea());
+        root.getChildren().addAll(buildSidebar(stage, root), buildMainArea());
 
         Scene scene = new Scene(root, 1200, 800);
         stage.setScene(scene);
@@ -103,7 +103,7 @@ public class AdminDashboardView extends Application {
     //  SIDEBAR
     // ═════════════════════════════════════════════════════════════════════════
 
-    private VBox buildSidebar(Stage stage) {
+    private VBox buildSidebar(Stage stage, HBox rootPane) {
         VBox sidebar = new VBox(0);
         sidebar.setPrefWidth(220);
         sidebar.setMinWidth(220);
@@ -138,7 +138,9 @@ public class AdminDashboardView extends Application {
 
         nav.getChildren().addAll(
                 navSection("VUE GÉNÉRALE"),
-                navItem("📊", "Dashboard",   true),
+                navItem("📊", "Dashboard",   true, () -> {
+                    rootPane.getChildren().set(1, buildMainArea());
+                }),
                 navSection("CATALOGUE"),
                 navItem("📦", "Produits",    false),
                 navItem("🏷️",  "Catégories", false),
@@ -146,8 +148,19 @@ public class AdminDashboardView extends Application {
                 navItem("🛒",  "Commandes",  false),
                 navItem("💳",  "Paiements",  false),
                 navItem("🚚",  "Livraisons", false),
-                navSection("UTILISATEURS"),
-                navItem("👥",  "Clients",    false),
+                navSection("UTILISATEURS")
+        );
+        HBox clientsItem = navItem("👥", "Clients", false);
+        clientsItem.setOnMouseClicked(e -> {
+            try {
+                rootPane.getChildren().set(1, new AdminUsersView().getView());
+            } catch (Exception ex) {
+                System.err.println("[DASHBOARD] Erreur ouverture Clients : " + ex.getMessage());
+                ex.printStackTrace();
+            }
+        });
+        nav.getChildren().addAll(
+                clientsItem,
                 navSection("SYSTÈME"),
                 navItem("⚙️",  "Paramètres",false),
                 navSection("COMPTE"),
@@ -188,7 +201,7 @@ public class AdminDashboardView extends Application {
         return lbl;
     }
 
-    private HBox navItem(String icon, String label, boolean actif) {
+    private HBox navItem(String icon, String label, boolean actif, Runnable action) {
         HBox item = new HBox(10);
         item.setPadding(new Insets(9, 14, 9, 14));
         item.setAlignment(Pos.CENTER_LEFT);
@@ -202,11 +215,29 @@ public class AdminDashboardView extends Application {
         txt.setFill(Color.web(BRUN, actif ? 1.0 : 0.78));
         item.getChildren().addAll(ico, txt);
 
-        if (!actif) {
-            item.setOnMouseEntered(e -> item.setStyle("-fx-background-color: rgba(255,255,255,0.12); -fx-background-radius: 7;"));
-            item.setOnMouseExited(e  -> item.setStyle(""));
+        item.setOnMouseEntered(e -> {
+            if (!item.getStyle().contains("0.22")) {
+                item.setStyle("-fx-background-color: rgba(255,255,255,0.12); -fx-background-radius: 7;");
+            }
+        });
+        item.setOnMouseExited(e -> {
+            if (!item.getStyle().contains("0.22")) {
+                item.setStyle("");
+            }
+        });
+        
+        if (action != null) {
+            item.setOnMouseClicked(e -> {
+                // On pourrait ici gérer l'état 'actif' visuellement pour tous les boutons
+                action.run();
+            });
         }
+        
         return item;
+    }
+
+    private HBox navItem(String icon, String label, boolean actif) {
+        return navItem(icon, label, actif, null);
     }
 
     private void deconnecter(Stage stage) {
