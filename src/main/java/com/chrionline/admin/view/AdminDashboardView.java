@@ -43,6 +43,10 @@ public class AdminDashboardView extends Application {
     private static final String SUCCESS_BG = "#EAF5ED";
 
     private AdminDashboardController controller;
+    /** Le panneau racine partagé — la sidebar reste fixe, seul le centre change. */
+    private BorderPane rootPane;
+    /** Tous les items nav pour gérer l'état actif mutuellement exclusif. */
+    private final List<HBox> tousLesNavItems = new ArrayList<>();
 
     @Override
     public void start(Stage stage) {
@@ -51,11 +55,12 @@ public class AdminDashboardView extends Application {
 
         stage.setTitle("ChriOnline — Administration");
 
-        HBox root = new HBox(0);
-        root.setStyle("-fx-background-color: " + CREME + ";");
-        root.getChildren().addAll(buildSidebar(stage), buildMainArea());
+        rootPane = new BorderPane();
+        rootPane.setStyle("-fx-background-color: " + CREME + ";");
+        rootPane.setLeft(buildSidebar(stage));
+        rootPane.setCenter(buildMainArea());
 
-        Scene scene = new Scene(root, 1200, 800);
+        Scene scene = new Scene(rootPane, 1200, 800);
         stage.setScene(scene);
         stage.setMinWidth(960);
         stage.setMinHeight(650);
@@ -94,13 +99,15 @@ public class AdminDashboardView extends Application {
         nav.setPadding(new Insets(20, 10, 20, 10));
         VBox.setVgrow(nav, Priority.ALWAYS);
 
-        // ── Bouton Commandes cliquable ──────────────────────────────────────────
-        HBox btnCommandes = navItem("🛒", "Commandes", false);
-        btnCommandes.setCursor(javafx.scene.Cursor.HAND);
-        btnCommandes.setOnMouseClicked(e -> {
+        // ── Navigation items ───────────────────────────────────────────────────
+        HBox btnDashboard = navItem("📊", "Dashboard", true, () -> {
+            controller.chargerStats();
+            rootPane.setCenter(buildMainArea());
+        });
+
+        HBox btnCommandes = navItem("🛒", "Commandes", false, () -> {
             try {
-                Stage commandesStage = new Stage();
-                new com.chrionline.admin.view.AdminCommandesView().start(commandesStage);
+                rootPane.setCenter(new AdminCommandesView().getView());
             } catch (Exception ex) {
                 System.err.println("[DASHBOARD] Erreur ouverture Commandes : " + ex.getMessage());
                 ex.printStackTrace();
@@ -109,18 +116,18 @@ public class AdminDashboardView extends Application {
 
         nav.getChildren().addAll(
                 navSection("VUE GÉNÉRALE"),
-                navItem("📊", "Dashboard", true),
+                btnDashboard,
                 navSection("CATALOGUE"),
-                navItem("📦", "Produits", false),
-                navItem("🏷️", "Catégories", false),
+                navItem("📦", "Produits", false, null),
+                navItem("🏷️", "Catégories", false, null),
                 navSection("VENTES"),
                 btnCommandes,
-                navItem("💳", "Paiements", false),
-                navItem("🚚", "Livraisons", false),
+                navItem("💳", "Paiements", false, null),
+                navItem("🚚", "Livraisons", false, null),
                 navSection("UTILISATEURS"),
-                navItem("👥", "Clients", false),
+                navItem("👥", "Clients", false, null),
                 navSection("SYSTÈME"),
-                navItem("⚙️", "Paramètres", false));
+                navItem("⚙️", "Paramètres", false, null));
 
         HBox footer = new HBox(10);
         footer.setPadding(new Insets(14, 16, 18, 16));
@@ -155,27 +162,62 @@ public class AdminDashboardView extends Application {
         return lbl;
     }
 
-    private HBox navItem(String icon, String label, boolean actif) {
+    private HBox navItem(String icon, String label, boolean actifParDefaut, Runnable onClick) {
         HBox item = new HBox(10);
         item.setPadding(new Insets(9, 14, 9, 14));
         item.setAlignment(Pos.CENTER_LEFT);
         item.setCursor(javafx.scene.Cursor.HAND);
-        if (actif)
-            item.setStyle("-fx-background-color: rgba(255,255,255,0.22); -fx-background-radius: 7;");
 
         Label ico = new Label(icon);
         ico.setFont(Font.font(12));
         Text txt = new Text(label);
-        txt.setFont(Font.font("Georgia", actif ? FontWeight.BOLD : FontWeight.NORMAL, 13));
-        txt.setFill(Color.web(BRUN, actif ? 1.0 : 0.78));
         item.getChildren().addAll(ico, txt);
 
-        if (!actif) {
-            item.setOnMouseEntered(
-                    e -> item.setStyle("-fx-background-color: rgba(255,255,255,0.12); -fx-background-radius: 7;"));
-            item.setOnMouseExited(e -> item.setStyle(""));
+        // Marquer l'état actif via userData
+        item.setUserData(actifParDefaut);
+        appliquerStyleNavItem(item, txt, actifParDefaut);
+
+        tousLesNavItems.add(item);
+
+        item.setOnMouseEntered(e -> {
+            if (!(boolean) item.getUserData())
+                item.setStyle("-fx-background-color: rgba(255,255,255,0.12); -fx-background-radius: 7;");
+        });
+        item.setOnMouseExited(e -> {
+            if (!(boolean) item.getUserData())
+                item.setStyle("");
+        });
+
+        if (onClick != null) {
+            item.setOnMouseClicked(e -> {
+                // Désactiver tous les autres
+                for (HBox nav : tousLesNavItems) {
+                    nav.setUserData(false);
+                    nav.setStyle("");
+                    if (nav.getChildren().size() > 1 && nav.getChildren().get(1) instanceof Text t) {
+                        t.setFont(Font.font("Georgia", FontWeight.NORMAL, 13));
+                        t.setFill(Color.web(BRUN, 0.78));
+                    }
+                }
+                // Activer cet item
+                item.setUserData(true);
+                appliquerStyleNavItem(item, txt, true);
+                onClick.run();
+            });
         }
         return item;
+    }
+
+    private void appliquerStyleNavItem(HBox item, Text txt, boolean actif) {
+        if (actif) {
+            item.setStyle("-fx-background-color: rgba(255,255,255,0.22); -fx-background-radius: 7;");
+            txt.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+            txt.setFill(Color.web(BRUN, 1.0));
+        } else {
+            item.setStyle("");
+            txt.setFont(Font.font("Georgia", FontWeight.NORMAL, 13));
+            txt.setFill(Color.web(BRUN, 0.78));
+        }
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -185,7 +227,6 @@ public class AdminDashboardView extends Application {
     private VBox buildMainArea() {
         VBox main = new VBox(0);
         main.setStyle("-fx-background-color: " + CREME + ";");
-        HBox.setHgrow(main, Priority.ALWAYS);
         main.getChildren().add(buildTopbar());
 
         VBox content = new VBox(24);

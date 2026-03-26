@@ -9,6 +9,7 @@ import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.*;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -57,21 +58,20 @@ public class AdminCommandesView extends Application {
     // ─── Boutons de filtre (pour les activer/désactiver visuellement) ───────────
     private final List<Button> filtresBtns = new ArrayList<>();
 
-    @Override
-    public void start(Stage stage) {
+    /**
+     * Construit et retourne le contenu de la vue Commandes sous forme de Node.
+     * Utilisé pour l'intégrer dans le layout principal sans ouvrir une nouvelle fenêtre.
+     */
+    public Node getView() {
         this.controller = new AdminCommandesController();
-
-        // ─── Layout principal ────────────────────────────────────────────────────
-        BorderPane root = new BorderPane();
-        root.setStyle("-fx-background-color: " + CREME + ";");
 
         VBox content = new VBox(20);
         content.setPadding(new Insets(30, 34, 34, 34));
 
-        // 1. HEADER
-        content.getChildren().add(buildHeader(stage));
+        // 1. HEADER (no stage reference needed when embedded)
+        content.getChildren().add(buildHeader(null));
 
-        // 2. TOAST (notification UDP)
+        // 2. TOAST
         toastLabel = buildToast();
         content.getChildren().add(toastLabel);
 
@@ -99,16 +99,22 @@ public class AdminCommandesView extends Application {
             "-fx-background: " + CREME + ";" +
             "-fx-background-color: transparent; -fx-border-color: transparent;"
         );
-        root.setCenter(scroll);
+
+        chargerDonnees();
+        return scroll;
+    }
+
+    @Override
+    public void start(Stage stage) {
+        BorderPane root = new BorderPane();
+        root.setStyle("-fx-background-color: " + CREME + ";");
+        root.setCenter(getView());
 
         Scene scene = new Scene(root, 1100, 750);
         stage.setTitle("ChriOnline — Gestion des Commandes");
         stage.setScene(scene);
         stage.setMinWidth(900);
         stage.show();
-
-        // Chargement initial dans un thread pour ne pas bloquer l'UI
-        chargerDonnees();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

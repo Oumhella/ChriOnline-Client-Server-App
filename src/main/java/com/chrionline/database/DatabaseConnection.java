@@ -37,8 +37,18 @@ public class DatabaseConnection {
 
 
     public static synchronized DatabaseConnection getInstance() throws SQLException {
-        if (instance == null || instance.connection.isClosed()) {
+        if (instance == null) {
             instance = new DatabaseConnection();
+        } else {
+            try {
+                // isValid(2) envoie un ping au serveur MySQL — détecte une connexion zombie
+                if (!instance.connection.isValid(2)) {
+                    System.out.println("[DB] Connexion invalide, reconnexion...");
+                    instance = new DatabaseConnection();
+                }
+            } catch (SQLException e) {
+                instance = new DatabaseConnection();
+            }
         }
         return instance;
     }
