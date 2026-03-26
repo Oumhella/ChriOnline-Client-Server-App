@@ -2,6 +2,8 @@ package com.chrionline.server.core;
 
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.service.AuthenticationService;
+import com.chrionline.server.service.PanierService;
+import com.chrionline.server.service.ProduitService;
 import com.chrionline.shared.models.User;
 import com.chrionline.server.dao.CommandeDAO;
 import com.chrionline.server.dao.LigneCommandeDAO;
@@ -25,7 +27,8 @@ public class ClientHandler implements Runnable {
     private final Socket socket;
     private final Server server;
     private final AuthenticationService authService;
-
+    private final ProduitService produitService;
+    private final PanierService panierService;
     private ObjectOutputStream out;
     private ObjectInputStream  in;
 
@@ -37,7 +40,9 @@ public class ClientHandler implements Runnable {
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
         this.server = server;
+        this.produitService = new ProduitService();
         this.authService = new AuthenticationService();
+        this.panierService = new PanierService();
     }
 
     // ─── Gestion de la Connexion TCP ──────────────────────────────────────────
@@ -89,18 +94,31 @@ public class ClientHandler implements Runnable {
             case "CONNEXION" -> handleConnexion(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
+            case "DETAIL_PRODUIT" -> handleDetailProduit(req);
+            case "AJOUTER_WISHLIST"  -> handleAjouterWishlist(req);
+            case "SUPPRIMER_WISHLIST"-> handleSupprimerWishlist(req);
+            case "LISTE_WISHLIST"    -> handleListeWishlist(req);
             case "CONFIRMER_EMAIL"       -> handleConfirmerEmail(req);
             case "OUBLIER_MOT_DE_PASSE" -> handleOublierMotDePasse(req);
             case "REINITIALISER_MDP"     -> handleReinitialiserMdp(req);
+            case "PANIER_GET"            -> envoyerMessage(panierService.getPanier(req));
+            case "PANIER_AJOUTER"        -> envoyerMessage(panierService.ajouterProduit(req));
+            case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
+            case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
+            case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
+            case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
             case "GET_ALL_ORDERS",
                  "GET_ORDER_DETAILS",
                  "UPDATE_ORDER_STATUS" -> {
-                // /!\ On commente cette sécurité temporairement car notre AdminCommandeClient
-                // actuel ouvre une NOUVELLE socket qui n'a pas encore fait de login().
-                // if (!isAdmin()) {
-                //     envoyerMessage(creerReponse("ERREUR", "Accès refusé : réservé à l'admin"));
-                //     return;
-                // }
+                // /!\ On doit commenter ce bloc jusqu'à ce que `AdminCommandeClient` 
+                //     envoie son `idUtilisateur` ou maintienne une session, sinon `this.userId` 
+                //     vaut 0 (car c'est une toute nouvelle socket) et bloque l'affichage !
+                /*
+                if (!isAdmin()) {
+                    envoyerMessage(creerReponse("ERREUR", "Accès refusé : réservé à l'admin"));
+                    return;
+                }
+                */
                 handleAdminCommande(commande, req);
             }
             // ... autres commandes ...
@@ -118,19 +136,11 @@ public class ClientHandler implements Runnable {
             System.out.println("[HANDLER] Login statut = " + reponse.get("statut"));
 
             if ("OK".equals(reponse.get("statut"))) {
-                Object dataObj = reponse.get("data");
-                if (dataObj instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> data = (Map<String, Object>) dataObj;
-                    this.userId    = (int) data.get("userId");
-                    this.userEmail = (String) data.get("email");
-                    this.userRole  = (String) data.get("role");
-                    System.out.println("[HANDLER] Session ouverte : userId=" + userId + " role=" + userRole);
-                }
-            } else {
-                System.out.println("[HANDLER] Echec connexion : " + reponse.get("message"));
+                Map<String, Object> data = (Map<String, Object>) reponse.get("data");
+                this.userId = (int) data.get("userId");
+                this.userEmail = (String) data.get("email");
             }
-
+            
             envoyerMessage(reponse);
         } catch (Exception e) {
             System.err.println("[HANDLER] Exception handleConnexion : " + e.getMessage());
@@ -179,13 +189,47 @@ public class ClientHandler implements Runnable {
     }
     private void handleListeProduits(Map<String, Object> req) {
         try {
-            List<com.chrionline.shared.models.Produit> produits = com.chrionline.server.dao.ProduitDAO.findAll();
-            Map<String, Object> reponse = new HashMap<>();
-            reponse.put("statut", "OK");
-            reponse.put("produits", produits);
+
+            Map<String, Object> reponse = produitService.handleListeProduits(req);
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur lors de la récupération des produits : " + e.getMessage()));
+        }
+    }
+
+    private void handleDetailProduit(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = produitService.handleGetProduitById(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur lors de la récupération du produit : " + e.getMessage()));
+        }
+    }
+
+    private void handleAjouterWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleAjouterWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleSupprimerWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleSupprimerWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleListeWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleGetWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
         }
     }
 
@@ -220,8 +264,18 @@ public class ClientHandler implements Runnable {
     }
 
     private boolean isAdmin() {
-        // UserDAO retourne le rôle en minuscule ('admin'), on compare sans sensibilité à la casse
-        return userRole != null && userRole.equalsIgnoreCase("ADMIN");
+        if (this.userId <= 0) return false;
+        
+        try (java.sql.Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM admin WHERE idAdmin = ?")) {
+            ps.setInt(1, this.userId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                return rs.next(); // true si présent dans la table admin
+            }
+        } catch (Exception e) {
+            System.err.println("[HANDLER] Erreur isAdmin : " + e.getMessage());
+            return false;
+        }
     }
 
     public void fermerConnexion() {
