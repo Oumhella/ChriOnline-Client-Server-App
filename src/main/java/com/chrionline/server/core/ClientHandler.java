@@ -106,7 +106,8 @@ public class ClientHandler implements Runnable {
             case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
             case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
             case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
-            case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
+            case "PANIER_VALIDER"        -> handlePanierValider(req);
+            case "COMMANDE_CONFIRMER"    -> handleCommandeConfirmer(req);
             case "GET_ALL_ORDERS",
                  "GET_ORDER_DETAILS",
                  "UPDATE_ORDER_STATUS" -> {
@@ -204,6 +205,25 @@ public class ClientHandler implements Runnable {
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleCommandeConfirmer(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleCommandeConfirmer");
+        try {
+            Map<String, Object> reponse = panierService.confirmerCommande(req);
+
+            // Si la commande est validée avec succès, on notifie les administrateurs via UDP
+            if ("OK".equals(reponse.get("statut"))) {
+                CommandeDTO recap = (CommandeDTO) reponse.get("commandeResult");
+                String ref = recap != null ? recap.getReference() : "Inconnue";
+                String messageAdmin = "NOUVELLE_COMMANDE:" + ref + ":Utilisateur " + this.userId;
+                server.notifierAdmins(messageAdmin);
+            }
+
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
         }
     }
 
