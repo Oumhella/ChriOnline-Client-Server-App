@@ -297,12 +297,6 @@ public class ClientHandler implements Runnable {
             Map<String, Object> reponse = new HashMap<>();
             reponse.put("statut", resultat.startsWith("SUCCESS") ? "OK" : "ERREUR");
             reponse.put("message", resultat);
-            if (resultat.startsWith("SUCCESS")) {
-                envoyerNotificationUDP(
-                        "Votre commande " + idCommande + " est maintenant : " + nouveauStatut,
-                        9999
-                );
-            }
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", e.getMessage()));
