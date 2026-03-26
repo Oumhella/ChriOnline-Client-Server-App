@@ -13,6 +13,8 @@ public class SessionManager {
     private String prenom;
     private String email;
     private String role;
+    private final java.util.List<String> notificationHistory = new java.util.ArrayList<>();
+    private int unreadNotificationsCount = 0;
 
     private SessionManager() {}
 
@@ -39,6 +41,25 @@ public class SessionManager {
         this.prenom = null;
         this.email = null;
         this.role = null;
+        this.notificationHistory.clear();
+        this.unreadNotificationsCount = 0;
+    }
+    
+    public void addNotification(String msg) {
+        this.notificationHistory.add(0, msg);
+        this.unreadNotificationsCount++;
+    }
+    
+    public void resetUnreadCount() {
+        this.unreadNotificationsCount = 0;
+    }
+    
+    public int getUnreadNotificationsCount() {
+        return unreadNotificationsCount;
+    }
+    
+    public java.util.List<String> getNotificationHistory() {
+        return notificationHistory;
     }
 
     public boolean isLogged() {

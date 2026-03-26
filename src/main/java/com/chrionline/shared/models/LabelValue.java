@@ -32,4 +32,9 @@ public class LabelValue implements Serializable {
     public void setLabel(Label label) {
         this.label = label;
     }
+
+    @Override
+    public String toString() {
+        return valeur;
+    }
 }

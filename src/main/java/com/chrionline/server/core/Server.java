@@ -155,6 +155,21 @@ public class Server {
         }
     }
 
+    /**
+     * Envoie une notification UDP à un client spécifique identifié par son userId.
+     * Le port UDP client conventionnel est 9092.
+     *
+     * @param userId  l'ID unique de l'utilisateur à notifier
+     * @param message le message de notification
+     */
+    public void notifierClient(int userId, String message) {
+        for (ClientHandler handler : clientConnectes) {
+            if (handler.getUserId() == userId) {
+                diffuserNotification(message, handler.getSocket().getInetAddress(), handler.getUdpPort());
+            }
+        }
+    }
+
     // ─── Thread UDP (écoute des messages entrants UDP) ─────────────────────────
 
     /**
