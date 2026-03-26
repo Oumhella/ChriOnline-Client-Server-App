@@ -16,9 +16,9 @@ public class ProduitDAO {
     public static List<Produit> findAll() {
         Map<Integer, Produit> produitsMap = new LinkedHashMap<>();
         String sql = "SELECT p.id_produit, p.nom, p.description, p.date_ajout, p.id_categorie, " +
-                     "pf.id_product_formats, pf.prix, pf.image_url " +
-                     "FROM produit p LEFT JOIN product_formats pf ON p.id_produit = pf.id_produit " +
-                     "ORDER BY p.id_produit";
+                "pf.id_product_formats, pf.prix, pf.image_url " +
+                "FROM produit p LEFT JOIN product_formats pf ON p.id_produit = pf.id_produit " +
+                "ORDER BY p.id_produit";
 
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -61,7 +61,6 @@ public class ProduitDAO {
     }
 
     public static Produit findById(int id) {
-
         String sql = "SELECT " +
                 "p.id_produit, p.nom AS produit_nom, p.description, p.date_ajout, " +
                 "p.id_categorie, " +
@@ -69,10 +68,10 @@ public class ProduitDAO {
                 "lv.id_labelValues, lv.valeur, " +
                 "l.id_label, l.nom AS label_nom " +
                 "FROM produit p " +
-                "JOIN product_formats pf ON p.id_produit = pf.id_produit " +
-                "JOIN product_formats_values pfv ON pf.id_product_formats = pfv.id_product_formats " +
-                "JOIN label_values lv ON pfv.id_labelValues = lv.id_labelValues " +
-                "JOIN label l ON lv.id_label = l.id_label " +
+                "LEFT JOIN product_formats pf ON p.id_produit = pf.id_produit " +
+                "LEFT JOIN product_formats_values pfv ON pf.id_product_formats = pfv.id_product_formats " +
+                "LEFT JOIN label_values lv ON pfv.id_labelValues = lv.id_labelValues " +
+                "LEFT JOIN label l ON lv.id_label = l.id_label " +
                 "WHERE p.id_produit = ?";
 
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
@@ -82,13 +81,9 @@ public class ProduitDAO {
             ResultSet rs = ps.executeQuery();
 
             Produit produit = null;
-
-            // éviter doublons
             Map<Integer, ProductFormat> formatsMap = new HashMap<>();
 
             while (rs.next()) {
-
-                //  Produit
                 if (produit == null) {
                     produit = new Produit();
                     produit.setIdProduit(rs.getInt("id_produit"));
@@ -97,21 +92,18 @@ public class ProduitDAO {
                     produit.setDescription(rs.getString("description"));
                     produit.setDateAjout(rs.getTimestamp("date_ajout"));
 
-                    // Set top-level imageUrl and prix from first row
                     produit.setImageUrl(rs.getString("image_url"));
                     double firstPrix = rs.getDouble("prix");
                     if (!rs.wasNull()) {
                         produit.setPrix((float) firstPrix);
                     }
-
                     produit.setFormats(new ArrayList<>());
                 }
 
-                //  Format
                 int formatId = rs.getInt("id_product_formats");
+                if (rs.wasNull()) continue;
 
                 ProductFormat format = formatsMap.get(formatId);
-
                 if (format == null) {
                     format = new ProductFormat();
                     format.setId(formatId);
@@ -119,26 +111,24 @@ public class ProduitDAO {
                     format.setStock(rs.getInt("stock"));
                     format.setStockAlerte(rs.getInt("stock_alerte"));
                     format.setImageUrl(rs.getString("image_url"));
-
                     format.setLabelValues(new ArrayList<>());
-
                     formatsMap.put(formatId, format);
                     produit.getFormats().add(format);
                 }
 
-                //  LabelValue
-                LabelValue lv = new LabelValue();
-                lv.setId(rs.getInt("id_labelValues"));
-                lv.setValeur(rs.getString("valeur"));
+                int idLV = rs.getInt("id_labelValues");
+                if (!rs.wasNull()) {
+                    LabelValue lv = new LabelValue();
+                    lv.setId(idLV);
+                    lv.setValeur(rs.getString("valeur"));
 
-                //  Label
-                Label label = new Label();
-                label.setId(rs.getInt("id_label"));
-                label.setNom(rs.getString("label_nom"));
+                    Label label = new Label();
+                    label.setId(rs.getInt("id_label"));
+                    label.setNom(rs.getString("label_nom"));
+                    lv.setLabel(label);
 
-                lv.setLabel(label);
-
-                format.getLabelValues().add(lv);
+                    format.getLabelValues().add(lv);
+                }
             }
 
             return produit;
@@ -149,4 +139,5 @@ public class ProduitDAO {
 
         return null;
     }
+
 }

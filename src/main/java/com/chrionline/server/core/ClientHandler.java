@@ -2,6 +2,7 @@ package com.chrionline.server.core;
 
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.service.AuthenticationService;
+import com.chrionline.server.service.PanierService;
 import com.chrionline.server.service.ProduitService;
 import com.chrionline.shared.models.User;
 
@@ -20,6 +21,7 @@ public class ClientHandler implements Runnable {
     private final Server server;
     private final AuthenticationService authService;
     private final ProduitService produitService;
+    private final PanierService panierService;
     private ObjectOutputStream out;
     private ObjectInputStream  in;
 
@@ -32,6 +34,7 @@ public class ClientHandler implements Runnable {
         this.server = server;
         this.produitService = new ProduitService();
         this.authService = new AuthenticationService();
+        this.panierService = new PanierService();
     }
 
     // ─── Gestion de la Connexion TCP ──────────────────────────────────────────
@@ -90,7 +93,12 @@ public class ClientHandler implements Runnable {
             case "CONFIRMER_EMAIL"       -> handleConfirmerEmail(req);
             case "OUBLIER_MOT_DE_PASSE" -> handleOublierMotDePasse(req);
             case "REINITIALISER_MDP"     -> handleReinitialiserMdp(req);
-            // ... autres commandes ...
+            case "PANIER_GET"            -> envoyerMessage(panierService.getPanier(req));
+            case "PANIER_AJOUTER"        -> envoyerMessage(panierService.ajouterProduit(req));
+            case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
+            case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
+            case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
+            case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
     }
