@@ -1,69 +1,59 @@
 package com.chrionline.shared.models;
+
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
 
-public class Panier implements Serializable{
-    private int id_panier ;
-    private float montant_total;
-    private String statut ;
-    private String session_id ;
-    private LocalDateTime date_creation;
-    private LocalDateTime date_modification;
 
-    public Panier(int id_panier, float montant_total, String statut, String session_id, LocalDateTime date_creation, LocalDateTime date_modification) {
-        this.id_panier = id_panier;
-        this.montant_total = montant_total;
-        this.statut = statut;
-        this.session_id = session_id;
-        this.date_creation = date_creation;
-        this.date_modification = date_modification;
+public class Panier implements Serializable {
+
+    private int          idPanier;
+    private int          idUtilisateur;
+    private BigDecimal   montantTotal;
+    private String       statut;          // 'actif' | 'valide' | 'abandonne'
+    private Timestamp    dateCreation;
+    private Timestamp    dateModification;
+    private List<LignePanier> lignes;
+
+    public Panier() {
+        this.lignes       = new ArrayList<>();
+        this.montantTotal = BigDecimal.ZERO;
+        this.statut       = "actif";
     }
 
-    public int getId_panier() {
-        return id_panier;
+    // ── Recalcul du total à partir des lignes ─────────────────────────────
+    public void recalculerTotal() {
+        this.montantTotal = lignes.stream()
+                .map(l -> l.getPrix().multiply(BigDecimal.valueOf(l.getQuantite())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    public void setId_panier(int id_panier) {
-        this.id_panier = id_panier;
-    }
+    // ── Getters / Setters ─────────────────────────────────────────────────
+    public int          getIdPanier()           { return idPanier; }
+    public void         setIdPanier(int v)       { this.idPanier = v; }
 
-    public float getMontant_total() {
-        return montant_total;
-    }
+    public int          getIdUtilisateur()       { return idUtilisateur; }
+    public void         setIdUtilisateur(int v)  { this.idUtilisateur = v; }
 
-    public void setMontant_total(float montant_total) {
-        this.montant_total = montant_total;
-    }
+    public BigDecimal   getMontantTotal()        { return montantTotal; }
+    public void         setMontantTotal(BigDecimal v) { this.montantTotal = v; }
 
-    public String getStatut() {
-        return statut;
-    }
+    public String       getStatut()              { return statut; }
+    public void         setStatut(String v)       { this.statut = v; }
 
-    public void setStatut(String statut) {
-        this.statut = statut;
-    }
+    public Timestamp    getDateCreation()        { return dateCreation; }
+    public void         setDateCreation(Timestamp v) { this.dateCreation = v; }
 
-    public String getSession_id() {
-        return session_id;
-    }
+    public Timestamp    getDateModification()    { return dateModification; }
+    public void         setDateModification(Timestamp v) { this.dateModification = v; }
 
-    public void setSession_id(String session_id) {
-        this.session_id = session_id;
-    }
+    public List<LignePanier> getLignes()         { return lignes; }
+    public void         setLignes(List<LignePanier> v) { this.lignes = v; }
 
-    public LocalDateTime getDate_creation() {
-        return date_creation;
-    }
-
-    public void setDate_creation(LocalDateTime date_creation) {
-        this.date_creation = date_creation;
-    }
-
-    public LocalDateTime getDate_modification() {
-        return date_modification;
-    }
-
-    public void setDate_modification(LocalDateTime date_modification) {
-        this.date_modification = date_modification;
+    @Override
+    public String toString() {
+        return "Panier{id=" + idPanier + ", total=" + montantTotal + ", lignes=" + lignes.size() + "}";
     }
 }
