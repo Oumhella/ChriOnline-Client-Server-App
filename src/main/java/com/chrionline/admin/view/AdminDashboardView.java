@@ -96,6 +96,16 @@ public class AdminDashboardView extends Application {
         VBox nav = new VBox(2);
         nav.setPadding(new Insets(20, 10, 20, 10));
         VBox.setVgrow(nav, Priority.ALWAYS);
+        HBox btnCommandes = navItem("🛒",  "Commandes",  false);
+        btnCommandes.setOnMouseClicked(e -> {
+            try {
+                new AdminCommandesView().start(new Stage());
+                // stage.close(); // Décommentez si vous souhaitez que le Dashboard se ferme
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
         nav.getChildren().addAll(
                 navSection("VUE GÉNÉRALE"),
                 navItem("📊", "Dashboard",   true),
@@ -103,7 +113,7 @@ public class AdminDashboardView extends Application {
                 navItem("📦", "Produits",    false),
                 navItem("🏷️",  "Catégories", false),
                 navSection("VENTES"),
-                navItem("🛒",  "Commandes",  false),
+                btnCommandes,
                 navItem("💳",  "Paiements",  false),
                 navItem("🚚",  "Livraisons", false),
                 navSection("UTILISATEURS"),
