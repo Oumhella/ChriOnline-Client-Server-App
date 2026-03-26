@@ -12,25 +12,25 @@ import java.util.Map;
  * Communique avec le serveur via TCP et retourne des PanierDTO.
  *
  * Utilisation depuis la vue :
- *   PanierController ctrl = new PanierController(idUtilisateur);
- *   PanierDTO panier = ctrl.getPanier();
- *   PanierDTO panier = ctrl.ajouterProduit(idFormat, quantite);
+ * PanierController ctrl = new PanierController(idUtilisateur);
+ * PanierDTO panier = ctrl.getPanier();
+ * PanierDTO panier = ctrl.ajouterProduit(idFormat, quantite);
  */
 public class PanierController {
 
-    private final int    idUtilisateur;
+    private final int idUtilisateur;
     private final Client client;
 
     public PanierController(int idUtilisateur) {
         this.idUtilisateur = idUtilisateur;
-        this.client        = Client.getInstance("localhost", 12345);
+        this.client = Client.getInstance("localhost", 12345);
     }
 
     // ─── Récupérer le panier ──────────────────────────────────────────────
 
     public PanierDTO getPanier() {
         Map<String, Object> req = new HashMap<>();
-        req.put("commande",      "PANIER_GET");
+        req.put("commande", "PANIER_GET");
         req.put("idUtilisateur", idUtilisateur);
         return envoyerEtLire(req);
     }
@@ -39,10 +39,10 @@ public class PanierController {
 
     public PanierDTO ajouterProduit(int idProductFormats, int quantite) {
         Map<String, Object> req = new HashMap<>();
-        req.put("commande",         "PANIER_AJOUTER");
-        req.put("idUtilisateur",    idUtilisateur);
+        req.put("commande", "PANIER_AJOUTER");
+        req.put("idUtilisateur", idUtilisateur);
         req.put("idProductFormats", idProductFormats);
-        req.put("quantite",         quantite);
+        req.put("quantite", quantite);
         return envoyerEtLire(req);
     }
 
@@ -50,10 +50,10 @@ public class PanierController {
 
     public PanierDTO modifierQuantite(int idProductFormats, int nouvelleQte) {
         Map<String, Object> req = new HashMap<>();
-        req.put("commande",         "PANIER_MODIFIER_QTE");
-        req.put("idUtilisateur",    idUtilisateur);
+        req.put("commande", "PANIER_MODIFIER_QTE");
+        req.put("idUtilisateur", idUtilisateur);
         req.put("idProductFormats", idProductFormats);
-        req.put("quantite",         nouvelleQte);
+        req.put("quantite", nouvelleQte);
         return envoyerEtLire(req);
     }
 
@@ -61,8 +61,8 @@ public class PanierController {
 
     public PanierDTO retirerProduit(int idProductFormats) {
         Map<String, Object> req = new HashMap<>();
-        req.put("commande",         "PANIER_RETIRER");
-        req.put("idUtilisateur",    idUtilisateur);
+        req.put("commande", "PANIER_RETIRER");
+        req.put("idUtilisateur", idUtilisateur);
         req.put("idProductFormats", idProductFormats);
         return envoyerEtLire(req);
     }
@@ -71,7 +71,7 @@ public class PanierController {
 
     public PanierDTO viderPanier() {
         Map<String, Object> req = new HashMap<>();
-        req.put("commande",      "PANIER_VIDER");
+        req.put("commande", "PANIER_VIDER");
         req.put("idUtilisateur", idUtilisateur);
         return envoyerEtLire(req);
     }
@@ -80,12 +80,13 @@ public class PanierController {
 
     /**
      * Valide le panier et crée une commande.
+     * 
      * @return la référence de la commande (ex: CMD-2026-00042) ou null si erreur.
      */
     public String validerPanier() {
         try {
             Map<String, Object> req = new HashMap<>();
-            req.put("commande",      "PANIER_VALIDER");
+            req.put("commande", "PANIER_VALIDER");
             req.put("idUtilisateur", idUtilisateur);
 
             client.connecter();
