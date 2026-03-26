@@ -1,0 +1,13 @@
+===========================================
+               FACTURE ChriOnline          
+===========================================
+Référence Commande : CMD-2026-00006
+Date : Thu Mar 26 18:57:18 GMT+01:00 2026
+Client : Yassine Benali
+Méthode de paiement : carte
+-------------------------------------------
+- Clean Code (x1) : 180,00 MAD
+-------------------------------------------
+TOTAL PAYÉ : 180.0 MAD
+===========================================
+Merci pour votre confiance !

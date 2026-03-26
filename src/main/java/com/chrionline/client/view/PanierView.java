@@ -509,12 +509,12 @@ public class PanierView extends Application {
 
     private void afficherSuccesCommande(CommandeDTO recap) {
         try {
-            new ConfirmationCommandeView(idUtilisateur, recap).start(stage);
+            new CheckoutView(idUtilisateur, recap).start(stage);
         } catch (Exception e) {
             e.printStackTrace();
             // Fallback: simple message if view fails
             listeZone.getChildren().clear();
-            Text t = new Text("Commande passée ! Réf: " + recap.getReference());
+            Text t = new Text("Panier validé ! Réf: " + recap.getReference());
             t.setFont(Font.font("Georgia", 20));
             listeZone.getChildren().add(t);
         }

@@ -1,12 +1,16 @@
 package com.chrionline.server.core;
 
+import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.server.service.PanierService;
 import com.chrionline.server.service.ProduitService;
+import com.chrionline.shared.models.User;
 import com.chrionline.server.dao.CommandeDAO;
 import com.chrionline.server.dao.LigneCommandeDAO;
 import com.chrionline.server.service.CommandeService;
 import com.chrionline.shared.dto.CommandeDTO;
+import com.chrionline.shared.dto.LigneCommandeDTO;
+import com.chrionline.shared.enums.StatutCommande;
 import com.chrionline.database.DatabaseConnection;
 import java.sql.Connection;
 import java.io.*;
@@ -104,8 +108,7 @@ public class ClientHandler implements Runnable {
             case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
             case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
             case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
-            case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
-            
+
             // Admin Produits
             case "AJOUTER_PRODUIT"       -> handleAjouterProduit(req);
             case "MODIFIER_PRODUIT"      -> handleModifierProduit(req);
@@ -121,6 +124,8 @@ public class ClientHandler implements Runnable {
             case "MODIFIER_CATEGORIE"    -> handleModifierCategorie(req);
             case "SUPPRIMER_CATEGORIE"    -> handleSupprimerCategorie(req);
 
+            case "PANIER_VALIDER"        -> handlePanierValider(req);
+            case "COMMANDE_CONFIRMER"    -> handleCommandeConfirmer(req);
             case "GET_ALL_ORDERS",
                  "GET_ORDER_DETAILS",
                  "UPDATE_ORDER_STATUS" -> {
@@ -137,12 +142,12 @@ public class ClientHandler implements Runnable {
             }
             case "ADMIN_LISTE_USERS" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
             case "ADMIN_CHANGER_STATUT_USER" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
-            
+
             case "REGISTER_UDP" -> {
                 this.udpPort = (int) req.getOrDefault("udpPort", 9092);
                 System.out.println("[HANDLER] Port UDP enregistré pour " + (userId != -1 ? userId : "guest") + " : " + udpPort);
             }
-            
+
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -226,6 +231,25 @@ public class ClientHandler implements Runnable {
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleCommandeConfirmer(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleCommandeConfirmer");
+        try {
+            Map<String, Object> reponse = panierService.confirmerCommande(req);
+
+            // Si la commande est validée avec succès, on notifie les administrateurs via UDP
+            if ("OK".equals(reponse.get("statut"))) {
+                CommandeDTO recap = (CommandeDTO) reponse.get("commandeResult");
+                String ref = recap != null ? recap.getReference() : "Inconnue";
+                String messageAdmin = "NOUVELLE_COMMANDE:" + ref + ":Utilisateur " + this.userId;
+                server.notifierAdmins(messageAdmin);
+            }
+
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
         }
     }
 
@@ -359,6 +383,7 @@ public class ClientHandler implements Runnable {
             if (out != null) {
                 out.writeObject(objet);
                 out.flush();
+                out.reset();
             }
         } catch (IOException e) {
             System.err.println("[HANDLER] Échec d'envoi client : " + e.getMessage());
@@ -456,16 +481,16 @@ public class ClientHandler implements Runnable {
             String idCommande    = (String) req.get("idCommande");
             String nouveauStatut = (String) req.get("statut");
             Connection conn = DatabaseConnection.getInstance().getConnection();
-            
+
             CommandeDAO dao = new CommandeDAO(conn);
             CommandeService service = new CommandeService(dao, new LigneCommandeDAO(conn));
-            
+
             // 1. Récupérer les détails avant maj pour avoir le userId et la ref
             com.chrionline.shared.models.Commande c = dao.findById(idCommande);
-            
+
             // 2. Maj en BDD
             String resultat = service.updateStatut(idCommande, nouveauStatut);
-            
+
             if (resultat.startsWith("SUCCESS") && c != null) {
                 // 3. Notifier l'utilisateur concerné par UDP
                 String msg = "VOTRE COMMANDE #" + c.getReference() + " est passée au statut : " + nouveauStatut;

@@ -1,0 +1,14 @@
+===========================================
+               FACTURE ChriOnline          
+===========================================
+Référence Commande : CMD-2026-00007
+Date : Thu Mar 26 19:06:45 GMT+01:00 2026
+Client : Yassine Benali
+Méthode de paiement : carte
+-------------------------------------------
+- Jean Slim (x2) : 500,00 MAD
+- Clean Code (x1) : 180,00 MAD
+-------------------------------------------
+TOTAL PAYÉ : 680.0 MAD
+===========================================
+Merci pour votre confiance !

@@ -120,6 +120,27 @@ public class PanierService {
     }
 
 
+    public Map<String, Object> confirmerCommande(Map<String, Object> req) {
+        int idUtilisateur = getInt(req, "idUtilisateur");
+        String methodePaiement = (String) req.get("methodePaiement");
+        String nomCarte = (String) req.get("nomCarte");
+        String numeroCarte = (String) req.get("numeroCarte");
+        
+        if (idUtilisateur == -1 || methodePaiement == null)
+            return erreur("Parametres manquants.");
+
+        try {
+            CommandeDTO recap = PanierDAO.confirmerCommande(idUtilisateur, methodePaiement, nomCarte, numeroCarte);
+            return Map.of(
+                    "statut",    "OK",
+                    "message",   "Commande confirmee avec succes !",
+                    "commandeResult", recap
+            );
+        } catch (Exception e) {
+            return erreur(e.getMessage());
+        }
+    }
+
     private PanierDTO toDTO(Panier panier) {
         PanierDTO dto = new PanierDTO();
         dto.setIdPanier(panier.getIdPanier());

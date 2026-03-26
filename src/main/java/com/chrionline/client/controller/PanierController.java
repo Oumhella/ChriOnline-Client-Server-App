@@ -107,6 +107,33 @@ public class PanierController {
         }
     }
 
+    public CommandeDTO confirmerCommande(String methodePaiement, String nomCarte, String numeroCarte) {
+        try {
+            Map<String, Object> req = new HashMap<>();
+            req.put("commande", "COMMANDE_CONFIRMER");
+            req.put("idUtilisateur", idUtilisateur);
+            req.put("methodePaiement", methodePaiement);
+            req.put("nomCarte", nomCarte);
+            req.put("numeroCarte", numeroCarte);
+
+            client.connecter();
+            client.envoyerRequete(req);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
+
+            if ("OK".equals(rep.get("statut"))) {
+                return (CommandeDTO) rep.get("commandeResult");
+            } else {
+                System.err.println("[PanierController] Erreur confirmation : " + rep.get("message"));
+                return null;
+            }
+        } catch (Exception e) {
+            System.err.println("[PanierController] Erreur réseau : " + e.getMessage());
+            return null;
+        }
+    }
+
     // ─── Helper réseau ────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
