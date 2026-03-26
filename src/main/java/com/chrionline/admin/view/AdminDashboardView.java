@@ -1,8 +1,10 @@
 package com.chrionline.admin.view;
 
 import com.chrionline.admin.controller.AdminDashboardController;
+import javafx.animation.FadeTransition;
 import javafx.application.Application;
 import javafx.geometry.*;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -11,6 +13,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.*;
 import javafx.scene.text.*;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -60,11 +63,24 @@ public class AdminDashboardView extends Application {
         rootPane.setLeft(buildSidebar(stage));
         rootPane.setCenter(buildMainArea());
 
-        Scene scene = new Scene(rootPane, 1200, 800);
+        Scene scene = new Scene(rootPane, 1100, 700);
+        String css = getClass().getResource("/styles/admin.css").toExternalForm();
+        scene.getStylesheets().add(css);
+        
         stage.setScene(scene);
+        stage.setTitle("ChriOnline - Administration Premium");
         stage.setMinWidth(960);
         stage.setMinHeight(650);
         stage.show();
+    }
+
+    private void afficherVue(Node node) {
+        node.setOpacity(0);
+        rootPane.setCenter(node);
+        FadeTransition ft = new FadeTransition(Duration.millis(400), node);
+        ft.setFromValue(0);
+        ft.setToValue(1);
+        ft.play();
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -102,12 +118,12 @@ public class AdminDashboardView extends Application {
         // ── Navigation items ───────────────────────────────────────────────────
         HBox btnDashboard = navItem("📊", "Dashboard", true, () -> {
             controller.chargerStats();
-            rootPane.setCenter(buildMainArea());
+            afficherVue(buildMainArea());
         });
 
         HBox btnCommandes = navItem("🛒", "Commandes", false, () -> {
             try {
-                rootPane.setCenter(new AdminCommandesView().getView());
+                afficherVue(new AdminCommandesView().getView());
             } catch (Exception ex) {
                 System.err.println("[DASHBOARD] Erreur ouverture Commandes : " + ex.getMessage());
                 ex.printStackTrace();
@@ -118,8 +134,12 @@ public class AdminDashboardView extends Application {
                 navSection("VUE GÉNÉRALE"),
                 btnDashboard,
                 navSection("CATALOGUE"),
-                navItem("📦", "Produits", false, null),
-                navItem("🏷️", "Catégories", false, null),
+                navItem("📦", "Produits", true, () -> {
+                    afficherVue(new AdminProduitsView().getView());
+                }),
+                navItem("🏷️", "Catégories", false, () -> {
+                    afficherVue(new AdminCategoriesView().getView());
+                }),
                 navSection("VENTES"),
                 btnCommandes,
                 navItem("💳", "Paiements", false, null),
@@ -276,17 +296,10 @@ public class AdminDashboardView extends Application {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button btnRefresh = new Button("↻  Actualiser");
-        btnRefresh.setFont(Font.font("Georgia", 12));
-        btnRefresh.setStyle(
-                "-fx-background-color: transparent; -fx-border-color: " + BORDER + ";" +
-                        "-fx-border-radius: 6; -fx-text-fill: " + BRUN_MED + "; -fx-padding: 7 14;");
-        btnRefresh.setCursor(javafx.scene.Cursor.HAND);
-        btnRefresh.setOnMouseEntered(e -> btnRefresh.setStyle(
-                "-fx-background-color: " + CREME_INPUT + "; -fx-border-color: " + BORDER + ";" +
-                        "-fx-border-radius: 6; -fx-text-fill: " + BRUN + "; -fx-padding: 7 14;"));
-        btnRefresh.setOnMouseExited(e -> btnRefresh.setStyle(
-                "-fx-background-color: transparent; -fx-border-color: " + BORDER + ";" +
-                        "-fx-border-radius: 6; -fx-text-fill: " + BRUN_MED + "; -fx-padding: 7 14;"));
+        btnRefresh.getStyleClass().add("btn-secondary");
+        btnRefresh.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BRUN_MED + ";");
+        btnRefresh.setOnAction(e -> afficherVue(buildMainArea())); // Re-render to refresh stats
+
 
         bar.getChildren().addAll(bc, spacer, btnRefresh);
         return bar;
@@ -315,11 +328,9 @@ public class AdminDashboardView extends Application {
 
     private VBox kpiCard(String icon, String label, String valeur, String accent, String bg) {
         VBox card = new VBox(10);
+        card.getStyleClass().add("card");
         card.setPadding(new Insets(18));
-        card.setStyle(
-                "-fx-background-color: " + CREME_CARD + ";" +
-                        "-fx-background-radius: 10; -fx-border-color: " + BORDER + ";" +
-                        "-fx-border-radius: 10; -fx-border-width: 1;");
+
         Rectangle topBar = new Rectangle(0, 3);
         topBar.setArcWidth(3);
         topBar.setArcHeight(3);
@@ -348,7 +359,8 @@ public class AdminDashboardView extends Application {
     // ═════════════════════════════════════════════════════════════════════════
 
     private VBox buildTableauCommandes() {
-        VBox panel = card();
+        VBox panel = new VBox(0);
+        panel.getStyleClass().add("card");
 
         HBox header = panelHeader("Commandes récentes");
         Region sp = new Region();
@@ -379,7 +391,7 @@ public class AdminDashboardView extends Application {
                         (String) cmd.get("reference"), (String) cmd.get("client"),
                         date, montant, (String) cmd.get("status"), false);
                 if (alt)
-                    ligne.setStyle("-fx-background-color: " + CREME + ";");
+                    ligne.getStyleClass().add("creme");
                 panel.getChildren().add(ligne);
                 alt = !alt;
             }

@@ -5,6 +5,7 @@ import com.chrionline.client.view.MdpOublieView;
 import javafx.animation.*;
 import javafx.application.Application;
 import javafx.geometry.*;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.*;
@@ -128,7 +129,52 @@ public class ConnexionView extends Application {
         title.setFill(Color.web(BRUN));
 
         VBox emailBox = labelField("Adresse email", emailField = inputField("votre@email.com"));
-        VBox mdpBox   = labelField("Mot de passe", mdpField = passField("••••••••"));
+        
+        // Système de mot de passe avec "œil"
+        mdpField = new PasswordField();
+        mdpField.setPromptText("••••••••");
+        mdpField.setStyle(fieldStyle());
+        
+        TextField mdpVisibleField = new TextField();
+        mdpVisibleField.setPromptText("••••••••");
+        mdpVisibleField.setStyle(fieldStyle());
+        mdpVisibleField.setManaged(false);
+        mdpVisibleField.setVisible(false);
+        
+        // Synchronisation bidirectionnelle
+        mdpVisibleField.textProperty().bindBidirectional(mdpField.textProperty());
+        
+        Button btnEye = new Button("👁️");
+        btnEye.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-text-fill: " + BRUN_LIGHT + "; -fx-font-size: 16;");
+        btnEye.setPadding(new Insets(0, 10, 0, 0));
+        
+        btnEye.setOnAction(e -> {
+            if (mdpField.isVisible()) {
+                mdpField.setVisible(false);
+                mdpField.setManaged(false);
+                mdpVisibleField.setVisible(true);
+                mdpVisibleField.setManaged(true);
+                btnEye.setText("🙈");
+            } else {
+                mdpField.setVisible(true);
+                mdpField.setManaged(true);
+                mdpVisibleField.setVisible(false);
+                mdpVisibleField.setManaged(false);
+                btnEye.setText("👁️");
+            }
+        });
+        
+        StackPane mdpStack = new StackPane(mdpField, mdpVisibleField);
+        HBox mdpContainer = new HBox(mdpStack, btnEye);
+        HBox.setHgrow(mdpStack, Priority.ALWAYS);
+        mdpContainer.setAlignment(Pos.CENTER_RIGHT);
+        mdpContainer.setStyle("-fx-background-color: " + CREME_INPUT + "; -fx-background-radius: 6; -fx-border-color: " + BORDER + "; -fx-border-radius: 6;");
+        
+        // Ajustement des styles internes pour ne pas doubler les bordures
+        mdpField.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-padding: 12;");
+        mdpVisibleField.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-padding: 12;");
+        
+        VBox mdpBox = labelField("Mot de passe", mdpContainer);
 
         msgLabel = new Label();
         msgLabel.setFont(Font.font("Georgia", 13));
@@ -180,7 +226,7 @@ public class ConnexionView extends Application {
         return right;
     }
 
-    private VBox labelField(String label, Control field) {
+    private VBox labelField(String label, Node field) {
         Label lbl = new Label(label);
         lbl.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
         lbl.setTextFill(Color.web(BRUN_MED));
