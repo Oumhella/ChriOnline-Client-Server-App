@@ -44,7 +44,7 @@ public class DashboardDAO {
 
             // ── Commandes en attente ──────────────────────────
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT COUNT(*) FROM commande WHERE status = 'en_attente'")) {
+                    "SELECT COUNT(*) FROM commande WHERE status = 'en_preparation'")) {
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) stats.put("commandesEnAttente", rs.getInt(1));
             }

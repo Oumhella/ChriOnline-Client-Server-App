@@ -1,6 +1,7 @@
 package com.chrionline.server.service;
 
 import com.chrionline.server.dao.PanierDAO;
+import com.chrionline.shared.dto.CommandeDTO;
 import com.chrionline.shared.dto.LignePanierDTO;
 import com.chrionline.shared.dto.PanierDTO;
 import com.chrionline.shared.models.LignePanier;
@@ -106,11 +107,12 @@ public class PanierService {
             return erreur("idUtilisateur manquant.");
 
         try {
-            String reference = PanierDAO.validerPanier(idUtilisateur);
+            CommandeDTO recap = PanierDAO.validerPanier(idUtilisateur);
             return Map.of(
                     "statut",    "OK",
                     "message",   "Commande créée avec succès !",
-                    "reference", reference
+                    "recap",     recap,
+                    "reference", recap.getReference() // Backwards compatibility if needed
             );
         } catch (Exception e) {
             return erreur(e.getMessage());
@@ -155,6 +157,6 @@ public class PanierService {
     }
 
     private Map<String, Object> erreur(String message) {
-        return Map.of("statut", "ERREUR", "message", message);
+        return Map.of("statut", "ERREUR", "message", message != null ? message : "Erreur inconnue");
     }
 }
