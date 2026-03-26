@@ -596,7 +596,7 @@ public class PanierView extends Application {
     }
 
     private void retourCatalogue() {
-        try { new CatalogueView().start(stage); }
+        try { new CatalogueView(idUtilisateur).start(stage); }
         catch (Exception ex) { ex.printStackTrace(); }
     }
 

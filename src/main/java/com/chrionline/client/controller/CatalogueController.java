@@ -52,26 +52,17 @@ public class CatalogueController {
         return new ArrayList<>();
     }
 
+
     // ── Ajouter au panier ────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
-    public void ajouterAuPanier(Produit p) {
+    public void ajouterAuPanier(Produit p, int idFormat) {
         // Vérifier que l'utilisateur est connecté
         if (userId == -1) {
             afficherAlerte(Alert.AlertType.WARNING, "Non connecté",
                     "Vous devez être connecté pour ajouter au panier.");
             return;
         }
-
-        // Vérifier que le produit a des formats
-        if (p.getFormats() == null || p.getFormats().isEmpty()) {
-            afficherAlerte(Alert.AlertType.ERROR, "Erreur",
-                    "Ce produit n'a aucun format disponible.");
-            return;
-        }
-
-        // Prendre le premier format par défaut
-        int idFormat = p.getFormats().get(0).getId();
 
         new Thread(() -> {
             try {
@@ -88,8 +79,9 @@ public class CatalogueController {
 
                 Platform.runLater(() -> {
                     if ("OK".equals(rep.get("statut"))) {
+                        String nomProd = (p != null) ? p.getNom() : "Produit";
                         afficherAlerte(Alert.AlertType.INFORMATION, "Panier",
-                                "\"" + p.getNom() + "\" ajouté au panier ✓");
+                                "\"" + nomProd + "\" ajouté au panier ✓");
                     } else {
                         afficherAlerte(Alert.AlertType.WARNING,
                                 "Impossible d'ajouter", (String) rep.get("message"));
@@ -104,6 +96,30 @@ public class CatalogueController {
             }
         }).start();
     }
+    @SuppressWarnings("unchecked")
+    public Produit recupererProduitDetail(int id) {
+        try {
+            client.connecter();
+            Map<String, Object> req = new HashMap<>();
+            req.put("commande", "DETAIL_PRODUIT");
+            req.put("id", id);
+
+            client.envoyerRequete(req);
+
+            Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
+
+            if ("OK".equals(rep.get("statut"))) {
+                return (Produit) rep.get("produit");
+            } else {
+                System.err.println("[CatalogueController] Erreur détail : " + rep.get("message"));
+            }
+        } catch (Exception e) {
+            System.err.println("[CatalogueController] Erreur réseau (détail) : " + e.getMessage());
+            e.printStackTrace();
+        }
+        return null;
+    }
+
 
     // ── Getters / Setters ────────────────────────────────────────────────
 

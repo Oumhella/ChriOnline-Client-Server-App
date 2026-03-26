@@ -15,7 +15,7 @@ public class Produit implements Serializable {
 
 
     private Categorie categorie;
-    private List<ProductFormat> formats;
+    private List<ProductFormat> formats = new java.util.ArrayList<>();
     private String imageUrl;
     private float prix;
 

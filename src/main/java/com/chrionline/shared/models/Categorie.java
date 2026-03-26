@@ -1,6 +1,8 @@
 package com.chrionline.shared.models;
 
-public class Categorie {
+import java.io.Serializable;
+
+public class Categorie implements Serializable {
 
     private int id;
     private String nom;

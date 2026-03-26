@@ -1,9 +1,10 @@
 package com.chrionline.shared.models;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public class ProductFormat {
+public class ProductFormat implements Serializable {
 
     private int id;
     private Double prix;
