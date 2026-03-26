@@ -222,6 +222,97 @@ public class UserDAO {
         }
     }
 
+    public static Map<String, Object> getInfosProfil(int userId) {
+        String sql = """
+            SELECT u.nom, u.prenom, u.email, c.telephone, a.rue, a.ville, a.code_postal, a.pays
+            FROM utilisateur u
+            LEFT JOIN client c ON u.idUtilisateur = c.idUtilisateur
+            LEFT JOIN adresse a ON u.idUtilisateur = a.idUtilisateur AND a.type_adresse = 'livraison'
+            WHERE u.idUtilisateur = ?
+        """;
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                Map<String, Object> data = new java.util.HashMap<>();
+                data.put("nom", rs.getString("nom"));
+                data.put("prenom", rs.getString("prenom"));
+                data.put("email", rs.getString("email"));
+                data.put("telephone", rs.getString("telephone"));
+                data.put("rue", rs.getString("rue"));
+                data.put("ville", rs.getString("ville"));
+                data.put("code_postal", rs.getString("code_postal"));
+                data.put("pays", rs.getString("pays"));
+                return Map.of("statut", "OK", "data", data);
+            }
+            return Map.of("statut", "ERREUR", "message", "Utilisateur non trouvé.");
+        } catch (Exception e) {
+            return Map.of("statut", "ERREUR", "message", "Erreur : " + e.getMessage());
+        }
+    }
+
+    public static Map<String, Object> majProfil(int userId, Map<String, Object> data) {
+        Connection conn = null;
+        try {
+            conn = DatabaseConnection.getInstance().getConnection();
+            conn.setAutoCommit(false);
+
+            // 1. Utilisateur
+            String sqlU = "UPDATE utilisateur SET nom = ?, prenom = ?, email = ? WHERE idUtilisateur = ?";
+            try (PreparedStatement ps = conn.prepareStatement(sqlU)) {
+                ps.setString(1, (String) data.get("nom"));
+                ps.setString(2, (String) data.get("prenom"));
+                ps.setString(3, (String) data.get("email"));
+                ps.setInt(4, userId);
+                ps.executeUpdate();
+            }
+
+            // 2. Client (téléphone)
+            String sqlC = "UPDATE client SET telephone = ? WHERE idUtilisateur = ?";
+            try (PreparedStatement ps = conn.prepareStatement(sqlC)) {
+                String tel = (String) data.getOrDefault("telephone", "");
+                ps.setString(1, tel.isBlank() ? null : tel);
+                ps.setInt(2, userId);
+                ps.executeUpdate();
+            }
+
+            // 3. Adresse (UPSERT / simple update si existe)
+            String sqlA = "UPDATE adresse SET rue = ?, ville = ?, code_postal = ?, pays = ? WHERE idUtilisateur = ? AND type_adresse = 'livraison'";
+            try (PreparedStatement ps = conn.prepareStatement(sqlA)) {
+                ps.setString(1, (String) data.get("rue"));
+                ps.setString(2, (String) data.get("ville"));
+                ps.setString(3, (String) data.get("code_postal"));
+                ps.setString(4, (String) data.get("pays"));
+                ps.setInt(5, userId);
+                int rows = ps.executeUpdate();
+                
+                // Si pas d'adresse, on l'insère
+                if (rows == 0 && data.get("rue") != null && !((String)data.get("rue")).isBlank()) {
+                    String sqlIns = "INSERT INTO adresse (idUtilisateur, type_adresse, rue, ville, code_postal, pays) VALUES (?, 'livraison', ?, ?, ?, ?)";
+                    try (PreparedStatement psi = conn.prepareStatement(sqlIns)) {
+                        psi.setInt(1, userId);
+                        psi.setString(2, (String) data.get("rue"));
+                        psi.setString(3, (String) data.get("ville"));
+                        psi.setString(4, (String) data.get("code_postal"));
+                        psi.setString(5, (String) data.get("pays"));
+                        psi.executeUpdate();
+                    }
+                }
+            }
+
+            conn.commit();
+            return Map.of("statut", "OK", "message", "Profil mis à jour avec succès !");
+        } catch (Exception e) {
+            rollback(conn);
+            return Map.of("statut", "ERREUR", "message", "Échec mise à jour : " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                try { conn.setAutoCommit(true); } catch (SQLException ignored) {}
+            }
+        }
+    }
+
     public static java.util.List<Map<String, Object>> listerClients() {
         java.util.List<Map<String, Object>> clients = new java.util.ArrayList<>();
         String sql = """

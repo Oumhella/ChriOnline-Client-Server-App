@@ -166,20 +166,16 @@ public class CatalogueView extends Application {
 
         HBox nav = new HBox(30);
         nav.setAlignment(Pos.CENTER);
-        
-        Hyperlink hAccueil = navLink("Accueil");
-        hAccueil.setOnAction(e -> {
+        Hyperlink hAcc = navLink("Accueil");
+        hAcc.setOnAction(e -> {
             try { new HomeView().start(primaryStage); } catch (Exception ex) { ex.printStackTrace(); }
         });
-        
-        Hyperlink hAssortiment = navLink("Assortiment");
-        hAssortiment.setOnAction(e -> {
-            try { new CatalogueView(userId, false).start(primaryStage); } catch (Exception ex) { ex.printStackTrace(); }
-        });
-        
-        nav.getChildren().addAll(hAccueil, hAssortiment, navLink("Livraison"));
 
-        // Boutons supplémentaires — variable selon si connecté ou non
+        Hyperlink hOrd = navLink("Mes Commandes");
+        hOrd.setOnAction(e -> {
+            try { new MesCommandesView().start(primaryStage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
+
         if (userId != -1) {
             Button btnFavoris = new Button("♥ Mes favoris");
             btnFavoris.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
@@ -207,7 +203,27 @@ public class CatalogueView extends Application {
             btnLogout.setOnMouseExited(e  -> btnLogout.setStyle(panierBtnStyle(BRUN_LIGHT)));
             btnLogout.setOnAction(e -> deconnecter());
 
-            nav.getChildren().addAll(btnFavoris, btnPanier, btnLogout);
+            String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
+            String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
+            String initials = "";
+            if (prenom != null && !prenom.isEmpty()) initials += prenom.toUpperCase().charAt(0);
+            if (nom != null && !nom.isEmpty()) initials += nom.toUpperCase().charAt(0);
+            if (initials.isEmpty()) initials = "U";
+            
+            javafx.scene.layout.StackPane avatar = new javafx.scene.layout.StackPane();
+            javafx.scene.shape.Circle circle = new javafx.scene.shape.Circle(18, Color.web(TERRACOTTA));
+            Text initText = new Text(initials);
+            initText.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
+            initText.setFill(Color.WHITE);
+            avatar.getChildren().addAll(circle, initText);
+            avatar.setCursor(javafx.scene.Cursor.HAND);
+            avatar.setOnMouseClicked(evt -> {
+                try { new ProfilView().start(primaryStage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+            avatar.setOnMouseEntered(evt -> circle.setFill(Color.web(SAUGE_DARK)));
+            avatar.setOnMouseExited(evt -> circle.setFill(Color.web(TERRACOTTA)));
+
+            nav.getChildren().addAll(hAcc, hOrd, btnPanier, avatar, btnLogout);
         } else {
             Button btnLogin = new Button("🔑 Connexion");
             btnLogin.setFont(Font.font("Georgia", FontWeight.BOLD, 13));

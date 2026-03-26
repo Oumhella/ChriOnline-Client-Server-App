@@ -11,6 +11,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
@@ -66,6 +67,14 @@ public class ProductDetailView {
         if (produit.getFormats() != null && !produit.getFormats().isEmpty()) {
             this.formatSelectionne = produit.getFormats().get(0);
         }
+    }
+
+    private Hyperlink createNavLink(String text, Stage stage) {
+        Hyperlink l = new Hyperlink(text);
+        l.setFont(Font.font("Georgia", 14));
+        l.setTextFill(Color.web(BRUN));
+        l.setStyle("-fx-border-color: transparent;");
+        return l;
     }
 
     public VBox build() {
@@ -128,15 +137,57 @@ public class ProductDetailView {
         Region spacerL = new Region();
         HBox.setHgrow(spacerL, Priority.ALWAYS);
 
-        Text logo = new Text("SHE SOAP");
+        Text logo = new Text("ChriOnline");
         logo.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
         logo.setFill(Color.web(BRUN));
+        logo.setCursor(Cursor.HAND);
+        logo.setOnMouseClicked(e -> {
+            try { new HomeView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
 
         Region spacerR = new Region();
         HBox.setHgrow(spacerR, Priority.ALWAYS);
 
-        // ── Bouton panier (visible seulement si connecté) ──────
+        // ── Navigation ──────
         if (userId != -1) {
+            HBox nav = new HBox(25);
+            nav.setAlignment(Pos.CENTER);
+
+            Hyperlink hAcc = createNavLink("Accueil", stage);
+            hAcc.setOnAction(e -> {
+                try { new HomeView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+
+            Hyperlink hCat = createNavLink("Catalogue", stage);
+            hCat.setOnAction(e -> {
+                try { new CatalogueView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+
+            String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
+            String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
+            String initials = "";
+            if (prenom != null && !prenom.isEmpty()) initials += prenom.toUpperCase().charAt(0);
+            if (nom != null && !nom.isEmpty()) initials += nom.toUpperCase().charAt(0);
+            if (initials.isEmpty()) initials = "U";
+            
+            StackPane avatar = new StackPane();
+            javafx.scene.shape.Circle circle = new javafx.scene.shape.Circle(15, Color.web(TERRACOTTA));
+            Text initText = new Text(initials);
+            initText.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
+            initText.setFill(Color.WHITE);
+            avatar.getChildren().addAll(circle, initText);
+            avatar.setCursor(javafx.scene.Cursor.HAND);
+            avatar.setOnMouseClicked(e -> {
+                try { new ProfilView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+            avatar.setOnMouseEntered(e -> circle.setFill(Color.web(SAUGE_DARK)));
+            avatar.setOnMouseExited(e -> circle.setFill(Color.web(TERRACOTTA)));
+
+            Hyperlink hOrd = createNavLink("Mes Commandes", stage);
+            hOrd.setOnAction(e -> {
+                try { new MesCommandesView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+
             Button btnPanier = new Button("🛒 Mon panier");
             btnPanier.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
             btnPanier.setStyle(
@@ -154,7 +205,8 @@ public class ProductDetailView {
             ));
             btnPanier.setOnAction(e -> ouvrirPanier());
 
-            bar.getChildren().addAll(btnRetour, spacerL, logo, spacerR, btnPanier);
+            nav.getChildren().addAll(hAcc, hCat, hOrd, btnPanier, avatar);
+            bar.getChildren().addAll(btnRetour, spacerL, logo, spacerR, nav);
         } else {
             bar.getChildren().addAll(btnRetour, spacerL, logo, spacerR);
         }

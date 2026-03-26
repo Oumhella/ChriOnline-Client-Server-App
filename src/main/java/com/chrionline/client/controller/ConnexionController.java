@@ -59,6 +59,9 @@ public class ConnexionController {
                         //  Stockage dans le SessionManager
                         com.chrionline.client.session.SessionManager.getInstance().setUser(data);
 
+                        // ✅ Enregistrement du port UDP auprès du serveur
+                        client.enregistrerUDP();
+
                         System.out.println("[ConnexionController] userId=" + 
                                 com.chrionline.client.session.SessionManager.getInstance().getUserId() + " role=" + role);
 

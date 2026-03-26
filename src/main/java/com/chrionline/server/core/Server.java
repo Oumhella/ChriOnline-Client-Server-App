@@ -150,7 +150,7 @@ public class Server {
     public void notifierAdmins(String message) {
         for (ClientHandler handler : clientConnectes) {
             if ("admin".equals(handler.getRole())) {
-                diffuserNotification(message, handler.getSocket().getInetAddress(), 9092);
+                diffuserNotification(message, handler.getSocket().getInetAddress(), handler.getUdpPort());
             }
         }
     }

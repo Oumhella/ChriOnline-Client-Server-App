@@ -19,6 +19,8 @@ public class Client {
     // Attributs UDP pour les notifications
     private DatagramSocket udpSocket;
     private int selectedUdpPort = -1; // Port dynamique choisi à l'exécution
+    private int actualUdpPort = 9092;
+    private static final int CLIENT_UDP_PORT = 9092;
 
     // Constructeur privé pour le pattern Singleton
     private Client(String host, int port) {
@@ -36,22 +38,25 @@ public class Client {
         return instance;
     }
 
+    public static synchronized Client getInstance() {
+        return instance;
+    }
+
     /**
      * Établit la connexion TCP avec le serveur et lance l'écouteur de notifications UDP.
      */
     public void connecter() throws IOException {
         if (socket == null || socket.isClosed()) {
-            // Connexion TCP principale pour les opérations (Auth, Panier, Commande)
+            // Connexion TCP principale
             this.socket = new Socket(host, port);
 
-            // Initialisation des flux d'objets pour l'envoi/réception de modèles (Produit, User)
             this.out = new ObjectOutputStream(socket.getOutputStream());
-            this.out.flush(); // Crucial pour envoyer l'en-tête du flux immédiatement
+            this.out.flush();
             this.in = new ObjectInputStream(socket.getInputStream());
 
             System.out.println("[CLIENT] Connexion TCP établie sur le port " + port);
 
-            // Démarrage de l'écouteur UDP en arrière-plan (Thread Daemon)
+            // Démarrage de l'écouteur UDP
             Thread udpThread = new Thread(this::ecouterNotificationsUDP);
             udpThread.setDaemon(true);
             udpThread.start();
@@ -59,13 +64,45 @@ public class Client {
     }
 
     /**
-     * Envoie une requête au serveur (ex: Authentification, Ajout au panier).
+     * Envoie une requête au serveur.
      */
     public synchronized void envoyerRequete(Object requete) throws IOException {
         if (out != null) {
             out.writeObject(requete);
             out.flush();
             out.reset(); // Crucial pour éviter d'envoyer d'anciennes versions d'objets modifiés
+        }
+    }
+
+    /**
+     * Envoie une requête Map et attend la réponse Map associée.
+     * Utile pour les appels simples synchrone (comme Profil ou Commandes).
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.Map<String, Object> envoyerRequeteAttendreReponse(java.util.Map<String, Object> requete) {
+        try {
+            envoyerRequete((Object) requete);
+            return (java.util.Map<String, Object>) lireReponse();
+        } catch (Exception e) {
+            java.util.Map<String, Object> err = new java.util.HashMap<>();
+            err.put("statut", "ERREUR");
+            err.put("message", "Erreur réseau : " + e.getMessage());
+            return err;
+        }
+    }
+
+    /**
+     * Enregistre le port UDP actuel auprès du serveur.
+     */
+    public void enregistrerUDP() {
+        try {
+            java.util.Map<String, Object> req = new java.util.HashMap<>();
+            req.put("commande", "UDP_REGISTER");
+            req.put("port", actualUdpPort);
+            envoyerRequete((Object) req);
+            System.out.println("[CLIENT] Port UDP " + actualUdpPort + " enregistré sur le serveur.");
+        } catch (java.io.IOException e) {
+            System.err.println("[CLIENT] Erreur lors de l'enregistrement UDP : " + e.getMessage());
         }
     }
 
@@ -91,15 +128,25 @@ public class Client {
     }
 
     /**
-     * Écoute les paquets UDP envoyés par la méthode diffuserNotification du serveur.
+     * Écoute les paquets UDP envoyés par le serveur.
      */
     private void ecouterNotificationsUDP() {
         try {
-            // Utiliser port 0 pour laisser l'OS choisir un port libre (évite conflit sur localhost)
-            udpSocket = new DatagramSocket(0);
-            this.selectedUdpPort = udpSocket.getLocalPort();
+            try {
+                // Tentative sur le port par défaut
+                udpSocket = new DatagramSocket(CLIENT_UDP_PORT);
+                actualUdpPort = CLIENT_UDP_PORT;
+                this.selectedUdpPort = actualUdpPort;
+            } catch (java.net.BindException e) {
+                // Repli sur un port libre aléatoire
+                udpSocket = new DatagramSocket(0);
+                actualUdpPort = udpSocket.getLocalPort();
+                this.selectedUdpPort = actualUdpPort;
+                System.out.println("[UDP] Port " + CLIENT_UDP_PORT + " occupé, repli sur le port " + actualUdpPort);
+            }
+
             byte[] buffer = new byte[1024];
-            System.out.println("[UDP] Écoute des notifications sur le port " + selectedUdpPort);
+            System.out.println("[UDP] Écoute des notifications sur le port " + actualUdpPort);
 
             while (!udpSocket.isClosed()) {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -108,15 +155,15 @@ public class Client {
 
                 System.out.println("[NOTIFICATION REÇUE] " + notification);
 
-                // Transmettre la notification à l'UI si un listener est défini
+                // Transmettre la notification à l'UI
                 if (notificationListener != null) {
                     javafx.application.Platform.runLater(() -> {
                         notificationListener.accept(notification);
                     });
                 }
+
             }
         } catch (java.net.SocketException e) {
-            // Socket fermée proprement à la déconnexion, pas une erreur
             System.out.println("[UDP] Socket fermée.");
         } catch (java.io.IOException e) {
             System.err.println("[UDP] Erreur : " + e.getMessage());

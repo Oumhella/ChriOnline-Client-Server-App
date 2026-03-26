@@ -86,15 +86,53 @@ public class HomeView extends Application {
         
         Hyperlink hAcc = navLink("Accueil", true);
         Hyperlink hCat = navLink("Catalogue", false);
+        Hyperlink hOrd = navLink("Mes Commandes", false);
         Hyperlink hAbo = navLink("À propos", false);
         
         hCat.setOnAction(e -> {
             try { new CatalogueView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
         });
 
-        nav.getChildren().addAll(hAcc, hCat, hAbo);
+        hOrd.setOnAction(e -> {
+            try { new MesCommandesView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+        });
 
-        Button btnLogout = new Button("Déconnexion");
+        hAbo.setOnAction(e -> {
+            // Logique À propos si nécessaire
+        });
+
+        nav.getChildren().addAll(hAcc, hCat, hOrd, hAbo);
+        
+        // --- Avatar Profil (à droite) ---
+        javafx.scene.layout.HBox rightControls = new javafx.scene.layout.HBox(20);
+        rightControls.setAlignment(Pos.CENTER);
+        
+        boolean isLogged = com.chrionline.client.session.SessionManager.getInstance().isLogged();
+        if (isLogged) {
+            String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
+            String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
+            String initials = "";
+            if (prenom != null && !prenom.isEmpty()) initials += prenom.toUpperCase().charAt(0);
+            if (nom != null && !nom.isEmpty()) initials += nom.toUpperCase().charAt(0);
+            if (initials.isEmpty()) initials = "U";
+            
+            StackPane avatar = new StackPane();
+            Circle circle = new Circle(18, Color.web(TERRACOTTA));
+            Text initText = new Text(initials);
+            initText.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
+            initText.setFill(Color.WHITE);
+            avatar.getChildren().addAll(circle, initText);
+            avatar.setCursor(javafx.scene.Cursor.HAND);
+            avatar.setOnMouseClicked(e -> {
+                try { new ProfilView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+            avatar.setOnMouseEntered(e -> circle.setFill(Color.web(SAUGE_DARK)));
+            avatar.setOnMouseExited(e -> circle.setFill(Color.web(TERRACOTTA)));
+            
+            rightControls.getChildren().add(avatar);
+        }
+
+        Button btnLogout = new Button(isLogged ? "Déconnexion" : "Connexion");
         btnLogout.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BRUN + "; -fx-border-color: " + BRUN + "; -fx-border-radius: 20; -fx-font-family: 'Georgia'; -fx-padding: 8 20; -fx-font-size: 14px;");
         btnLogout.setCursor(javafx.scene.Cursor.HAND);
         
@@ -106,11 +144,20 @@ public class HomeView extends Application {
             btnLogout.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BRUN + "; -fx-border-color: " + BRUN + "; -fx-border-radius: 20; -fx-font-family: 'Georgia'; -fx-padding: 8 20; -fx-font-size: 14px;");
         });
         
-        btnLogout.setOnAction(e -> {
-            try { new ConnexionView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-        });
+        if (isLogged) {
+            btnLogout.setOnAction(e -> {
+                com.chrionline.client.session.SessionManager.getInstance().clear();
+                try { new ConnexionView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+        } else {
+            btnLogout.setOnAction(e -> {
+                try { new ConnexionView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
+            });
+        }
+        
+        rightControls.getChildren().add(btnLogout);
 
-        header.getChildren().addAll(logo, spacer, nav, btnLogout);
+        header.getChildren().addAll(logo, spacer, nav, rightControls);
         return header;
     }
 
