@@ -43,15 +43,11 @@ public class UserDAO {
                 INSERT INTO client (idUtilisateur, telephone, statut_compte)
                 VALUES (?, ?, 'en_attente')
             """;
-            int idClient;
-            try (PreparedStatement ps = conn.prepareStatement(sqlClient, Statement.RETURN_GENERATED_KEYS)) {
+            try (PreparedStatement ps = conn.prepareStatement(sqlClient)) {
                 ps.setInt(1, idUtilisateur);
                 String tel = (String) data.getOrDefault("telephone", "");
                 ps.setString(2, tel.isBlank() ? null : tel);
                 ps.executeUpdate();
-                ResultSet keys = ps.getGeneratedKeys();
-                if (!keys.next()) throw new SQLException("Échec récupération id_client");
-                idClient = keys.getInt(1);
             }
 
             String rue   = (String) data.getOrDefault("rue", "");
@@ -104,9 +100,9 @@ public class UserDAO {
 
         try (Connection conn = DatabaseConnection.getInstance().getConnection()) {
 
-            // Vérifier d'abord si c'est un admin
+            // ── Admin : on vérifie la présence de l'id dans la table `admin` ──
             String sqlAdmin = """
-                SELECT u.idUtilisateur, u.nom, u.prenom, u.email, u.password, u.idUtilisateur_role
+                SELECT u.idUtilisateur, u.nom, u.prenom, u.email, u.password
                 FROM utilisateur u
                 JOIN admin a ON a.idAdmin = u.idUtilisateur
                 WHERE u.email = ?
@@ -114,24 +110,28 @@ public class UserDAO {
             try (PreparedStatement ps = conn.prepareStatement(sqlAdmin)) {
                 ps.setString(1, email);
                 ResultSet rs = ps.executeQuery();
-                if (rs.next() && BCrypt.checkpw(mdp, rs.getString("password"))) {
-                    return Map.of(
-                            "statut",  "OK",
-                            "message", "Bienvenue, " + rs.getString("prenom") + " !",
-                            "data", Map.of(
-                                    "userId", rs.getInt("idUtilisateur"),
-                                    "nom",    rs.getString("nom"),
-                                    "prenom", rs.getString("prenom"),
-                                    "email",  rs.getString("email"),
-                                    "role",   "admin"
-                            )
-                    );
+                if (rs.next()) {
+                    if (BCrypt.checkpw(mdp, rs.getString("password"))) {
+                        System.out.println("[UserDAO] Admin trouvé : id=" + rs.getInt("idUtilisateur"));
+                        Map<String, Object> innerData = new java.util.HashMap<>();
+                        innerData.put("userId",  rs.getInt("idUtilisateur"));
+                        innerData.put("nom",     rs.getString("nom"));
+                        innerData.put("prenom",  rs.getString("prenom"));
+                        innerData.put("email",   rs.getString("email"));
+                        innerData.put("role",    "admin");
+
+                        Map<String, Object> rep = new java.util.HashMap<>();
+                        rep.put("statut",  "OK");
+                        rep.put("message", "Bienvenue, " + rs.getString("prenom") + " !");
+                        rep.put("data", innerData);
+                        return rep;
+                    }
                 }
             }
 
-            // Sinon vérifier client
+            // ── Client : on vérifie la présence de l'id dans la table `client` ──
             String sqlClient = """
-                SELECT u.*, c.statut_compte
+                SELECT u.idUtilisateur, u.nom, u.prenom, u.email, u.password, c.statut_compte
                 FROM utilisateur u
                 JOIN client c ON c.idUtilisateur = u.idUtilisateur
                 WHERE u.email = ?
@@ -143,28 +143,38 @@ public class UserDAO {
                     if (BCrypt.checkpw(mdp, rs.getString("password"))) {
                         String statut = rs.getString("statut_compte");
                         if ("en_attente".equals(statut)) {
-                            return Map.of("statut", "EN_ATTENTE",
-                                    "message", "Confirmez votre email avant de vous connecter.");
+                            Map<String, Object> rep = new java.util.HashMap<>();
+                            rep.put("statut",  "EN_ATTENTE");
+                            rep.put("message", "Confirmez votre email avant de vous connecter.");
+                            return rep;
                         }
-                        return Map.of(
-                                "statut",  "OK",
-                                "message", "Bienvenue, " + rs.getString("prenom") + " !",
-                                "data", Map.of(
-                                        "userId", rs.getInt("idUtilisateur"),
-                                        "nom",    rs.getString("nom"),
-                                        "prenom", rs.getString("prenom"),
-                                        "email",  rs.getString("email"),
-                                        "role",   "client"
-                                )
-                        );
+                        System.out.println("[UserDAO] Client trouvé : id=" + rs.getInt("idUtilisateur"));
+                        Map<String, Object> innerData = new java.util.HashMap<>();
+                        innerData.put("userId",  rs.getInt("idUtilisateur"));
+                        innerData.put("nom",     rs.getString("nom"));
+                        innerData.put("prenom",  rs.getString("prenom"));
+                        innerData.put("email",   rs.getString("email"));
+                        innerData.put("role",    "client");
+
+                        Map<String, Object> rep = new java.util.HashMap<>();
+                        rep.put("statut",  "OK");
+                        rep.put("message", "Bienvenue, " + rs.getString("prenom") + " !");
+                        rep.put("data", innerData);
+                        return rep;
                     }
                 }
             }
 
-            return Map.of("statut", "ERREUR", "message", "Email ou mot de passe incorrect.");
+            Map<String, Object> rep = new java.util.HashMap<>();
+            rep.put("statut",  "ERREUR");
+            rep.put("message", "Email ou mot de passe incorrect.");
+            return rep;
 
         } catch (Exception e) {
-            return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
+            Map<String, Object> rep = new java.util.HashMap<>();
+            rep.put("statut",  "ERREUR");
+            rep.put("message", "Erreur serveur : " + e.getMessage());
+            return rep;
         }
     }
 

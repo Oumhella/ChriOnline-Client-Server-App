@@ -2,6 +2,8 @@ package com.chrionline.server.core;
 
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.service.AuthenticationService;
+import com.chrionline.server.service.PanierService;
+import com.chrionline.server.service.ProduitService;
 import com.chrionline.shared.models.User;
 
 import java.io.*;
@@ -18,7 +20,8 @@ public class ClientHandler implements Runnable {
     private final Socket socket;
     private final Server server;
     private final AuthenticationService authService;
-
+    private final ProduitService produitService;
+    private final PanierService panierService;
     private ObjectOutputStream out;
     private ObjectInputStream  in;
 
@@ -29,7 +32,9 @@ public class ClientHandler implements Runnable {
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
         this.server = server;
+        this.produitService = new ProduitService();
         this.authService = new AuthenticationService();
+        this.panierService = new PanierService();
     }
 
     // ─── Gestion de la Connexion TCP ──────────────────────────────────────────
@@ -81,10 +86,19 @@ public class ClientHandler implements Runnable {
             case "CONNEXION" -> handleConnexion(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
+            case "DETAIL_PRODUIT" -> handleDetailProduit(req);
+            case "AJOUTER_WISHLIST"  -> handleAjouterWishlist(req);
+            case "SUPPRIMER_WISHLIST"-> handleSupprimerWishlist(req);
+            case "LISTE_WISHLIST"    -> handleListeWishlist(req);
             case "CONFIRMER_EMAIL"       -> handleConfirmerEmail(req);
             case "OUBLIER_MOT_DE_PASSE" -> handleOublierMotDePasse(req);
             case "REINITIALISER_MDP"     -> handleReinitialiserMdp(req);
-            // ... autres commandes ...
+            case "PANIER_GET"            -> envoyerMessage(panierService.getPanier(req));
+            case "PANIER_AJOUTER"        -> envoyerMessage(panierService.ajouterProduit(req));
+            case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
+            case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
+            case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
+            case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
     }
@@ -148,13 +162,47 @@ public class ClientHandler implements Runnable {
     }
     private void handleListeProduits(Map<String, Object> req) {
         try {
-            List<com.chrionline.shared.models.Produit> produits = com.chrionline.server.dao.ProduitDAO.findAll();
-            Map<String, Object> reponse = new HashMap<>();
-            reponse.put("statut", "OK");
-            reponse.put("produits", produits);
+
+            Map<String, Object> reponse = produitService.handleListeProduits(req);
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur lors de la récupération des produits : " + e.getMessage()));
+        }
+    }
+
+    private void handleDetailProduit(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = produitService.handleGetProduitById(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur lors de la récupération du produit : " + e.getMessage()));
+        }
+    }
+
+    private void handleAjouterWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleAjouterWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleSupprimerWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleSupprimerWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleListeWishlist(Map<String, Object> req) {
+        try {
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleGetWishlist(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
         }
     }
 
