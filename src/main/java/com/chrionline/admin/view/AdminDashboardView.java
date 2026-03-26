@@ -1,8 +1,10 @@
 package com.chrionline.admin.view;
 
 import com.chrionline.admin.controller.AdminDashboardController;
+import javafx.animation.FadeTransition;
 import javafx.application.Application;
 import javafx.geometry.*;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -11,6 +13,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.*;
 import javafx.scene.text.*;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -58,59 +61,79 @@ public class AdminDashboardView extends Application {
         rootPane.setStyle("-fx-background-color: " + CREME + ";");
         rootPane.getChildren().addAll(buildSidebar(stage), buildMainArea());
 
-        Scene scene = new Scene(rootPane, 1200, 800);
+        Scene scene = new Scene(rootPane, 1100, 700);
+        String css = getClass().getResource("/styles/admin.css").toExternalForm();
+        scene.getStylesheets().add(css);
+        
         stage.setScene(scene);
+        stage.setTitle("ChriOnline - Administration Premium");
         stage.setMinWidth(960);
-        stage.setMinHeight(650);
-
-        // --- Inscription à l'écouteur UDP pour les notifications Administrateur ---
+        stage.setMinHeight(650);        // --- Inscription à l'écouteur UDP pour les notifications Administrateur ---
         try {
-            // L'hôte et port doivent correspondre à ceux de la session actuelle (12345 par
-            // défaut)
-            com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("127.0.0.1",
-                    12345);
+            com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("127.0.0.1", 12345);
 
-            // Initialisation de la connexion et enregistrement UDP en background
-            new Thread(() -> {
+            // Connecter + enregistrer UDP dans le même thread (évite la race condition)
+            Thread udpThread = new Thread(() -> {
                 try {
                     client.connecter();
                     client.enregistrerUDP();
                 } catch (Exception e) {
                     System.err.println("[ADMIN] Échec connexion/UDP : " + e.getMessage());
                 }
-            }).start();
+            });
+            udpThread.setDaemon(true);
+            udpThread.start();
 
             client.setNotificationListener(notification -> {
+                // Parser le format NOUVELLE_COMMANDE:REF:Utilisateur X
+                String affichage;
+                if (notification.startsWith("NOUVELLE_COMMANDE:")) {
+                    String[] parts = notification.split(":", 3);
+                    String ref = parts.length > 1 ? parts[1] : "?";
+                    String user = parts.length > 2 ? parts[2] : "";
+                    String heure = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
+                    affichage = "📦 Nouvelle commande #" + ref + " — " + user + " (à " + heure + ")";
+                } else if (notification.startsWith("VOTRE COMMANDE")) {
+                    affichage = notification; // message de suivi commande client
+                } else {
+                    affichage = notification;
+                }
+
                 // Ajouter à l'historique
-                notificationHistory.add(0, notification); // Plus récent en haut
+                notificationHistory.add(0, affichage);
 
                 // Mettre à jour le MenuButton
                 if (btnNotifications != null) {
-                    MenuItem item = new MenuItem(notification);
+                    MenuItem item = new MenuItem(affichage);
                     item.setStyle("-fx-font-family: 'Georgia'; -fx-font-size: 12px;");
                     btnNotifications.getItems().add(0, item);
 
-                    // Alerte visuelle sur le bouton (badge/texte)
                     int count = notificationHistory.size();
                     btnNotifications.setText("🔔 (" + count + ")");
                     btnNotifications.setStyle(
-                            "-fx-background-color: " + TERRA_LIGHT + "; -fx-border-color: " + TERRACOTTA + ";" +
-                                    "-fx-border-radius: 6; -fx-text-fill: " + TERRACOTTA
-                                    + "; -fx-padding: 7 14; -fx-font-weight: bold;");
+                            "-fx-background-color: " + TERRA_LIGHT + "; -fx-border-color: " + TERRACOTTA + ";"
+                            + "-fx-border-radius: 6; -fx-text-fill: " + TERRACOTTA
+                            + "; -fx-padding: 7 14; -fx-font-weight: bold;");
                 }
 
                 // Rafraîchir les statistiques du dashboard
                 controller.chargerStats();
-
-                // Reconstruire la vue principale (facultatif si on veut juste refresh les
-                // chiffres)
-                // root.getChildren().set(1, buildMainArea());
             });
         } catch (Exception e) {
             System.err.println("Impossible de configurer le listener UDP : " + e.getMessage());
         }
 
         stage.show();
+    }
+
+    private void afficherVue(Node node) {
+        node.setOpacity(0);
+        HBox.setHgrow(node, Priority.ALWAYS);
+        rootPane.getChildren().set(1, node);
+        FadeTransition ft = new FadeTransition(Duration.millis(400), node);
+        ft.setFromValue(0);
+        ft.setToValue(1);
+        ft.play();
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -158,6 +181,14 @@ public class AdminDashboardView extends Application {
 
         // Actions de navigation
         itemDashboard.setOnMouseClicked(e -> rootPane.getChildren().set(1, buildMainArea()));
+        itemClients.setOnMouseClicked(e -> {
+            try {
+                rootPane.getChildren().set(1, new AdminUsersView().getView());
+            } catch (Exception ex) {
+                System.err.println("[DASHBOARD] Erreur ouverture Clients : " + ex.getMessage());
+                ex.printStackTrace();
+            }
+        });
         itemCommandes.setOnMouseClicked(e -> {
             try {
                 rootPane.getChildren().set(1, new AdminCommandesView().getView());
@@ -170,8 +201,12 @@ public class AdminDashboardView extends Application {
                 navSection("VUE GÉNÉRALE"),
                 itemDashboard,
                 navSection("CATALOGUE"),
-                itemProduits,
-                itemCategories,
+                navItem("📦", "Produits", true, () -> {
+                    afficherVue(new AdminProduitsView().getView());
+                }),
+                navItem("🏷️", "Catégories", false, () -> {
+                    afficherVue(new AdminCategoriesView().getView());
+                }),
                 navSection("VENTES"),
                 itemCommandes,
                 itemPaiements,
@@ -216,7 +251,7 @@ public class AdminDashboardView extends Application {
         return lbl;
     }
 
-    private HBox navItem(String icon, String label, boolean actif) {
+    private HBox navItem(String icon, String label, boolean actif, Runnable action) {
         HBox item = new HBox(10);
         item.setPadding(new Insets(9, 14, 9, 14));
         item.setAlignment(Pos.CENTER_LEFT);
@@ -231,12 +266,22 @@ public class AdminDashboardView extends Application {
         txt.setFill(Color.web(BRUN, actif ? 1.0 : 0.78));
         item.getChildren().addAll(ico, txt);
 
-        if (!actif) {
-            item.setOnMouseEntered(
-                    e -> item.setStyle("-fx-background-color: rgba(255,255,255,0.12); -fx-background-radius: 7;"));
-            item.setOnMouseExited(e -> item.setStyle(""));
-        }
+        item.setOnMouseEntered(e -> {
+            if (!item.getStyle().contains("0.22")) {
+                item.setStyle("-fx-background-color: rgba(255,255,255,0.12); -fx-background-radius: 7;");
+            }
+        });
+        item.setOnMouseExited(e -> {
+            if (!item.getStyle().contains("0.22")) {
+                item.setStyle("");
+            }
+        });
+        
         return item;
+    }
+
+    private HBox navItem(String icon, String label, boolean actif) {
+        return navItem(icon, label, actif, null);
     }
 
     private void deconnecter(Stage stage) {
@@ -366,6 +411,7 @@ public class AdminDashboardView extends Application {
 
     private VBox kpiCard(String icon, String label, String valeur, String accent, String bg) {
         VBox card = new VBox(10);
+        card.getStyleClass().add("card");
         card.setPadding(new Insets(18));
         card.setStyle(
                 "-fx-background-color: " + CREME_CARD + ";" +
@@ -399,7 +445,8 @@ public class AdminDashboardView extends Application {
     // ═════════════════════════════════════════════════════════════════════════
 
     private VBox buildTableauCommandes() {
-        VBox panel = card();
+        VBox panel = new VBox(0);
+        panel.getStyleClass().add("card");
 
         HBox header = panelHeader("Commandes récentes");
         Region sp = new Region();

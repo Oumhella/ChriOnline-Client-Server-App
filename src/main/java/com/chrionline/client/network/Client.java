@@ -18,7 +18,8 @@ public class Client {
 
     // Attributs UDP pour les notifications
     private DatagramSocket udpSocket;
-    private int actualUdpPort = 9092; 
+    private int selectedUdpPort = -1; // Port dynamique choisi à l'exécution
+    private int actualUdpPort = 9092;
     private static final int CLIENT_UDP_PORT = 9092;
 
     // Constructeur privé pour le pattern Singleton
@@ -65,10 +66,11 @@ public class Client {
     /**
      * Envoie une requête au serveur.
      */
-    public void envoyerRequete(Object requete) throws IOException {
+    public synchronized void envoyerRequete(Object requete) throws IOException {
         if (out != null) {
             out.writeObject(requete);
             out.flush();
+            out.reset(); // Crucial pour éviter d'envoyer d'anciennes versions d'objets modifiés
         }
     }
 
@@ -107,11 +109,15 @@ public class Client {
     /**
      * Reçoit une réponse du serveur.
      */
-    public Object lireReponse() throws IOException, ClassNotFoundException {
+    public synchronized Object lireReponse() throws IOException, ClassNotFoundException {
         if (in != null) {
             return in.readObject();
         }
         return null;
+    }
+
+    public int getUdpPort() {
+        return selectedUdpPort;
     }
 
     // Ecouteur pour la couche UI
@@ -130,10 +136,12 @@ public class Client {
                 // Tentative sur le port par défaut
                 udpSocket = new DatagramSocket(CLIENT_UDP_PORT);
                 actualUdpPort = CLIENT_UDP_PORT;
+                this.selectedUdpPort = actualUdpPort;
             } catch (java.net.BindException e) {
                 // Repli sur un port libre aléatoire
                 udpSocket = new DatagramSocket(0);
                 actualUdpPort = udpSocket.getLocalPort();
+                this.selectedUdpPort = actualUdpPort;
                 System.out.println("[UDP] Port " + CLIENT_UDP_PORT + " occupé, repli sur le port " + actualUdpPort);
             }
 
@@ -154,15 +162,6 @@ public class Client {
                     });
                 }
 
-                // Alerte JavaFX
-                javafx.application.Platform.runLater(() -> {
-                    javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
-                            javafx.scene.control.Alert.AlertType.INFORMATION);
-                    alert.setTitle("Mise à jour de commande");
-                    alert.setHeaderText("Notification reçue");
-                    alert.setContentText(notification);
-                    alert.showAndWait();
-                });
             }
         } catch (java.net.SocketException e) {
             System.out.println("[UDP] Socket fermée.");

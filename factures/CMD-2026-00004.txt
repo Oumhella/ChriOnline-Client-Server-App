@@ -1,0 +1,13 @@
+===========================================
+               FACTURE ChriOnline          
+===========================================
+Référence Commande : CMD-2026-00004
+Date : Thu Mar 26 18:50:28 GMT+01:00 2026
+Client : Yassine Benali
+Méthode de paiement : livraison
+-------------------------------------------
+- T-shirt Basique (x1) : 89,00 MAD
+-------------------------------------------
+TOTAL PAYÉ : 89.0 MAD
+===========================================
+Merci pour votre confiance !

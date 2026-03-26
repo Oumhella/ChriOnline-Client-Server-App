@@ -22,6 +22,7 @@ import java.util.*;
  * Cette classe se concentre sur le transport et la gestion de session de base.
  * La logique métier sera déléguée aux DAOs/Controllers plus tard.
  */
+@SuppressWarnings("unchecked")
 public class ClientHandler implements Runnable {
 
     private final Socket socket;
@@ -31,13 +32,12 @@ public class ClientHandler implements Runnable {
     private final PanierService panierService;
     private ObjectOutputStream out;
     private ObjectInputStream  in;
+    private int udpPort = 9092; // Port par défaut
 
     // État de la session client
     private int    userId   = -1;
     private String userEmail = null;
     private String userRole      = null;
-    private int    udpPort       = 9092; // Port de notification par défaut
-
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
         this.server = server;
@@ -95,7 +95,7 @@ public class ClientHandler implements Runnable {
             case "CONNEXION" -> handleConnexion(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
-            case "DETAIL_PRODUIT" -> handleDetailProduit(req);
+            case "DETAIL_PRODUIT", "GET_PRODUIT_BY_ID" -> handleDetailProduit(req);
             case "AJOUTER_WISHLIST"  -> handleAjouterWishlist(req);
             case "SUPPRIMER_WISHLIST"-> handleSupprimerWishlist(req);
             case "LISTE_WISHLIST"    -> handleListeWishlist(req);
@@ -111,15 +111,40 @@ public class ClientHandler implements Runnable {
             case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
             case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
             case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
-            case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
             case "GET_PROFIL"            -> handleGetProfil(req);
             case "UPDATE_PROFIL"         -> handleUpdateProfil(req);
             case "GET_MY_ORDERS"         -> handleGetMyOrders(req);
+            
+            // Admin Produits
+            case "AJOUTER_PRODUIT"       -> handleAjouterProduit(req);
+            case "MODIFIER_PRODUIT"      -> handleModifierProduit(req);
+            case "SUPPRIMER_PRODUIT"     -> handleSupprimerProduit(req);
+            case "UPLOAD_IMAGE"          -> handleUploadImage(req);
+            case "LISTE_CATEGORIES"      -> handleListeCategories(req);
+            case "LISTE_LABELS"          -> handleListeLabels(req);
+            case "LISTE_LABEL_VALUES"    -> handleListeLabelValues(req);
+            case "AJOUTER_LABEL"         -> handleAjouterLabel(req);
+            case "AJOUTER_LABEL_VALUE"   -> handleAjouterLabelValue(req);
+            case "SUPPRIMER_LABEL_VALUE" -> handleSupprimerLabelValue(req);
+            case "AJOUTER_CATEGORIE"     -> handleAjouterCategorie(req);
+            case "MODIFIER_CATEGORIE"    -> handleModifierCategorie(req);
+            case "SUPPRIMER_CATEGORIE"    -> handleSupprimerCategorie(req);
+
+            case "PANIER_VALIDER"        -> handlePanierValider(req);
+            case "COMMANDE_CONFIRMER"    -> handleCommandeConfirmer(req);
             case "GET_ALL_ORDERS",
                  "GET_ORDER_DETAILS",
                  "UPDATE_ORDER_STATUS" -> {
                 handleAdminCommande(commande, req);
             }
+            case "ADMIN_LISTE_USERS" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
+            case "ADMIN_CHANGER_STATUT_USER" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
+
+            case "REGISTER_UDP" -> {
+                this.udpPort = (int) req.getOrDefault("udpPort", 9092);
+                System.out.println("[HANDLER] Port UDP enregistré pour " + (userId != -1 ? userId : "guest") + " : " + udpPort);
+            }
+
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -192,17 +217,28 @@ public class ClientHandler implements Runnable {
         System.out.println("[HANDLER] >>> handlePanierValider");
         try {
             Map<String, Object> reponse = panierService.validerPanier(req);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleCommandeConfirmer(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleCommandeConfirmer");
+        try {
+            Map<String, Object> reponse = panierService.confirmerCommande(req);
 
             // Si la commande est validée avec succès, on notifie les administrateurs via UDP
             if ("OK".equals(reponse.get("statut"))) {
-                String ref = (String) reponse.get("reference");
-                String messageAdmin = "NOUVELLE_COMMANDE:" + (ref != null ? ref : "Inconnue") + ":Utilisateur " + this.userId;
+                CommandeDTO recap = (CommandeDTO) reponse.get("commandeResult");
+                String ref = recap != null ? recap.getReference() : "Inconnue";
+                String messageAdmin = "NOUVELLE_COMMANDE:" + ref + ":Utilisateur " + this.userId;
                 server.notifierAdmins(messageAdmin);
             }
 
             envoyerMessage(reponse);
         } catch (Exception e) {
-            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
         }
     }
 
@@ -276,6 +312,73 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    private void handleAjouterProduit(Map<String, Object> req) {
+        try {
+            envoyerMessage(produitService.handleAjouterProduit(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleModifierProduit(Map<String, Object> req) {
+        try {
+            envoyerMessage(produitService.handleModifierProduit(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleSupprimerProduit(Map<String, Object> req) {
+        try {
+            envoyerMessage(produitService.handleSupprimerProduit(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleUploadImage(Map<String, Object> req) {
+        try {
+            envoyerMessage(produitService.handleUploadImage(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleListeCategories(Map<String, Object> req) {
+        envoyerMessage(produitService.handleListeCategories(req));
+    }
+
+    private void handleListeLabels(Map<String, Object> req) {
+        envoyerMessage(produitService.handleListeLabels(req));
+    }
+
+    private void handleListeLabelValues(Map<String, Object> req) {
+        envoyerMessage(produitService.handleListeLabelValues(req));
+    }
+
+    private void handleAjouterLabel(Map<String, Object> req) {
+        envoyerMessage(produitService.handleAjouterLabel(req));
+    }
+
+    private void handleAjouterLabelValue(Map<String, Object> req) {
+        envoyerMessage(produitService.handleAjouterLabelValue(req));
+    }
+
+    private void handleSupprimerLabelValue(Map<String, Object> req) {
+        envoyerMessage(produitService.handleSupprimerLabelValue(req));
+    }
+
+    private void handleAjouterCategorie(Map<String, Object> req) {
+        envoyerMessage(produitService.handleAjouterCategorie(req));
+    }
+
+    private void handleModifierCategorie(Map<String, Object> req) {
+        envoyerMessage(produitService.handleModifierCategorie(req));
+    }
+
+    private void handleSupprimerCategorie(Map<String, Object> req) {
+        envoyerMessage(produitService.handleSupprimerCategorie(req));
+    }
     // ─── Gestion UDP ──────────────────────────────────────────────────────────
 
     /**
@@ -297,6 +400,10 @@ public class ClientHandler implements Runnable {
         } catch (IOException e) {
             System.err.println("[HANDLER] Échec d'envoi client : " + e.getMessage());
         }
+    }
+
+    public int getUdpPort() {
+        return udpPort;
     }
 
     private Map<String, Object> creerReponse(String statut, String message) {
@@ -386,11 +493,22 @@ public class ClientHandler implements Runnable {
             String idCommande    = (String) req.get("idCommande");
             String nouveauStatut = (String) req.get("statut");
             Connection conn = DatabaseConnection.getInstance().getConnection();
-            CommandeService service = new CommandeService(
-                    new CommandeDAO(conn),
-                    new LigneCommandeDAO(conn)
-            );
+
+            CommandeDAO dao = new CommandeDAO(conn);
+            CommandeService service = new CommandeService(dao, new LigneCommandeDAO(conn));
+
+            // 1. Récupérer les détails avant maj pour avoir le userId et la ref
+            com.chrionline.shared.models.Commande c = dao.findById(idCommande);
+
+            // 2. Maj en BDD
             String resultat = service.updateStatut(idCommande, nouveauStatut);
+
+            if (resultat.startsWith("SUCCESS") && c != null) {
+                // 3. Notifier l'utilisateur concerné par UDP
+                String msg = "VOTRE COMMANDE #" + c.getReference() + " est passée au statut : " + nouveauStatut;
+                server.notifierClient(c.getIdUtilisateur(), msg);
+            }
+
             Map<String, Object> reponse = new HashMap<>();
             reponse.put("statut", resultat.startsWith("SUCCESS") ? "OK" : "ERREUR");
             reponse.put("message", resultat);
@@ -405,7 +523,6 @@ public class ClientHandler implements Runnable {
     public void setUserId(int userId) { this.userId = userId; }
 
     public String getRole() { return userRole; }
-    public int getUdpPort() { return udpPort; }
     public Socket getSocket() { return socket; }
 
 

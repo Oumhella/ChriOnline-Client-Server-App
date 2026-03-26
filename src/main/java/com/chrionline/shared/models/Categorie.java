@@ -5,6 +5,7 @@ import java.io.Serializable;
 public class Categorie implements Serializable {
 
     private int id;
+    private int idParent;
     private String nom;
     private String description;
 
@@ -14,6 +15,14 @@ public class Categorie implements Serializable {
 
     public void setId(int id) {
         this.id = id;
+    }
+
+    public int getIdParent() {
+        return idParent;
+    }
+
+    public void setIdParent(int idParent) {
+        this.idParent = idParent;
     }
 
     public String getNom() {
@@ -30,5 +39,10 @@ public class Categorie implements Serializable {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    @Override
+    public String toString() {
+        return nom;
     }
 }

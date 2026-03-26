@@ -4,6 +4,7 @@ import com.chrionline.client.controller.MdpOublieController;
 import javafx.animation.*;
 import javafx.application.Application;
 import javafx.geometry.*;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.*;
@@ -133,24 +134,19 @@ public class MdpOublieView extends Application {
         tokenField.setPromptText("Code reçu (ex: UUID)");
         tokenField.setStyle(fieldStyle());
 
-        mdpField = new PasswordField();
-        mdpField.setPromptText("Nouveau mot de passe");
-        mdpField.setStyle(fieldStyle());
-
+        mdpField     = new PasswordField();
         mdpConfField = new PasswordField();
-        mdpConfField.setPromptText("Confirmer le mot de passe");
-        mdpConfField.setStyle(fieldStyle());
 
         Button btnValider = new Button("Réinitialiser");
         btnValider.setMaxWidth(Double.MAX_VALUE);
-        btnValider.setStyle(btnPrimary(SAUGE_LIGHT.replace("D0E2D8", "#6B9E7A"))); // SAUGE_DARK
+        btnValider.setStyle(btnPrimary("#6B9E7A")); // SAUGE_DARK
         btnValider.setCursor(javafx.scene.Cursor.HAND);
 
         paneStep2.getChildren().addAll(
                 title, 
                 labelField("Code secret", tokenField),
-                labelField("Nouveau mot de passe", mdpField),
-                labelField("Confirmation", mdpConfField),
+                labelField("Nouveau mot de passe", creerChampMdp(mdpField, "Nouveau mot de passe")),
+                labelField("Confirmation", creerChampMdp(mdpConfField, "Confirmer le mot de passe")),
                 msgLabel,
                 btnValider
         );
@@ -175,7 +171,7 @@ public class MdpOublieView extends Application {
         fadeOut.play();
     }
 
-    private VBox labelField(String label, Control field) {
+    private VBox labelField(String label, Node field) {
         Label lbl = new Label(label);
         lbl.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
         lbl.setTextFill(Color.web(BRUN_MED));
@@ -187,6 +183,46 @@ public class MdpOublieView extends Application {
         f.setPromptText(prompt);
         f.setStyle(fieldStyle());
         return f;
+    }
+
+    private HBox creerChampMdp(PasswordField pf, String prompt) {
+        pf.setPromptText(prompt);
+        pf.setStyle(fieldStyle());
+        
+        TextField tf = new TextField();
+        tf.setPromptText(prompt);
+        tf.setStyle(fieldStyle());
+        tf.setManaged(false);
+        tf.setVisible(false);
+        
+        tf.textProperty().bindBidirectional(pf.textProperty());
+        
+        Button btnEye = new Button("👁️");
+        btnEye.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-text-fill: " + BRUN_LIGHT + "; -fx-font-size: 14;");
+        
+        btnEye.setOnAction(e -> {
+            if (pf.isVisible()) {
+                pf.setVisible(false); pf.setManaged(false);
+                tf.setVisible(true); tf.setManaged(true);
+                btnEye.setText("🙈");
+            } else {
+                pf.setVisible(true); pf.setManaged(true);
+                tf.setVisible(false); tf.setManaged(false);
+                btnEye.setText("👁️");
+            }
+        });
+        
+        StackPane stack = new StackPane(pf, tf);
+        HBox.setHgrow(stack, Priority.ALWAYS);
+        
+        HBox container = new HBox(stack, btnEye);
+        container.setAlignment(Pos.CENTER_RIGHT);
+        container.setStyle("-fx-background-color: " + CREME_INPUT + "; -fx-background-radius: 8; -fx-border-color: " + BORDER + "; -fx-border-radius: 8;");
+        
+        pf.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-padding:12;");
+        tf.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-padding:12;");
+        
+        return container;
     }
 
     private String fieldStyle() {

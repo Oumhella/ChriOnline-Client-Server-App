@@ -4,6 +4,7 @@ import com.chrionline.client.controller.InscriptionController;
 import javafx.animation.*;
 import javafx.application.Application;
 import javafx.geometry.*;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.*;
@@ -220,11 +221,12 @@ public class InscriptionView extends Application {
         // ══ Bloc 2 : Sécurité ═════════════════════════════════
         form.getChildren().add(blocTitre("Mot de passe"));
 
-        mdpField     = passField("Au moins 6 caractères");
-        mdpConfField = passField("Répéter le mot de passe");
+        mdpField     = new PasswordField();
+        mdpConfField = new PasswordField();
+        
         form.getChildren().add(row(
-                labelField("Mot de passe *", mdpField),
-                labelField("Confirmation *", mdpConfField)
+                labelField("Mot de passe *", creerChampMdp(mdpField, "Au moins 6 caractères")),
+                labelField("Confirmation *", creerChampMdp(mdpConfField, "Répéter le mot de passe"))
         ));
 
         // Barre de force
@@ -434,12 +436,14 @@ public class InscriptionView extends Application {
     }
 
     // ── Champ avec label intégré ──────────────────────────────
-    private VBox labelField(String label, Control field) {
+    private VBox labelField(String label, Node field) {
         Label lbl = new Label(label);
         lbl.setFont(Font.font("Georgia", FontWeight.BOLD, 11));
         lbl.setTextFill(Color.web(BRUN_MED));
         VBox box = new VBox(5, lbl, field);
-        field.setMaxWidth(Double.MAX_VALUE);
+        if (field instanceof Region r) {
+            r.setMaxWidth(Double.MAX_VALUE);
+        }
         HBox.setHgrow(box, Priority.ALWAYS);
         return box;
     }
@@ -465,6 +469,49 @@ public class InscriptionView extends Application {
                         : fieldStyle(BORDER))
         );
         return f;
+    }
+
+    private HBox creerChampMdp(PasswordField pf, String prompt) {
+        pf.setPromptText(prompt);
+        pf.setFont(Font.font("Georgia", 13));
+        pf.setStyle(fieldStyle(BORDER));
+        
+        TextField tf = new TextField();
+        tf.setPromptText(prompt);
+        tf.setFont(Font.font("Georgia", 13));
+        tf.setStyle(fieldStyle(BORDER));
+        tf.setManaged(false);
+        tf.setVisible(false);
+        
+        tf.textProperty().bindBidirectional(pf.textProperty());
+        
+        Button btnEye = new Button("👁️");
+        btnEye.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-text-fill: " + BRUN_LIGHT + "; -fx-font-size: 14;");
+        
+        btnEye.setOnAction(e -> {
+            if (pf.isVisible()) {
+                pf.setVisible(false); pf.setManaged(false);
+                tf.setVisible(true); tf.setManaged(true);
+                btnEye.setText("🙈");
+            } else {
+                pf.setVisible(true); pf.setManaged(true);
+                tf.setVisible(false); tf.setManaged(false);
+                btnEye.setText("👁️");
+            }
+        });
+        
+        StackPane stack = new StackPane(pf, tf);
+        HBox.setHgrow(stack, Priority.ALWAYS);
+        
+        HBox container = new HBox(stack, btnEye);
+        container.setAlignment(Pos.CENTER_RIGHT);
+        container.setStyle("-fx-background-color: " + CREME_INPUT + "; -fx-background-radius: 6; -fx-border-color: " + BORDER + "; -fx-border-radius: 6;");
+        
+        // Nettoyage des styles internes
+        pf.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-padding:10 13;");
+        tf.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-padding:10 13;");
+        
+        return container;
     }
 
     private PasswordField passField(String prompt) {
@@ -503,7 +550,7 @@ public class InscriptionView extends Application {
         return h;
     }
 
-    private VBox wrap(String label, Control field) {
+    private VBox wrap(String label, Node field) {
         return labelField(label, field);
     }
 

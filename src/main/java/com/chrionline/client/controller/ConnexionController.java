@@ -56,7 +56,7 @@ public class ConnexionController {
                         Map<String, Object> data = (Map<String, Object>) rep.get("data");
                         String role = data != null ? (String) data.getOrDefault("role", "client") : "client";
 
-                        // ✅ Stockage dans le SessionManager
+                        //  Stockage dans le SessionManager
                         com.chrionline.client.session.SessionManager.getInstance().setUser(data);
 
                         // ✅ Enregistrement du port UDP auprès du serveur
@@ -64,6 +64,16 @@ public class ConnexionController {
 
                         System.out.println("[ConnexionController] userId=" + 
                                 com.chrionline.client.session.SessionManager.getInstance().getUserId() + " role=" + role);
+
+                        // Enregistrement du port UDP dynamique auprès du serveur
+                        try {
+                            Map<String, Object> udpReg = new HashMap<>();
+                            udpReg.put("commande", "REGISTER_UDP");
+                            udpReg.put("udpPort", client.getUdpPort());
+                            client.envoyerRequete(udpReg);
+                        } catch (Exception e) {
+                            System.err.println("[CONNEXION] Échec enregistrement UDP : " + e.getMessage());
+                        }
 
                         new Thread(() -> {
                             try { Thread.sleep(800); } catch (InterruptedException ignored) {}

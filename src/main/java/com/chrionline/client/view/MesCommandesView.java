@@ -14,6 +14,7 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -88,10 +89,7 @@ public class MesCommandesView {
         Hyperlink hPan = createNavLink("Mon Panier", stage);
         hPan.setOnAction(e -> {
             try {
-                // On suppose qu'on peut récupérer l'ID utilisateur depuis le Client ou le passer au constructeur
-                // Pour l'instant on redirige vers le catalogue si on ne l'a pas, 
-                // mais MesCommandesView est déjà pour un utilisateur spécifique.
-                new PanierView(5).start(stage); // ID 5 par défaut comme vu dans les logs
+                new PanierView(5).start(stage);
             } catch (Exception ex) { ex.printStackTrace(); }
         });
 
@@ -139,7 +137,7 @@ public class MesCommandesView {
         card.setStyle("-fx-background-color: white; -fx-background-radius: 8; -fx-border-color: " + BORDER + "; -fx-border-radius: 8;");
 
         VBox details = new VBox(5);
-        Text ref = new Text(order.getReference());
+        Text ref = new Text("Commande " + order.getReference());
         ref.setFont(Font.font("Georgia", FontWeight.BOLD, 16));
         ref.setFill(Color.web(BRUN));
 
@@ -155,16 +153,7 @@ public class MesCommandesView {
         amount.setFont(Font.font("Arial", FontWeight.BOLD, 16));
         amount.setFill(Color.web(TERRACOTTA));
 
-        Label status = new Label(order.getStatut());
-        String color = switch (order.getStatut().toUpperCase()) {
-            case "LIVREE" -> "#4CAF50";
-            case "ANNULEE" -> "#F44336";
-            case "EXPEDIEE" -> "#2196F3";
-            default -> "#FF9800";
-        };
-        status.setStyle("-fx-background-color: " + color + "22; -fx-text-fill: " + color + "; -fx-padding: 5 10; -fx-background-radius: 15; -fx-font-weight: bold;");
-
-        card.getChildren().addAll(details, spacer, amount, status);
+        card.getChildren().addAll(details, spacer, amount);
         return card;
     }
 
