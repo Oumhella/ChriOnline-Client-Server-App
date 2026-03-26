@@ -11,10 +11,11 @@ public class ProductFormat implements Serializable {
     private int stock;
     private int stockAlerte;
     private String imageUrl;
-    private LocalDateTime dateExpiration;
 
 
-    private List<LabelValue> labelValues;
+    private List<LabelValue> labelValues = new java.util.ArrayList<>();
+
+    public ProductFormat() {}
 
     public int getId() {
         return id;
@@ -56,13 +57,6 @@ public class ProductFormat implements Serializable {
         this.imageUrl = imageUrl;
     }
 
-    public LocalDateTime getDateExpiration() {
-        return dateExpiration;
-    }
-
-    public void setDateExpiration(LocalDateTime dateExpiration) {
-        this.dateExpiration = dateExpiration;
-    }
 
     public List<LabelValue> getLabelValues() {
         return labelValues;

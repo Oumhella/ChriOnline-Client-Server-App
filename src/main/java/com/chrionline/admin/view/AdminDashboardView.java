@@ -1,8 +1,10 @@
 package com.chrionline.admin.view;
 
 import com.chrionline.admin.controller.AdminDashboardController;
+import javafx.animation.FadeTransition;
 import javafx.application.Application;
 import javafx.geometry.*;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -11,6 +13,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.*;
 import javafx.scene.text.*;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -58,8 +61,12 @@ public class AdminDashboardView extends Application {
         rootPane.setStyle("-fx-background-color: " + CREME + ";");
         rootPane.getChildren().addAll(buildSidebar(stage), buildMainArea());
 
-        Scene scene = new Scene(rootPane, 1200, 800);
+        Scene scene = new Scene(rootPane, 1100, 700);
+        String css = getClass().getResource("/styles/admin.css").toExternalForm();
+        scene.getStylesheets().add(css);
+        
         stage.setScene(scene);
+        stage.setTitle("ChriOnline - Administration Premium");
         stage.setMinWidth(960);
         stage.setMinHeight(650);
 
@@ -98,6 +105,16 @@ public class AdminDashboardView extends Application {
         }
 
         stage.show();
+    }
+
+    private void afficherVue(Node node) {
+        node.setOpacity(0);
+        HBox.setHgrow(node, Priority.ALWAYS);
+        rootPane.getChildren().set(1, node);
+        FadeTransition ft = new FadeTransition(Duration.millis(400), node);
+        ft.setFromValue(0);
+        ft.setToValue(1);
+        ft.play();
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -168,8 +185,12 @@ public class AdminDashboardView extends Application {
                 navSection("VUE GÉNÉRALE"),
                 itemDashboard,
                 navSection("CATALOGUE"),
-                itemProduits,
-                itemCategories,
+                navItem("📦", "Produits", true, () -> {
+                    afficherVue(new AdminProduitsView().getView());
+                }),
+                navItem("🏷️", "Catégories", false, () -> {
+                    afficherVue(new AdminCategoriesView().getView());
+                }),
                 navSection("VENTES"),
                 itemCommandes,
                 itemPaiements,
@@ -382,6 +403,7 @@ public class AdminDashboardView extends Application {
 
     private VBox kpiCard(String icon, String label, String valeur, String accent, String bg) {
         VBox card = new VBox(10);
+        card.getStyleClass().add("card");
         card.setPadding(new Insets(18));
         card.setStyle(
                 "-fx-background-color: " + CREME_CARD + ";" +
@@ -415,7 +437,8 @@ public class AdminDashboardView extends Application {
     // ═════════════════════════════════════════════════════════════════════════
 
     private VBox buildTableauCommandes() {
-        VBox panel = card();
+        VBox panel = new VBox(0);
+        panel.getStyleClass().add("card");
 
         HBox header = panelHeader("Commandes récentes");
         Region sp = new Region(); HBox.setHgrow(sp, Priority.ALWAYS);

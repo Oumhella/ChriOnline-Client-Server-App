@@ -18,6 +18,7 @@ import java.util.*;
  * Cette classe se concentre sur le transport et la gestion de session de base.
  * La logique métier sera déléguée aux DAOs/Controllers plus tard.
  */
+@SuppressWarnings("unchecked")
 public class ClientHandler implements Runnable {
 
     private final Socket socket;
@@ -91,7 +92,7 @@ public class ClientHandler implements Runnable {
             case "CONNEXION" -> handleConnexion(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
-            case "DETAIL_PRODUIT" -> handleDetailProduit(req);
+            case "DETAIL_PRODUIT", "GET_PRODUIT_BY_ID" -> handleDetailProduit(req);
             case "AJOUTER_WISHLIST"  -> handleAjouterWishlist(req);
             case "SUPPRIMER_WISHLIST"-> handleSupprimerWishlist(req);
             case "LISTE_WISHLIST"    -> handleListeWishlist(req);
@@ -104,6 +105,22 @@ public class ClientHandler implements Runnable {
             case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
             case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
             case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
+            
+            // Admin Produits
+            case "AJOUTER_PRODUIT"       -> handleAjouterProduit(req);
+            case "MODIFIER_PRODUIT"      -> handleModifierProduit(req);
+            case "SUPPRIMER_PRODUIT"     -> handleSupprimerProduit(req);
+            case "UPLOAD_IMAGE"          -> handleUploadImage(req);
+            case "LISTE_CATEGORIES"      -> handleListeCategories(req);
+            case "LISTE_LABELS"          -> handleListeLabels(req);
+            case "LISTE_LABEL_VALUES"    -> handleListeLabelValues(req);
+            case "AJOUTER_LABEL"         -> handleAjouterLabel(req);
+            case "AJOUTER_LABEL_VALUE"   -> handleAjouterLabelValue(req);
+            case "SUPPRIMER_LABEL_VALUE" -> handleSupprimerLabelValue(req);
+            case "AJOUTER_CATEGORIE"     -> handleAjouterCategorie(req);
+            case "MODIFIER_CATEGORIE"    -> handleModifierCategorie(req);
+            case "SUPPRIMER_CATEGORIE"    -> handleSupprimerCategorie(req);
+
             case "GET_ALL_ORDERS",
                  "GET_ORDER_DETAILS",
                  "UPDATE_ORDER_STATUS" -> {
@@ -256,6 +273,74 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
         }
+    }
+
+    private void handleAjouterProduit(Map<String, Object> req) {
+        try {
+            envoyerMessage(produitService.handleAjouterProduit(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleModifierProduit(Map<String, Object> req) {
+        try {
+            envoyerMessage(produitService.handleModifierProduit(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleSupprimerProduit(Map<String, Object> req) {
+        try {
+            envoyerMessage(produitService.handleSupprimerProduit(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleUploadImage(Map<String, Object> req) {
+        try {
+            envoyerMessage(produitService.handleUploadImage(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleListeCategories(Map<String, Object> req) {
+        envoyerMessage(produitService.handleListeCategories(req));
+    }
+
+    private void handleListeLabels(Map<String, Object> req) {
+        envoyerMessage(produitService.handleListeLabels(req));
+    }
+
+    private void handleListeLabelValues(Map<String, Object> req) {
+        envoyerMessage(produitService.handleListeLabelValues(req));
+    }
+
+    private void handleAjouterLabel(Map<String, Object> req) {
+        envoyerMessage(produitService.handleAjouterLabel(req));
+    }
+
+    private void handleAjouterLabelValue(Map<String, Object> req) {
+        envoyerMessage(produitService.handleAjouterLabelValue(req));
+    }
+
+    private void handleSupprimerLabelValue(Map<String, Object> req) {
+        envoyerMessage(produitService.handleSupprimerLabelValue(req));
+    }
+
+    private void handleAjouterCategorie(Map<String, Object> req) {
+        envoyerMessage(produitService.handleAjouterCategorie(req));
+    }
+
+    private void handleModifierCategorie(Map<String, Object> req) {
+        envoyerMessage(produitService.handleModifierCategorie(req));
+    }
+
+    private void handleSupprimerCategorie(Map<String, Object> req) {
+        envoyerMessage(produitService.handleSupprimerCategorie(req));
     }
 
     // ─── Gestion UDP ──────────────────────────────────────────────────────────
