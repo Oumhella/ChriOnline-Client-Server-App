@@ -67,7 +67,7 @@ public class AdminDashboardView extends Application {
         try {
             // L'hôte et port doivent correspondre à ceux de la session actuelle,
             // on recupere l'instance deja cree via Client.getInstance(...)
-            com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("127.0.0.1", 9090);
+            com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("127.0.0.1", 12345);
             client.setNotificationListener(notification -> {
                 // Ajouter à l'historique
                 notificationHistory.add(0, notification); // Plus récent en haut

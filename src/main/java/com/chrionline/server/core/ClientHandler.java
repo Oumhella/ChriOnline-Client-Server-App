@@ -1,16 +1,12 @@
 package com.chrionline.server.core;
 
-import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.server.service.PanierService;
 import com.chrionline.server.service.ProduitService;
-import com.chrionline.shared.models.User;
 import com.chrionline.server.dao.CommandeDAO;
 import com.chrionline.server.dao.LigneCommandeDAO;
 import com.chrionline.server.service.CommandeService;
 import com.chrionline.shared.dto.CommandeDTO;
-import com.chrionline.shared.dto.LigneCommandeDTO;
-import com.chrionline.shared.enums.StatutCommande;
 import com.chrionline.database.DatabaseConnection;
 import java.sql.Connection;
 import java.io.*;
@@ -31,6 +27,7 @@ public class ClientHandler implements Runnable {
     private final PanierService panierService;
     private ObjectOutputStream out;
     private ObjectInputStream  in;
+    private int udpPort = 9092; // Port par défaut
 
     // État de la session client
     private int    userId   = -1;
@@ -123,6 +120,12 @@ public class ClientHandler implements Runnable {
             }
             case "ADMIN_LISTE_USERS" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
             case "ADMIN_CHANGER_STATUT_USER" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
+            
+            case "REGISTER_UDP" -> {
+                this.udpPort = (int) req.getOrDefault("udpPort", 9092);
+                System.out.println("[HANDLER] Port UDP enregistré pour " + (userId != -1 ? userId : "guest") + " : " + udpPort);
+            }
+            
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -271,11 +274,14 @@ public class ClientHandler implements Runnable {
             if (out != null) {
                 out.writeObject(objet);
                 out.flush();
-                out.reset();
             }
         } catch (IOException e) {
             System.err.println("[HANDLER] Échec d'envoi client : " + e.getMessage());
         }
+    }
+
+    public int getUdpPort() {
+        return udpPort;
     }
 
     private Map<String, Object> creerReponse(String statut, String message) {
@@ -365,11 +371,22 @@ public class ClientHandler implements Runnable {
             String idCommande    = (String) req.get("idCommande");
             String nouveauStatut = (String) req.get("statut");
             Connection conn = DatabaseConnection.getInstance().getConnection();
-            CommandeService service = new CommandeService(
-                    new CommandeDAO(conn),
-                    new LigneCommandeDAO(conn)
-            );
+            
+            CommandeDAO dao = new CommandeDAO(conn);
+            CommandeService service = new CommandeService(dao, new LigneCommandeDAO(conn));
+            
+            // 1. Récupérer les détails avant maj pour avoir le userId et la ref
+            com.chrionline.shared.models.Commande c = dao.findById(idCommande);
+            
+            // 2. Maj en BDD
             String resultat = service.updateStatut(idCommande, nouveauStatut);
+            
+            if (resultat.startsWith("SUCCESS") && c != null) {
+                // 3. Notifier l'utilisateur concerné par UDP
+                String msg = "VOTRE COMMANDE #" + c.getReference() + " est passée au statut : " + nouveauStatut;
+                server.notifierClient(c.getIdUtilisateur(), msg);
+            }
+
             Map<String, Object> reponse = new HashMap<>();
             reponse.put("statut", resultat.startsWith("SUCCESS") ? "OK" : "ERREUR");
             reponse.put("message", resultat);

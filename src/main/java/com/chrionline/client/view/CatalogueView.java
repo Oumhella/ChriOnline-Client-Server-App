@@ -17,6 +17,7 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
@@ -29,6 +30,7 @@ public class CatalogueView extends Application {
     private static final String SAUGE      = "#A8C4B0";
     private static final String SAUGE_DARK = "#6B9E7A";
     private static final String BRUN       = "#3E2C1E";
+    private static final String BRUN_MED    = "#6B4F3A";
     private static final String BRUN_LIGHT = "#9A7B65";
     private static final String TERRACOTTA = "#C96B4A";
     private static final String TERRA_HOVER= "#A0522D";
@@ -39,6 +41,9 @@ public class CatalogueView extends Application {
     Stage               primaryStage; // package-private pour ProductDetailView
     private int         userId;
     private boolean     isWishlistMode = false;
+
+    // Notifications
+    private MenuButton btnNotifications;
 
     public CatalogueView() {
         this.userId = com.chrionline.client.session.SessionManager.getInstance().getUserId();
@@ -63,6 +68,32 @@ public class CatalogueView extends Application {
         this.primaryStage = stage;
         this.userId = com.chrionline.client.session.SessionManager.getInstance().getUserId();
         this.controller   = new CatalogueController(userId);
+        
+        // --- Inscription à l'écouteur UDP pour les notifications ---
+        try {
+            com.chrionline.client.network.Client networkClient = com.chrionline.client.network.Client.getInstance("127.0.0.1", 12345);
+            networkClient.setNotificationListener(notification -> {
+                com.chrionline.client.session.SessionManager.getInstance().addNotification(notification);
+                
+                // --- Animation Toast ---
+                if (primaryStage != null) {
+                    com.chrionline.client.view.utils.NotificationToast.show(primaryStage, notification);
+                }
+
+                if (btnNotifications != null) {
+                    // Création d'un item stylé
+                    CustomMenuItem customItem = createNotificationMenuItem(notification);
+                    btnNotifications.getItems().add(0, customItem);
+                    
+                    // Mise à jour du badge (nombre de non-lus)
+                    int unread = com.chrionline.client.session.SessionManager.getInstance().getUnreadNotificationsCount();
+                    updateNotificationButtonUI(unread);
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("[UDP] Erreur setup : " + e.getMessage());
+        }
+
         stage.setTitle(isWishlistMode ? "ChriOnline — Mes Favoris" : "ChriOnline — Catalogue");
         stage.setScene(new Scene(buildCatalogueRoot(), 1100, 800));
         stage.show();
@@ -195,7 +226,37 @@ public class CatalogueView extends Application {
             nav.getChildren().add(btnLogin);
         }
 
-        header.getChildren().addAll(logo, spacer, nav);
+        // --- Bouton Notifications (visible pour tout le monde ou seulement si connecté ?)
+        // On le met seulement si connecté pour eviter le bruit
+        if (userId != -1) {
+            btnNotifications = new MenuButton("🔔 (0)");
+            btnNotifications.setFont(Font.font("Georgia", 12));
+            btnNotifications.setStyle(
+                "-fx-background-color: transparent; -fx-border-color: " + BORDER + ";" +
+                "-fx-border-radius: 6; -fx-text-fill: " + BRUN_MED + "; -fx-padding: 7 14;"
+            );
+            btnNotifications.setCursor(Cursor.HAND);
+            
+            // --- Logique "Marquer comme lu" au clic ---
+            btnNotifications.setOnShowing(e -> {
+                com.chrionline.client.session.SessionManager.getInstance().resetUnreadCount();
+                updateNotificationButtonUI(0);
+            });
+
+            // Recharger l'historique depuis SessionManager si on reconstruit la vue
+            java.util.List<String> history = com.chrionline.client.session.SessionManager.getInstance().getNotificationHistory();
+            for (String n : history) {
+                btnNotifications.getItems().add(createNotificationMenuItem(n));
+            }
+            
+            int unread = com.chrionline.client.session.SessionManager.getInstance().getUnreadNotificationsCount();
+            updateNotificationButtonUI(unread);
+
+            header.getChildren().addAll(logo, spacer, btnNotifications, nav);
+        } else {
+            header.getChildren().addAll(logo, spacer, nav);
+        }
+        
         return header;
     }
 
@@ -415,6 +476,53 @@ public class CatalogueView extends Application {
     private String detailBtnStyle(String color) {
         return "-fx-background-color: " + color + "; -fx-text-fill: white;"
                 + "-fx-font-family: Georgia; -fx-font-size: 13px; -fx-background-radius: 6;";
+    }
+
+    private CustomMenuItem createNotificationMenuItem(String message) {
+        HBox container = new HBox(12);
+        container.setPadding(new Insets(8, 12, 8, 12));
+        container.setAlignment(Pos.CENTER_LEFT);
+        container.setPrefWidth(300);
+        
+        Label icon = new Label("✉");
+        icon.setFont(Font.font(16));
+        icon.setTextFill(Color.web(TERRACOTTA));
+        
+        VBox texts = new VBox(2);
+        Label msg = new Label(message);
+        msg.setFont(Font.font("Georgia", 12));
+        msg.setWrapText(true);
+        msg.setMaxWidth(250);
+        msg.setTextFill(Color.web(BRUN));
+        
+        Label time = new Label("À l'instant");
+        time.setFont(Font.font("Georgia", FontPosture.ITALIC, 10));
+        time.setTextFill(Color.web(BRUN_LIGHT));
+        
+        texts.getChildren().addAll(msg, time);
+        container.getChildren().addAll(icon, texts);
+        
+        CustomMenuItem item = new CustomMenuItem(container);
+        item.setHideOnClick(false);
+        return item;
+    }
+
+    private void updateNotificationButtonUI(int unread) {
+        if (btnNotifications == null) return;
+        
+        if (unread > 0) {
+            btnNotifications.setText("🔔 (" + unread + ")");
+            btnNotifications.setStyle(
+                "-fx-background-color: #F5E6E0; -fx-border-color: " + TERRACOTTA + ";" +
+                "-fx-border-radius: 6; -fx-text-fill: " + TERRACOTTA + "; -fx-padding: 7 14; -fx-font-weight: bold;"
+            );
+        } else {
+            btnNotifications.setText("🔔");
+            btnNotifications.setStyle(
+                "-fx-background-color: transparent; -fx-border-color: " + BORDER + ";" +
+                "-fx-border-radius: 6; -fx-text-fill: " + BRUN_MED + "; -fx-padding: 7 14;"
+            );
+        }
     }
 
     public static void main(String[] args) { launch(args); }

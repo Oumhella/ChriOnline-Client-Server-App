@@ -18,7 +18,7 @@ public class Client {
 
     // Attributs UDP pour les notifications
     private DatagramSocket udpSocket;
-    private static final int CLIENT_UDP_PORT = 9092; // Port unique pour cette instance client
+    private int selectedUdpPort = -1; // Port dynamique choisi à l'exécution
 
     // Constructeur privé pour le pattern Singleton
     private Client(String host, int port) {
@@ -61,21 +61,26 @@ public class Client {
     /**
      * Envoie une requête au serveur (ex: Authentification, Ajout au panier).
      */
-    public void envoyerRequete(Object requete) throws IOException {
+    public synchronized void envoyerRequete(Object requete) throws IOException {
         if (out != null) {
             out.writeObject(requete);
             out.flush();
+            out.reset(); // Crucial pour éviter d'envoyer d'anciennes versions d'objets modifiés
         }
     }
 
     /**
      * Reçoit une réponse du serveur.
      */
-    public Object lireReponse() throws IOException, ClassNotFoundException {
+    public synchronized Object lireReponse() throws IOException, ClassNotFoundException {
         if (in != null) {
             return in.readObject();
         }
         return null;
+    }
+
+    public int getUdpPort() {
+        return selectedUdpPort;
     }
 
     // Ecouteur pour la couche UI
@@ -90,9 +95,11 @@ public class Client {
      */
     private void ecouterNotificationsUDP() {
         try {
-            udpSocket = new DatagramSocket(CLIENT_UDP_PORT);
+            // Utiliser port 0 pour laisser l'OS choisir un port libre (évite conflit sur localhost)
+            udpSocket = new DatagramSocket(0);
+            this.selectedUdpPort = udpSocket.getLocalPort();
             byte[] buffer = new byte[1024];
-            System.out.println("[UDP] Écoute des notifications sur le port " + CLIENT_UDP_PORT);
+            System.out.println("[UDP] Écoute des notifications sur le port " + selectedUdpPort);
 
             while (!udpSocket.isClosed()) {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -103,21 +110,10 @@ public class Client {
 
                 // Transmettre la notification à l'UI si un listener est défini
                 if (notificationListener != null) {
-                    // Toujours utile de passer ça sur le thread UI depuis l'appelant, ou ici.
                     javafx.application.Platform.runLater(() -> {
                         notificationListener.accept(notification);
                     });
                 }
-
-                // Afficher une alerte JavaFX dans le thread UI
-                javafx.application.Platform.runLater(() -> {
-                    javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
-                            javafx.scene.control.Alert.AlertType.INFORMATION);
-                    alert.setTitle("Mise à jour de commande");
-                    alert.setHeaderText("Notification reçue");
-                    alert.setContentText(notification);
-                    alert.showAndWait();
-                });
             }
         } catch (java.net.SocketException e) {
             // Socket fermée proprement à la déconnexion, pas une erreur
