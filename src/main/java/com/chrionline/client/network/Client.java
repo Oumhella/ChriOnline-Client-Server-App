@@ -92,10 +92,22 @@ public class Client {
                 udpSocket.receive(packet);
                 String notification = new String(packet.getData(), 0, packet.getLength());
 
-                // Logique pour mettre à jour l'interface JavaFX ou afficher une alerte
                 System.out.println("[NOTIFICATION REÇUE] " + notification);
+
+                // Afficher une alerte JavaFX dans le thread UI
+                javafx.application.Platform.runLater(() -> {
+                    javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                            javafx.scene.control.Alert.AlertType.INFORMATION);
+                    alert.setTitle("Mise à jour de commande");
+                    alert.setHeaderText("Notification reçue");
+                    alert.setContentText(notification);
+                    alert.showAndWait();
+                });
             }
-        } catch (IOException e) {
+        } catch (java.net.SocketException e) {
+            // Socket fermée proprement à la déconnexion, pas une erreur
+            System.out.println("[UDP] Socket fermée.");
+        } catch (java.io.IOException e) {
             System.err.println("[UDP] Erreur : " + e.getMessage());
         }
     }

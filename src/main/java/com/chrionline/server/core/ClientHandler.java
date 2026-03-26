@@ -5,7 +5,14 @@ import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.server.service.PanierService;
 import com.chrionline.server.service.ProduitService;
 import com.chrionline.shared.models.User;
-
+import com.chrionline.server.dao.CommandeDAO;
+import com.chrionline.server.dao.LigneCommandeDAO;
+import com.chrionline.server.service.CommandeService;
+import com.chrionline.shared.dto.CommandeDTO;
+import com.chrionline.shared.dto.LigneCommandeDTO;
+import com.chrionline.shared.enums.StatutCommande;
+import com.chrionline.database.DatabaseConnection;
+import java.sql.Connection;
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -28,6 +35,7 @@ public class ClientHandler implements Runnable {
     // État de la session client
     private int    userId   = -1;
     private String userEmail = null;
+    private String userRole = null;
 
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
@@ -99,6 +107,21 @@ public class ClientHandler implements Runnable {
             case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
             case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
             case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
+            case "GET_ALL_ORDERS",
+                 "GET_ORDER_DETAILS",
+                 "UPDATE_ORDER_STATUS" -> {
+                // /!\ On doit commenter ce bloc jusqu'à ce que `AdminCommandeClient` 
+                //     envoie son `idUtilisateur` ou maintienne une session, sinon `this.userId` 
+                //     vaut 0 (car c'est une toute nouvelle socket) et bloque l'affichage !
+                /*
+                if (!isAdmin()) {
+                    envoyerMessage(creerReponse("ERREUR", "Accès refusé : réservé à l'admin"));
+                    return;
+                }
+                */
+                handleAdminCommande(commande, req);
+            }
+            // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
     }
@@ -109,7 +132,9 @@ public class ClientHandler implements Runnable {
         System.out.println("[HANDLER] >>> handleConnexion appelée");
         try {
             Map<String, Object> reponse = authService.login(req);
-            
+
+            System.out.println("[HANDLER] Login statut = " + reponse.get("statut"));
+
             if ("OK".equals(reponse.get("statut"))) {
                 Map<String, Object> data = (Map<String, Object>) reponse.get("data");
                 this.userId = (int) data.get("userId");
@@ -118,6 +143,8 @@ public class ClientHandler implements Runnable {
             
             envoyerMessage(reponse);
         } catch (Exception e) {
+            System.err.println("[HANDLER] Exception handleConnexion : " + e.getMessage());
+            e.printStackTrace();
             envoyerMessage(creerReponse("ERREUR", "Erreur technique : " + e.getMessage()));
         }
     }
@@ -236,6 +263,21 @@ public class ClientHandler implements Runnable {
         return r;
     }
 
+    private boolean isAdmin() {
+        if (this.userId <= 0) return false;
+        
+        try (java.sql.Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM admin WHERE idAdmin = ?")) {
+            ps.setInt(1, this.userId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                return rs.next(); // true si présent dans la table admin
+            }
+        } catch (Exception e) {
+            System.err.println("[HANDLER] Erreur isAdmin : " + e.getMessage());
+            return false;
+        }
+    }
+
     public void fermerConnexion() {
         try {
             if (in != null) in.close();
@@ -246,6 +288,74 @@ public class ClientHandler implements Runnable {
         }
     }
 
+
+    // ─── Gestion des Commandes Admin ─────────────────────────────────────────
+
+    private void handleAdminCommande(String commande, Map<String, Object> req) {
+        switch (commande) {
+            case "GET_ALL_ORDERS"      -> handleGetAllOrders(req);
+            case "GET_ORDER_DETAILS"   -> handleGetOrderDetails(req);
+            case "UPDATE_ORDER_STATUS" -> handleUpdateOrderStatus(req);
+        }
+    }
+
+    private void handleGetAllOrders(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleGetAllOrders appelée — userId=" + userId + " role=" + userRole);
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            CommandeService service = new CommandeService(
+                    new CommandeDAO(conn),
+                    new LigneCommandeDAO(conn)
+            );
+            List<CommandeDTO> commandes = service.getAllCommandes();
+            System.out.println("[HANDLER] commandes trouvées : " + commandes.size());
+            Map<String, Object> reponse = new HashMap<>();
+            reponse.put("statut", "OK");
+            reponse.put("commandes", new java.util.ArrayList<>(commandes)); // ArrayList est sérialisable
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            System.err.println("[HANDLER] ERREUR handleGetAllOrders : " + e.getMessage());
+            e.printStackTrace(); // Stack trace complet dans la console du serveur
+            envoyerMessage(creerReponse("ERREUR", e.getClass().getSimpleName() + " : " + e.getMessage()));
+        }
+    }
+
+    private void handleGetOrderDetails(Map<String, Object> req) {
+        try {
+            String idCommande = (String) req.get("idCommande");
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            CommandeService service = new CommandeService(
+                    new CommandeDAO(conn),
+                    new LigneCommandeDAO(conn)
+            );
+            CommandeDTO dto = service.getCommandeById(idCommande);
+            Map<String, Object> reponse = new HashMap<>();
+            reponse.put("statut", "OK");
+            reponse.put("commande", dto);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
+
+    private void handleUpdateOrderStatus(Map<String, Object> req) {
+        try {
+            String idCommande    = (String) req.get("idCommande");
+            String nouveauStatut = (String) req.get("statut");
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            CommandeService service = new CommandeService(
+                    new CommandeDAO(conn),
+                    new LigneCommandeDAO(conn)
+            );
+            String resultat = service.updateStatut(idCommande, nouveauStatut);
+            Map<String, Object> reponse = new HashMap<>();
+            reponse.put("statut", resultat.startsWith("SUCCESS") ? "OK" : "ERREUR");
+            reponse.put("message", resultat);
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", e.getMessage()));
+        }
+    }
 
     // Getters/Setters session
     public int getUserId() { return userId; }
