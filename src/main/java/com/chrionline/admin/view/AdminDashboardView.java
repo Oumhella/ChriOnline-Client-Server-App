@@ -43,6 +43,8 @@ public class AdminDashboardView extends Application {
     private static final String SUCCESS_BG  = "#EAF5ED";
 
     private AdminDashboardController controller;
+    private final List<String> notificationHistory = new ArrayList<>();
+    private MenuButton btnNotifications;
 
     @Override
     public void start(Stage stage) {
@@ -59,6 +61,41 @@ public class AdminDashboardView extends Application {
         stage.setScene(scene);
         stage.setMinWidth(960);
         stage.setMinHeight(650);
+
+        // --- Inscription à l'écouteur UDP pour les notifications Administrateur ---
+        try {
+            // L'hôte et port doivent correspondre à ceux de la session actuelle,
+            // on recupere l'instance deja cree via Client.getInstance(...)
+            com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("127.0.0.1", 9090);
+            client.setNotificationListener(notification -> {
+                // Ajouter à l'historique
+                notificationHistory.add(0, notification); // Plus récent en haut
+                
+                // Mettre à jour le MenuButton
+                if (btnNotifications != null) {
+                    MenuItem item = new MenuItem(notification);
+                    item.setStyle("-fx-font-family: 'Georgia'; -fx-font-size: 12px;");
+                    btnNotifications.getItems().add(0, item);
+                    
+                    // Alerte visuelle sur le bouton (badge/texte)
+                    int count = notificationHistory.size();
+                    btnNotifications.setText("🔔 (" + count + ")");
+                    btnNotifications.setStyle(
+                        "-fx-background-color: " + TERRA_LIGHT + "; -fx-border-color: " + TERRACOTTA + ";" +
+                        "-fx-border-radius: 6; -fx-text-fill: " + TERRACOTTA + "; -fx-padding: 7 14; -fx-font-weight: bold;"
+                    );
+                }
+
+                // Rafraîchir les statistiques du dashboard
+                controller.chargerStats();
+                
+                // Reconstruire la vue principale (facultatif si on veut juste refresh les chiffres)
+                // root.getChildren().set(1, buildMainArea()); 
+            });
+        } catch (Exception e) {
+            System.err.println("Impossible de configurer le listener UDP : " + e.getMessage());
+        }
+
         stage.show();
     }
 
@@ -96,6 +133,9 @@ public class AdminDashboardView extends Application {
         VBox nav = new VBox(2);
         nav.setPadding(new Insets(20, 10, 20, 10));
         VBox.setVgrow(nav, Priority.ALWAYS);
+        HBox logoutItem = navItem("🚪", "Déconnexion", false);
+        logoutItem.setOnMouseClicked(e -> deconnecter(stage));
+
         nav.getChildren().addAll(
                 navSection("VUE GÉNÉRALE"),
                 navItem("📊", "Dashboard",   true),
@@ -109,7 +149,9 @@ public class AdminDashboardView extends Application {
                 navSection("UTILISATEURS"),
                 navItem("👥",  "Clients",    false),
                 navSection("SYSTÈME"),
-                navItem("⚙️",  "Paramètres",false)
+                navItem("⚙️",  "Paramètres",false),
+                navSection("COMPTE"),
+                logoutItem
         );
 
         HBox footer = new HBox(10);
@@ -165,6 +207,15 @@ public class AdminDashboardView extends Application {
             item.setOnMouseExited(e  -> item.setStyle(""));
         }
         return item;
+    }
+
+    private void deconnecter(Stage stage) {
+        com.chrionline.client.session.SessionManager.getInstance().clear();
+        try {
+            new com.chrionline.client.view.ConnexionView().start(stage);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -239,7 +290,30 @@ public class AdminDashboardView extends Application {
                         "-fx-border-radius: 6; -fx-text-fill: " + BRUN_MED + "; -fx-padding: 7 14;"
         ));
 
-        bar.getChildren().addAll(bc, spacer, btnRefresh);
+        // --- Bouton Notifications ---
+        btnNotifications = new MenuButton("🔔 (0)");
+        btnNotifications.setFont(Font.font("Georgia", 12));
+        btnNotifications.setStyle(
+                "-fx-background-color: transparent; -fx-border-color: " + BORDER + ";" +
+                        "-fx-border-radius: 6; -fx-text-fill: " + BRUN_MED + "; -fx-padding: 7 14;"
+        );
+        btnNotifications.setCursor(javafx.scene.Cursor.HAND);
+        
+        // Si on a déjà des notifs (cas de reconstruction de vue)
+        for (String n : notificationHistory) {
+            MenuItem mi = new MenuItem(n);
+            mi.setStyle("-fx-font-family: 'Georgia'; -fx-font-size: 12px;");
+            btnNotifications.getItems().add(mi);
+        }
+        if (!notificationHistory.isEmpty()) {
+            btnNotifications.setText("🔔 (" + notificationHistory.size() + ")");
+            btnNotifications.setStyle(
+                "-fx-background-color: " + TERRA_LIGHT + "; -fx-border-color: " + TERRACOTTA + ";" +
+                "-fx-border-radius: 6; -fx-text-fill: " + TERRACOTTA + "; -fx-padding: 7 14; -fx-font-weight: bold;"
+            );
+        }
+
+        bar.getChildren().addAll(bc, spacer, btnNotifications, btnRefresh);
         return bar;
     }
 
@@ -371,11 +445,10 @@ public class AdminDashboardView extends Application {
     private Label statutBadge(String statut) {
         record Cfg(String label, String color, String bg) {}
         Cfg cfg = switch (statut != null ? statut : "") {
-            case "validee"  -> new Cfg("Validée",    SAUGE_DARK, SUCCESS_BG);
-            case "expediee" -> new Cfg("Expédiée",   INFO,       INFO_BG);
-            case "livree"   -> new Cfg("Livrée",     "#1E7A45",  "#DFF5E8");
-            case "annulee"  -> new Cfg("Annulée",    DANGER,     DANGER_BG);
-            default         -> new Cfg("En attente", WARNING,    WARNING_BG);
+            case "expediee" -> new Cfg("Expédiée",       INFO,       INFO_BG);
+            case "livree"   -> new Cfg("Livrée",         "#1E7A45",  "#DFF5E8");
+            case "annulee"  -> new Cfg("Annulée",        DANGER,     DANGER_BG);
+            default         -> new Cfg("En préparation", WARNING,    WARNING_BG);
         };
         Label b = new Label(cfg.label());
         b.setFont(Font.font("Georgia", FontWeight.BOLD, 11));
@@ -400,11 +473,10 @@ public class AdminDashboardView extends Application {
         items.setPadding(new Insets(14, 18, 14, 18));
 
         Object[][] cfg = {
-                {"en_attente", "En attente", WARNING},
-                {"validee",    "Validée",    SAUGE_DARK},
-                {"expediee",   "Expédiée",   INFO},
-                {"livree",     "Livrée",     "#1E7A45"},
-                {"annulee",    "Annulée",    DANGER}
+                {"en_preparation", "En préparation", WARNING},
+                {"expediee",       "Expédiée",       INFO},
+                {"livree",         "Livrée",         "#1E7A45"},
+                {"annulee",        "Annulée",        DANGER}
         };
         for (Object[] c : cfg) {
             int nb = parStatut.getOrDefault((String) c[0], 0);

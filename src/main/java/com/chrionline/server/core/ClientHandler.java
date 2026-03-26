@@ -28,6 +28,7 @@ public class ClientHandler implements Runnable {
     // État de la session client
     private int    userId   = -1;
     private String userEmail = null;
+    private String role      = null;
 
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
@@ -98,7 +99,7 @@ public class ClientHandler implements Runnable {
             case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
             case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
             case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
-            case "PANIER_VALIDER"        -> envoyerMessage(panierService.validerPanier(req));
+            case "PANIER_VALIDER"        -> handlePanierValider(req); // On utilise une méthode interne pour intercepter la validation
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
     }
@@ -114,6 +115,7 @@ public class ClientHandler implements Runnable {
                 Map<String, Object> data = (Map<String, Object>) reponse.get("data");
                 this.userId = (int) data.get("userId");
                 this.userEmail = (String) data.get("email");
+                this.role = (String) data.get("role");
             }
             
             envoyerMessage(reponse);
@@ -160,6 +162,25 @@ public class ClientHandler implements Runnable {
             envoyerMessage(creerReponse("ERREUR", "Erreur : " + e.getMessage()));
         }
     }
+
+    private void handlePanierValider(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handlePanierValider");
+        try {
+            Map<String, Object> reponse = panierService.validerPanier(req);
+            
+            // Si la commande est validée avec succès, on notifie les administrateurs via UDP
+            if ("OK".equals(reponse.get("statut"))) {
+                String ref = (String) reponse.get("reference");
+                String messageAdmin = "NOUVELLE_COMMANDE:" + (ref != null ? ref : "Inconnue") + ":Utilisateur " + this.userId;
+                server.notifierAdmins(messageAdmin);
+            }
+            
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
     private void handleListeProduits(Map<String, Object> req) {
         try {
 
@@ -250,6 +271,9 @@ public class ClientHandler implements Runnable {
     // Getters/Setters session
     public int getUserId() { return userId; }
     public void setUserId(int userId) { this.userId = userId; }
+    
+    public String getRole() { return role; }
+    public Socket getSocket() { return socket; }
 
 
 }

@@ -1,6 +1,7 @@
 package com.chrionline.client.view;
 
 import com.chrionline.client.controller.PanierController;
+import com.chrionline.shared.dto.CommandeDTO;
 import com.chrionline.shared.dto.LignePanierDTO;
 import com.chrionline.shared.dto.PanierDTO;
 import javafx.application.Application;
@@ -502,10 +503,10 @@ public class PanierView extends Application {
         msgLabel.setStyle("-fx-text-fill: " + BRUN_MED + ";");
 
         new Thread(() -> {
-            String reference = controller.validerPanier();
+            CommandeDTO recap = controller.validerPanier();
             Platform.runLater(() -> {
-                if (reference != null) {
-                    afficherSuccesCommande(reference);
+                if (recap != null) {
+                    afficherSuccesCommande(recap);
                 } else {
                     afficherErreur("Impossible de valider la commande. Vérifiez le stock disponible.");
                 }
@@ -513,38 +514,20 @@ public class PanierView extends Application {
         }).start();
     }
 
-    private void afficherSuccesCommande(String reference) {
-        listeZone.getChildren().clear();
-
-        VBox succes = new VBox(16);
-        succes.setAlignment(Pos.CENTER);
-        succes.setPadding(new Insets(60, 0, 60, 0));
-
-        Text emoji = new Text("✓");
-        emoji.setFont(Font.font("Georgia", FontWeight.BOLD, 52));
-        emoji.setFill(Color.web(SAUGE_DARK));
-
-        Text msg = new Text("Commande passée avec succès !");
-        msg.setFont(Font.font("Georgia", FontWeight.BOLD, 20));
-        msg.setFill(Color.web(BRUN));
-
-        Text ref = new Text("Référence : " + reference);
-        ref.setFont(Font.font("Georgia", FontPosture.ITALIC, 14));
-        ref.setFill(Color.web(BRUN_LIGHT));
-
-        Button btnContinuer = new Button("Continuer mes achats");
-        btnContinuer.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
-        btnContinuer.setStyle(btnStyle(SAUGE_DARK));
-        btnContinuer.setCursor(javafx.scene.Cursor.HAND);
-        btnContinuer.setOnAction(e -> retourCatalogue());
-
-        succes.getChildren().addAll(emoji, msg, ref, btnContinuer);
-        listeZone.getChildren().add(succes);
-
-        totalText.setText("0,00 MAD");
-        nbArticlesText.setText("(0 article)");
-        msgLabel.setText("");
+    private void afficherSuccesCommande(CommandeDTO recap) {
+        try {
+            new ConfirmationCommandeView(idUtilisateur, recap).start(stage);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Fallback: simple message if view fails
+            listeZone.getChildren().clear();
+            Text t = new Text("Commande passée ! Réf: " + recap.getReference());
+            t.setFont(Font.font("Georgia", 20));
+            listeZone.getChildren().add(t);
+        }
     }
+
+
 
     // ═════════════════════════════════════════════════════════════════════
     //  HELPERS

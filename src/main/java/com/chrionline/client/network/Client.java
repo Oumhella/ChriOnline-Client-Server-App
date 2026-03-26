@@ -78,6 +78,13 @@ public class Client {
         return null;
     }
 
+    // Ecouteur pour la couche UI
+    private java.util.function.Consumer<String> notificationListener;
+
+    public void setNotificationListener(java.util.function.Consumer<String> listener) {
+        this.notificationListener = listener;
+    }
+
     /**
      * Écoute les paquets UDP envoyés par la méthode diffuserNotification du serveur.
      */
@@ -92,8 +99,15 @@ public class Client {
                 udpSocket.receive(packet);
                 String notification = new String(packet.getData(), 0, packet.getLength());
 
-                // Logique pour mettre à jour l'interface JavaFX ou afficher une alerte
                 System.out.println("[NOTIFICATION REÇUE] " + notification);
+                
+                // Transmettre la notification à l'UI si un listener est défini
+                if (notificationListener != null) {
+                    // Toujours utile de passer ça sur le thread UI depuis l'appelant, ou ici.
+                    javafx.application.Platform.runLater(() -> {
+                        notificationListener.accept(notification);
+                    });
+                }
             }
         } catch (IOException e) {
             System.err.println("[UDP] Erreur : " + e.getMessage());

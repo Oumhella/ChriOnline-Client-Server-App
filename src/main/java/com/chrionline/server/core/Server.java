@@ -141,6 +141,20 @@ public class Server {
         }
     }
 
+    /**
+     * Envoie une notification UDP à tous les administrateurs connectés.
+     * Le port UDP client conventionnel est 9092.
+     *
+     * @param message le message de notification à envoyer aux admins
+     */
+    public void notifierAdmins(String message) {
+        for (ClientHandler handler : clientConnectes) {
+            if ("admin".equals(handler.getRole())) {
+                diffuserNotification(message, handler.getSocket().getInetAddress(), 9092);
+            }
+        }
+    }
+
     // ─── Thread UDP (écoute des messages entrants UDP) ─────────────────────────
 
     /**
