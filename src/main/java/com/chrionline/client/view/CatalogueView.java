@@ -124,7 +124,7 @@ public class CatalogueView extends Application {
         nav.setAlignment(Pos.CENTER);
         nav.getChildren().addAll(navLink("Accueil"), navLink("Assortiment"), navLink("Livraison"));
 
-        // Bouton panier — visible seulement si connecté
+        // Bouton panier et déconnexion — visible seulement si connecté
         if (userId != -1) {
             Button btnPanier = new Button("🛒 Mon panier");
             btnPanier.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
@@ -133,11 +133,45 @@ public class CatalogueView extends Application {
             btnPanier.setOnMouseEntered(e -> btnPanier.setStyle(panierBtnStyle(TERRA_HOVER)));
             btnPanier.setOnMouseExited(e  -> btnPanier.setStyle(panierBtnStyle(TERRACOTTA)));
             btnPanier.setOnAction(e -> ouvrirPanier());
-            nav.getChildren().add(btnPanier);
+
+            Button btnLogout = new Button("🚪 Déconnexion");
+            btnLogout.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+            btnLogout.setStyle(panierBtnStyle(BRUN_LIGHT));
+            btnLogout.setCursor(Cursor.HAND);
+            btnLogout.setOnMouseEntered(e -> btnLogout.setStyle(panierBtnStyle(BRUN)));
+            btnLogout.setOnMouseExited(e  -> btnLogout.setStyle(panierBtnStyle(BRUN_LIGHT)));
+            btnLogout.setOnAction(e -> deconnecter());
+
+            nav.getChildren().addAll(btnPanier, btnLogout);
+        } else {
+            Button btnLogin = new Button("🔑 Connexion");
+            btnLogin.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+            btnLogin.setStyle(panierBtnStyle(SAUGE_DARK));
+            btnLogin.setCursor(Cursor.HAND);
+            btnLogin.setOnMouseEntered(e -> btnLogin.setStyle(panierBtnStyle(SAUGE)));
+            btnLogin.setOnMouseExited(e  -> btnLogin.setStyle(panierBtnStyle(SAUGE_DARK)));
+            btnLogin.setOnAction(e -> {
+                try {
+                    new com.chrionline.client.view.ConnexionView().start(primaryStage);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            });
+
+            nav.getChildren().add(btnLogin);
         }
 
         header.getChildren().addAll(logo, spacer, nav);
         return header;
+    }
+
+    private void deconnecter() {
+        com.chrionline.client.session.SessionManager.getInstance().clear();
+        try {
+            new com.chrionline.client.view.ConnexionView().start(primaryStage);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private Hyperlink navLink(String text) {

@@ -25,8 +25,15 @@ public class Panier implements Serializable {
 
     // ── Recalcul du total à partir des lignes ─────────────────────────────
     public void recalculerTotal() {
+        if (lignes == null) {
+            this.montantTotal = BigDecimal.ZERO;
+            return;
+        }
         this.montantTotal = lignes.stream()
-                .map(l -> l.getPrix().multiply(BigDecimal.valueOf(l.getQuantite())))
+                .map(l -> {
+                    BigDecimal p = l.getPrix();
+                    return (p != null) ? p.multiply(BigDecimal.valueOf(l.getQuantite())) : BigDecimal.ZERO;
+                })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

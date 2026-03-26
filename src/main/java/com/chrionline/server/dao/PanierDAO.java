@@ -1,6 +1,10 @@
 package com.chrionline.server.dao;
 
 import com.chrionline.database.DatabaseConnection;
+import com.chrionline.shared.dto.CommandeDTO;
+import com.chrionline.shared.dto.LigneCommandeDTO;
+import com.chrionline.shared.dto.LignePanierDTO;
+import com.chrionline.shared.dto.PanierDTO;
 import com.chrionline.shared.models.LignePanier;
 import com.chrionline.shared.models.Panier;
 
@@ -10,16 +14,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO gérant toutes les opérations liées au panier en base de données.
+ * DAO gÃ©rant toutes les opÃ©rations liÃ©es au panier en base de donnÃ©es.
  * Tables : panier, ligne_panier, product_formats, produit.
  */
 public class PanierDAO {
 
-    // ─── Récupérer ou créer le panier actif ───────────────────────────────
+    // â”€â”€â”€ RÃ©cupÃ©rer ou crÃ©er le panier actif â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Retourne le panier actif de l'utilisateur avec ses lignes.
-     * Si aucun panier actif n'existe, en crée un nouveau.
+     * Si aucun panier actif n'existe, en crÃ©e un nouveau.
      */
     public static Panier getPanierActif(int idUtilisateur) throws SQLException {
         Connection conn = DatabaseConnection.getInstance().getConnection();
@@ -37,12 +41,12 @@ public class PanierDAO {
             }
         }
 
-        // Aucun panier actif → en créer un
+        // Aucun panier actif â†’ en crÃ©er un
         return creerPanier(idUtilisateur, conn);
     }
 
     /**
-     * Crée un nouveau panier actif pour l'utilisateur.
+     * CrÃ©e un nouveau panier actif pour l'utilisateur.
      */
     private static Panier creerPanier(int idUtilisateur, Connection conn) throws SQLException {
         String sql = "INSERT INTO panier (idUtilisateur, montant_total, statut) VALUES (?, 0.00, 'actif')";
@@ -50,41 +54,37 @@ public class PanierDAO {
             ps.setInt(1, idUtilisateur);
             ps.executeUpdate();
             ResultSet keys = ps.getGeneratedKeys();
-            if (!keys.next()) throw new SQLException("Échec création panier");
+            if (!keys.next()) throw new SQLException("Ã‰chec crÃ©ation panier");
 
             Panier p = new Panier();
             p.setIdPanier(keys.getInt(1));
             p.setIdUtilisateur(idUtilisateur);
             p.setStatut("actif");
             p.setLignes(new ArrayList<>());
-            System.out.println("[PanierDAO] Nouveau panier créé — id=" + p.getIdPanier());
+            System.out.println("[PanierDAO] Nouveau panier crÃ©Ã© â€” id=" + p.getIdPanier());
             return p;
         }
     }
 
-    // ─── Ajouter un produit ───────────────────────────────────────────────
+    // â”€â”€â”€ Ajouter un produit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Ajoute un format produit au panier.
-     * Si la ligne existe déjà, incrémente la quantité.
-     * Vérifie le stock disponible avant insertion.
+     * Si la ligne existe dÃ©jÃ , incrÃ©mente la quantitÃ©.
+     * VÃ©rifie le stock disponible avant insertion.
      *
-     * @return le panier mis à jour
+     * @return le panier mis Ã  jour
      */
     public static Panier ajouterProduit(int idUtilisateur, int idProductFormats, int quantite)
             throws SQLException {
         Connection conn = DatabaseConnection.getInstance().getConnection();
         conn.setAutoCommit(false);
         try {
-            // Vérifier stock disponible
-            int stockDispo = getStock(idProductFormats, conn);
-            if (stockDispo < quantite) {
-                throw new SQLException("Stock insuffisant. Disponible : " + stockDispo);
-            }
+            // (La vÃ©rification de stock se fera lors de la crÃ©ation de la commande)
 
             Panier panier = getPanierActif(idUtilisateur);
 
-            // Vérifier si la ligne existe déjà
+            // VÃ©rifier si la ligne existe dÃ©jÃ 
             String sqlCheck = "SELECT quantite FROM ligne_panier WHERE id_panier = ? AND id_product_formats = ?";
             try (PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
                 ps.setInt(1, panier.getIdPanier());
@@ -92,11 +92,8 @@ public class PanierDAO {
                 ResultSet rs = ps.executeQuery();
 
                 if (rs.next()) {
-                    // La ligne existe → mise à jour quantité
+                    // La ligne existe â†’ mise Ã  jour quantitÃ©
                     int nouvelleQte = rs.getInt("quantite") + quantite;
-                    if (nouvelleQte > stockDispo) {
-                        throw new SQLException("Stock insuffisant pour cette quantité. Disponible : " + stockDispo);
-                    }
                     String sqlUpd = "UPDATE ligne_panier SET quantite = ? WHERE id_panier = ? AND id_product_formats = ?";
                     try (PreparedStatement upd = conn.prepareStatement(sqlUpd)) {
                         upd.setInt(1, nouvelleQte);
@@ -130,10 +127,10 @@ public class PanierDAO {
         }
     }
 
-    // ─── Modifier la quantité ─────────────────────────────────────────────
+    // â”€â”€â”€ Modifier la quantitÃ© â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
-     * Modifie la quantité d'une ligne.
+     * Modifie la quantitÃ© d'une ligne.
      * Si quantite <= 0, supprime la ligne.
      */
     public static Panier modifierQuantite(int idUtilisateur, int idProductFormats, int nouvelleQte)
@@ -152,11 +149,8 @@ public class PanierDAO {
                     ps.executeUpdate();
                 }
             } else {
-                // Vérifier stock
-                int stockDispo = getStock(idProductFormats, conn);
-                if (nouvelleQte > stockDispo) {
-                    throw new SQLException("Stock insuffisant. Disponible : " + stockDispo);
-                }
+                // Mise Ã  jour de la quantitÃ© sans vÃ©rification de stock
+                // (La vÃ©rification se fera lors de la crÃ©ation de la commande)
                 String sqlUpd = "UPDATE ligne_panier SET quantite = ? WHERE id_panier = ? AND id_product_formats = ?";
                 try (PreparedStatement ps = conn.prepareStatement(sqlUpd)) {
                     ps.setInt(1, nouvelleQte);
@@ -178,13 +172,13 @@ public class PanierDAO {
         }
     }
 
-    // ─── Retirer un produit ───────────────────────────────────────────────
+    // â”€â”€â”€ Retirer un produit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public static Panier retirerProduit(int idUtilisateur, int idProductFormats) throws SQLException {
         return modifierQuantite(idUtilisateur, idProductFormats, 0);
     }
 
-    // ─── Vider le panier ──────────────────────────────────────────────────
+    // â”€â”€â”€ Vider le panier â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public static Panier viderPanier(int idUtilisateur) throws SQLException {
         Connection conn = DatabaseConnection.getInstance().getConnection();
@@ -215,15 +209,16 @@ public class PanierDAO {
         }
     }
 
-    // ─── Valider le panier → crée une commande ────────────────────────────
+    // â”€â”€â”€ Valider le panier â†’ gÃ©nÃ¨re un rÃ©capitulatif â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
-     * Valide le panier : crée une commande + lignes_commande,
-     * décrémente le stock, marque le panier comme 'valide'.
+     * Valide le panier : gÃ©nÃ¨re un rÃ©capitulatif (CommandeDTO) et marque
+     * le panier comme 'valide'. La commande sera enregistrÃ©e en BD
+     * dans une Ã©tape ultÃ©rieure (ex : aprÃ¨s paiement).
      *
-     * @return la référence de la commande créée (ex: CMD-2026-00042)
+     * @return un objet CommandeDTO contenant le rÃ©capitulatif complet
      */
-    public static String validerPanier(int idUtilisateur) throws SQLException {
+    public static CommandeDTO validerPanier(int idUtilisateur) throws SQLException {
         Connection conn = DatabaseConnection.getInstance().getConnection();
         conn.setAutoCommit(false);
         try {
@@ -232,48 +227,38 @@ public class PanierDAO {
                 throw new SQLException("Le panier est vide.");
             }
 
-            // Générer une référence unique
-            String reference = genererReference(conn);
-
-            // Créer la commande
-            String sqlCmd = "INSERT INTO commande (idUtilisateur, reference, status) VALUES (?, ?, 'en_attente')";
-            int idCommande;
-            try (PreparedStatement ps = conn.prepareStatement(sqlCmd, Statement.RETURN_GENERATED_KEYS)) {
+            // --- 1. Recuperer le nom du client ---
+            String sqlUser = "SELECT nom, prenom FROM utilisateur WHERE idUtilisateur = ?";
+            String nomUtilisateur = "Client";
+            try (PreparedStatement ps = conn.prepareStatement(sqlUser)) {
                 ps.setInt(1, idUtilisateur);
-                ps.setString(2, reference);
-                ps.executeUpdate();
-                ResultSet keys = ps.getGeneratedKeys();
-                if (!keys.next()) throw new SQLException("Échec création commande");
-                idCommande = keys.getInt(1);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    nomUtilisateur = rs.getString("prenom") + " " + rs.getString("nom");
+                }
             }
 
-            // Créer les lignes de commande + décrémenter le stock
-            String sqlLigne = "INSERT INTO ligne_commande (id_commande, id_product_formats, quantite, prix_unitaire) VALUES (?, ?, ?, ?)";
-            String sqlStock = "UPDATE product_formats SET stock = stock - ? WHERE id_product_formats = ? AND stock >= ?";
+            // --- 2. Generer une reference provisoire ---
+            String reference = genererReference(conn);
+            String dateStr = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date());
+            double total = panier.getMontantTotal() != null ? panier.getMontantTotal().doubleValue() : 0.0;
 
+            CommandeDTO recap = new CommandeDTO(reference, nomUtilisateur, total, "en_preparation", dateStr);
+            recap.setReference(reference); // <--- Fixed missing reference
+
+            // --- 3. Construire les lignes du recap (SANS ecriture en BDD) ---
+            java.util.List<LigneCommandeDTO> lignesRecap = new java.util.ArrayList<>();
             for (LignePanier ligne : panier.getLignes()) {
-                // Décrémenter stock (avec vérification atomique)
-                try (PreparedStatement ps = conn.prepareStatement(sqlStock)) {
-                    ps.setInt(1, ligne.getQuantite());
-                    ps.setInt(2, ligne.getIdProductFormats());
-                    ps.setInt(3, ligne.getQuantite());
-                    int rows = ps.executeUpdate();
-                    if (rows == 0) {
-                        throw new SQLException("Stock insuffisant pour le format " + ligne.getIdProductFormats());
-                    }
-                }
-
-                // Insérer ligne commande
-                try (PreparedStatement ps = conn.prepareStatement(sqlLigne)) {
-                    ps.setInt(1, idCommande);
-                    ps.setInt(2, ligne.getIdProductFormats());
-                    ps.setInt(3, ligne.getQuantite());
-                    ps.setBigDecimal(4, ligne.getPrix());
-                    ps.executeUpdate();
-                }
+                LigneCommandeDTO l = new LigneCommandeDTO();
+                l.setNomProduit(ligne.getNomProduit());
+                l.setQuantite(ligne.getQuantite());
+                l.setPrixUnitaire(ligne.getPrix() != null ? ligne.getPrix().doubleValue() : 0.0);
+                l.setSousTotal(ligne.getSousTotal() != null ? ligne.getSousTotal().doubleValue() : 0.0);
+                lignesRecap.add(l);
             }
+            recap.setLignes(lignesRecap);
 
-            // Marquer le panier comme validé
+            // --- 4. Marquer le panier comme valide ---
             String sqlValide = "UPDATE panier SET statut = 'valide' WHERE id_panier = ?";
             try (PreparedStatement ps = conn.prepareStatement(sqlValide)) {
                 ps.setInt(1, panier.getIdPanier());
@@ -281,8 +266,8 @@ public class PanierDAO {
             }
 
             conn.commit();
-            System.out.println("[PanierDAO] Commande créée — ref=" + reference);
-            return reference;
+            System.out.println("[PanierDAO] Panier valide - ref=" + reference);
+            return recap;
 
         } catch (SQLException e) {
             conn.rollback();
@@ -292,7 +277,7 @@ public class PanierDAO {
         }
     }
 
-    // ─── Utilitaires privés ───────────────────────────────────────────────
+    // â”€â”€â”€ Utilitaires privÃ©s â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Charge les lignes d'un panier avec JOIN sur produit et product_formats.
@@ -304,7 +289,7 @@ public class PanierDAO {
                    pf.prix           AS prix_unitaire,
                    pf.image_url,
                    p.nom             AS nom_produit,
-                   GROUP_CONCAT(lv.valeur ORDER BY l.nom SEPARATOR ' – ') AS variants
+                   GROUP_CONCAT(lv.valeur ORDER BY l.nom SEPARATOR ' â€“ ') AS variants
             FROM ligne_panier lp
             JOIN product_formats pf ON pf.id_product_formats = lp.id_product_formats
             JOIN produit p           ON p.id_produit = pf.id_produit
@@ -333,7 +318,7 @@ public class PanierDAO {
         return lignes;
     }
 
-    /** Recalcule et met à jour le montant_total dans la table panier. */
+    /** Recalcule et met Ã  jour le montant_total dans la table panier. */
     private static void mettreAJourTotal(int idPanier, Connection conn) throws SQLException {
         String sql = """
             UPDATE panier p
@@ -361,7 +346,7 @@ public class PanierDAO {
         }
     }
 
-    /** Génère une référence commande unique au format CMD-YYYY-NNNNN. */
+    /** GÃ©nÃ¨re une rÃ©fÃ©rence commande unique au format CMD-YYYY-NNNNN. */
     private static String genererReference(Connection conn) throws SQLException {
         String sql = "SELECT COUNT(*) FROM commande WHERE YEAR(date_commande) = YEAR(NOW())";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
