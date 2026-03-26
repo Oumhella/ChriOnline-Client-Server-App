@@ -45,6 +45,7 @@ public class AdminDashboardView extends Application {
     private AdminDashboardController controller;
     private final List<String> notificationHistory = new ArrayList<>();
     private MenuButton btnNotifications;
+    private HBox rootPane;
 
     @Override
     public void start(Stage stage) {
@@ -53,11 +54,11 @@ public class AdminDashboardView extends Application {
 
         stage.setTitle("ChriOnline — Administration");
 
-        HBox root = new HBox(0);
-        root.setStyle("-fx-background-color: " + CREME + ";");
-        root.getChildren().addAll(buildSidebar(stage), buildMainArea());
+        rootPane = new HBox(0);
+        rootPane.setStyle("-fx-background-color: " + CREME + ";");
+        rootPane.getChildren().addAll(buildSidebar(stage), buildMainArea());
 
-        Scene scene = new Scene(root, 1200, 800);
+        Scene scene = new Scene(rootPane, 1200, 800);
         stage.setScene(scene);
         stage.setMinWidth(960);
         stage.setMinHeight(650);
@@ -136,20 +137,39 @@ public class AdminDashboardView extends Application {
         HBox logoutItem = navItem("🚪", "Déconnexion", false);
         logoutItem.setOnMouseClicked(e -> deconnecter(stage));
 
+        HBox itemDashboard = navItem("📊", "Dashboard",   true);
+        HBox itemProduits  = navItem("📦", "Produits",    false);
+        HBox itemCategories= navItem("🏷️", "Catégories", false);
+        HBox itemCommandes = navItem("🛒", "Commandes",  false);
+        HBox itemPaiements = navItem("💳", "Paiements",  false);
+        HBox itemLivraisons= navItem("🚚", "Livraisons", false);
+        HBox itemClients   = navItem("👥", "Clients",    false);
+        HBox itemParams    = navItem("⚙️", "Paramètres",false);
+
+        // Actions de navigation
+        itemDashboard.setOnMouseClicked(e -> rootPane.getChildren().set(1, buildMainArea()));
+        itemCommandes.setOnMouseClicked(e -> {
+            try {
+                rootPane.getChildren().set(1, new AdminCommandesView().getView());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
         nav.getChildren().addAll(
                 navSection("VUE GÉNÉRALE"),
-                navItem("📊", "Dashboard",   true),
+                itemDashboard,
                 navSection("CATALOGUE"),
-                navItem("📦", "Produits",    false),
-                navItem("🏷️",  "Catégories", false),
+                itemProduits,
+                itemCategories,
                 navSection("VENTES"),
-                navItem("🛒",  "Commandes",  false),
-                navItem("💳",  "Paiements",  false),
-                navItem("🚚",  "Livraisons", false),
+                itemCommandes,
+                itemPaiements,
+                itemLivraisons,
                 navSection("UTILISATEURS"),
-                navItem("👥",  "Clients",    false),
+                itemClients,
                 navSection("SYSTÈME"),
-                navItem("⚙️",  "Paramètres",false),
+                itemParams,
                 navSection("COMPTE"),
                 logoutItem
         );

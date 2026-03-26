@@ -28,30 +28,31 @@ import java.math.BigDecimal;
 public class PanierView extends Application {
 
     // ── Palette ──────────────────────────────────────────────────────────
-    private static final String CREME       = "#FDFBF7";
-    private static final String CREME_CARD  = "#FFFEFB";
+    private static final String CREME = "#FDFBF7";
+    private static final String CREME_CARD = "#FFFEFB";
     private static final String CREME_INPUT = "#F5EFE8";
-    private static final String SAUGE_DARK  = "#6B9E7A";
-    private static final String SAUGE       = "#A8C4B0";
-    private static final String TERRACOTTA  = "#C96B4A";
+    private static final String SAUGE_DARK = "#6B9E7A";
+    private static final String SAUGE = "#A8C4B0";
+    private static final String TERRACOTTA = "#C96B4A";
     private static final String TERRA_HOVER = "#A0522D";
-    private static final String BRUN        = "#3E2C1E";
-    private static final String BRUN_MED    = "#6B4F3A";
-    private static final String BRUN_LIGHT  = "#9A7B65";
-    private static final String BORDER      = "#E8E0D5";
-    private static final String DANGER      = "#B03A2E";
-    private static final String DANGER_BG   = "#FBEAEA";
+    private static final String BRUN = "#3E2C1E";
+    private static final String BRUN_MED = "#6B4F3A";
+    private static final String BRUN_LIGHT = "#9A7B65";
+    private static final String BORDER = "#E8E0D5";
+    private static final String DANGER = "#B03A2E";
+    private static final String DANGER_BG = "#FBEAEA";
 
-    private int               idUtilisateur;
-    private PanierController  controller;
-    private VBox              listeZone;
-    private Text              totalText;
-    private Text              nbArticlesText;
-    private Label             msgLabel;
-    private Stage             stage;
+    private int idUtilisateur;
+    private PanierController controller;
+    private VBox listeZone;
+    private Text totalText;
+    private Text nbArticlesText;
+    private Label msgLabel;
+    private Stage stage;
 
     /** Constructeur par défaut requis par JavaFX launch(). */
-    public PanierView() {}
+    public PanierView() {
+    }
 
     /** Constructeur à utiliser depuis les autres vues. */
     public PanierView(int idUtilisateur) {
@@ -60,7 +61,7 @@ public class PanierView extends Application {
 
     @Override
     public void start(Stage stage) {
-        this.stage      = stage;
+        this.stage = stage;
         this.controller = new PanierController(idUtilisateur);
 
         stage.setTitle("ChriOnline — Mon Panier");
@@ -94,7 +95,7 @@ public class PanierView extends Application {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  HEADER
+    // HEADER
     // ═════════════════════════════════════════════════════════════════════
 
     private HBox buildHeader() {
@@ -104,8 +105,7 @@ public class PanierView extends Application {
         header.setStyle(
                 "-fx-background-color: " + CREME_CARD + ";" +
                         "-fx-border-color: transparent transparent " + BORDER + " transparent;" +
-                        "-fx-border-width: 0 0 1 0;"
-        );
+                        "-fx-border-width: 0 0 1 0;");
 
         Text logo = new Text("ChriOnline");
         logo.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
@@ -121,8 +121,7 @@ public class PanierView extends Application {
         nav.getChildren().addAll(
                 navLink("Accueil"),
                 navLink("Catalogue"),
-                navLinkActif("Mon Panier")
-        );
+                navLinkActif("Mon Panier"));
 
         header.getChildren().addAll(logo, spacer, nav);
         return header;
@@ -145,7 +144,7 @@ public class PanierView extends Application {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  COLONNE GAUCHE — Liste des articles
+    // COLONNE GAUCHE — Liste des articles
     // ═════════════════════════════════════════════════════════════════════
 
     private VBox buildLeftColumn() {
@@ -178,7 +177,8 @@ public class PanierView extends Application {
         ScrollPane scroll = new ScrollPane(listeZone);
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
+        scroll.setStyle(
+                "-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
         col.getChildren().addAll(titreRow, msgLabel, scroll);
@@ -186,7 +186,7 @@ public class PanierView extends Application {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  COLONNE DROITE — Récapitulatif + commande
+    // COLONNE DROITE — Récapitulatif + commande
     // ═════════════════════════════════════════════════════════════════════
 
     private VBox buildRightColumn() {
@@ -199,8 +199,7 @@ public class PanierView extends Application {
                         "-fx-background-radius: 12;" +
                         "-fx-border-color: " + BORDER + ";" +
                         "-fx-border-radius: 12;" +
-                        "-fx-border-width: 1;"
-        );
+                        "-fx-border-width: 1;");
         col.setEffect(new DropShadow(8, Color.web(BRUN, 0.06)));
 
         // Titre récap
@@ -208,8 +207,7 @@ public class PanierView extends Application {
         titreBox.setPadding(new Insets(20, 20, 16, 20));
         titreBox.setStyle(
                 "-fx-border-color: transparent transparent " + BORDER + " transparent;" +
-                        "-fx-border-width: 0 0 1 0;"
-        );
+                        "-fx-border-width: 0 0 1 0;");
         Text titreRecap = new Text("Récapitulatif");
         titreRecap.setFont(Font.font("Georgia", FontWeight.BOLD, 16));
         titreRecap.setFill(Color.web(BRUN));
@@ -244,7 +242,7 @@ public class PanierView extends Application {
         btnCommander.setStyle(btnStyle(TERRACOTTA));
         btnCommander.setCursor(javafx.scene.Cursor.HAND);
         btnCommander.setOnMouseEntered(e -> btnCommander.setStyle(btnStyle(TERRA_HOVER)));
-        btnCommander.setOnMouseExited(e  -> btnCommander.setStyle(btnStyle(TERRACOTTA)));
+        btnCommander.setOnMouseExited(e -> btnCommander.setStyle(btnStyle(TERRACOTTA)));
         btnCommander.setOnAction(e -> passerCommande());
 
         VBox btnZone = new VBox(10);
@@ -259,23 +257,20 @@ public class PanierView extends Application {
                         "-fx-border-color: " + BORDER + ";" +
                         "-fx-border-radius: 6;" +
                         "-fx-text-fill: " + BRUN_LIGHT + ";" +
-                        "-fx-padding: 9 0;"
-        );
+                        "-fx-padding: 9 0;");
         btnVider.setCursor(javafx.scene.Cursor.HAND);
         btnVider.setOnMouseEntered(e -> btnVider.setStyle(
                 "-fx-background-color: " + DANGER_BG + ";" +
                         "-fx-border-color: " + DANGER + ";" +
                         "-fx-border-radius: 6;" +
                         "-fx-text-fill: " + DANGER + ";" +
-                        "-fx-padding: 9 0;"
-        ));
+                        "-fx-padding: 9 0;"));
         btnVider.setOnMouseExited(e -> btnVider.setStyle(
                 "-fx-background-color: transparent;" +
                         "-fx-border-color: " + BORDER + ";" +
                         "-fx-border-radius: 6;" +
                         "-fx-text-fill: " + BRUN_LIGHT + ";" +
-                        "-fx-padding: 9 0;"
-        ));
+                        "-fx-padding: 9 0;"));
         btnVider.setOnAction(e -> viderPanier());
 
         // Lien continuer shopping
@@ -292,7 +287,7 @@ public class PanierView extends Application {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  CHARGEMENT & RENDU DU PANIER
+    // CHARGEMENT & RENDU DU PANIER
     // ═════════════════════════════════════════════════════════════════════
 
     private void chargerPanier() {
@@ -363,8 +358,7 @@ public class PanierView extends Application {
                         "-fx-background-radius: 10;" +
                         "-fx-border-color: " + BORDER + ";" +
                         "-fx-border-radius: 10;" +
-                        "-fx-border-width: 1;"
-        );
+                        "-fx-border-width: 1;");
         card.setEffect(new DropShadow(5, Color.web(BRUN, 0.04)));
 
         // Image ou placeholder
@@ -376,10 +370,12 @@ public class PanierView extends Application {
             try {
                 Image img = new Image(ligne.getImage_url(), 70, 80, true, true, true);
                 ImageView iv = new ImageView(img);
-                iv.setFitWidth(70); iv.setFitHeight(80);
+                iv.setFitWidth(70);
+                iv.setFitHeight(80);
                 iv.setPreserveRatio(true);
                 Rectangle clip = new Rectangle(70, 80);
-                clip.setArcWidth(16); clip.setArcHeight(16);
+                clip.setArcWidth(16);
+                clip.setArcHeight(16);
                 iv.setClip(clip);
                 imgBox.getChildren().add(iv);
             } catch (Exception ignored) {
@@ -415,12 +411,12 @@ public class PanierView extends Application {
         qteControl.setAlignment(Pos.CENTER);
 
         Button btnMoins = roundBtn("−");
-        Label  qteLabel = new Label(String.valueOf(ligne.getQuantite()));
+        Label qteLabel = new Label(String.valueOf(ligne.getQuantite()));
         qteLabel.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
         qteLabel.setTextFill(Color.web(BRUN));
         qteLabel.setMinWidth(28);
         qteLabel.setAlignment(Pos.CENTER);
-        Button btnPlus  = roundBtn("+");
+        Button btnPlus = roundBtn("+");
 
         btnMoins.setOnAction(e -> {
             int nouvelle = ligne.getQuantite() - 1;
@@ -446,19 +442,16 @@ public class PanierView extends Application {
                         "-fx-text-fill: " + BRUN_LIGHT + ";" +
                         "-fx-font-size: 13;" +
                         "-fx-padding: 4 6;" +
-                        "-fx-background-radius: 6;"
-        );
+                        "-fx-background-radius: 6;");
         btnSuppr.setCursor(javafx.scene.Cursor.HAND);
         btnSuppr.setOnMouseEntered(e -> btnSuppr.setStyle(
                 "-fx-background-color: " + DANGER_BG + ";" +
                         "-fx-text-fill: " + DANGER + ";" +
-                        "-fx-font-size: 13; -fx-padding: 4 6; -fx-background-radius: 6;"
-        ));
+                        "-fx-font-size: 13; -fx-padding: 4 6; -fx-background-radius: 6;"));
         btnSuppr.setOnMouseExited(e -> btnSuppr.setStyle(
                 "-fx-background-color: transparent;" +
                         "-fx-text-fill: " + BRUN_LIGHT + ";" +
-                        "-fx-font-size: 13; -fx-padding: 4 6; -fx-background-radius: 6;"
-        ));
+                        "-fx-font-size: 13; -fx-padding: 4 6; -fx-background-radius: 6;"));
         btnSuppr.setOnAction(e -> {
             new Thread(() -> {
                 PanierDTO maj = controller.retirerProduit(ligne.getId_product_formats());
@@ -475,7 +468,7 @@ public class PanierView extends Application {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  ACTIONS
+    // ACTIONS
     // ═════════════════════════════════════════════════════════════════════
 
     private void majQuantite(LignePanierDTO ligne, int nouvelleQte, Label qteLabel) {
@@ -530,7 +523,7 @@ public class PanierView extends Application {
 
 
     // ═════════════════════════════════════════════════════════════════════
-    //  HELPERS
+    // HELPERS
     // ═════════════════════════════════════════════════════════════════════
 
     private Button roundBtn(String label) {
@@ -543,8 +536,7 @@ public class PanierView extends Application {
                         "-fx-border-color: " + BORDER + ";" +
                         "-fx-border-radius: 14;" +
                         "-fx-text-fill: " + BRUN + ";" +
-                        "-fx-padding: 0;"
-        );
+                        "-fx-padding: 0;");
         btn.setCursor(javafx.scene.Cursor.HAND);
         btn.setOnMouseEntered(e -> btn.setStyle(
                 "-fx-background-color: " + SAUGE + ";" +
@@ -552,22 +544,21 @@ public class PanierView extends Application {
                         "-fx-border-color: " + SAUGE + ";" +
                         "-fx-border-radius: 14;" +
                         "-fx-text-fill: white;" +
-                        "-fx-padding: 0;"
-        ));
+                        "-fx-padding: 0;"));
         btn.setOnMouseExited(e -> btn.setStyle(
                 "-fx-background-color: " + CREME_INPUT + ";" +
                         "-fx-background-radius: 14;" +
                         "-fx-border-color: " + BORDER + ";" +
                         "-fx-border-radius: 14;" +
                         "-fx-text-fill: " + BRUN + ";" +
-                        "-fx-padding: 0;"
-        ));
+                        "-fx-padding: 0;"));
         return btn;
     }
 
     private Text placeholderText(String nom) {
         Text t = new Text(nom != null && !nom.isBlank()
-                ? nom.substring(0, 1).toUpperCase() : "?");
+                ? nom.substring(0, 1).toUpperCase()
+                : "?");
         t.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
         t.setFill(Color.web(BRUN_LIGHT, 0.5));
         return t;
@@ -579,8 +570,11 @@ public class PanierView extends Application {
     }
 
     private void retourCatalogue() {
-        try { new CatalogueView(idUtilisateur).start(stage); }
-        catch (Exception ex) { ex.printStackTrace(); }
+        try {
+            new CatalogueView(idUtilisateur).start(stage);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 
     private String formatMonnaie(BigDecimal val) {
@@ -592,5 +586,7 @@ public class PanierView extends Application {
                 "-fx-padding: 13 0; -fx-background-radius: 8;";
     }
 
-    public static void main(String[] args) { launch(args); }
+    public static void main(String[] args) {
+        launch(args);
+    }
 }
