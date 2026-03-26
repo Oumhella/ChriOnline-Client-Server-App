@@ -100,7 +100,7 @@ public class Client {
                 String notification = new String(packet.getData(), 0, packet.getLength());
 
                 System.out.println("[NOTIFICATION REÇUE] " + notification);
-                
+
                 // Transmettre la notification à l'UI si un listener est défini
                 if (notificationListener != null) {
                     // Toujours utile de passer ça sur le thread UI depuis l'appelant, ou ici.
@@ -108,8 +108,21 @@ public class Client {
                         notificationListener.accept(notification);
                     });
                 }
+
+                // Afficher une alerte JavaFX dans le thread UI
+                javafx.application.Platform.runLater(() -> {
+                    javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                            javafx.scene.control.Alert.AlertType.INFORMATION);
+                    alert.setTitle("Mise à jour de commande");
+                    alert.setHeaderText("Notification reçue");
+                    alert.setContentText(notification);
+                    alert.showAndWait();
+                });
             }
-        } catch (IOException e) {
+        } catch (java.net.SocketException e) {
+            // Socket fermée proprement à la déconnexion, pas une erreur
+            System.out.println("[UDP] Socket fermée.");
+        } catch (java.io.IOException e) {
             System.err.println("[UDP] Erreur : " + e.getMessage());
         }
     }

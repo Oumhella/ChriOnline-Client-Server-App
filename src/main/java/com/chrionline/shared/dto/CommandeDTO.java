@@ -1,59 +1,65 @@
 package com.chrionline.shared.dto;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
-/**
- * DTO pour le récapitulatif d'une commande passée.
- * Contient les infos de la commande et du client.
- */
 public class CommandeDTO implements Serializable {
 
-    private String reference;
-    private LocalDateTime dateCommande;
-    private BigDecimal montantTotal;
-    private String status;
-    private List<LignePanierDTO> lignes;
+    private static final long serialVersionUID = 1L;
 
-    // Infos Client
-    private String clientNom;
-    private String clientPrenom;
-    private String clientEmail;
-    private String clientTelephone;
-    private String clientAdresse;
+    private String idCommande;
+    private String reference;       // ex: CMD-2026-00042
+    private String nomUtilisateur;
+    private double montantTotal;
+    private String statut;
+    private String dateCommande;
+    private List<LigneCommandeDTO> lignes = new ArrayList<>();
 
-    public CommandeDTO() {}
+    // ───── Constructeur complet ─────
+    public CommandeDTO(String idCommande, String nomUtilisateur, double montantTotal,
+                       String statut, String dateCommande) {
+        this.idCommande = idCommande;
+        this.nomUtilisateur = nomUtilisateur;
+        this.montantTotal = montantTotal;
+        this.statut = statut;
+        this.dateCommande = dateCommande;
+        this.lignes = new ArrayList<>();
+    }
 
-    // Getters and Setters
+    // ───── Constructeur vide ─────
+    public CommandeDTO() {
+        this.lignes = new ArrayList<>();
+    }
+
+    // ───── Getters ─────
+    public String getIdCommande() { return idCommande; }
     public String getReference() { return reference; }
+    public String getNomUtilisateur() { return nomUtilisateur; }
+    public double getMontantTotal() { return montantTotal; }
+    public String getStatut() { return statut; }
+    public String getDateCommande() { return dateCommande; }
+    public List<LigneCommandeDTO> getLignes() { return lignes; }
+
+    // ───── Setters ─────
+    public void setIdCommande(String idCommande) { this.idCommande = idCommande; }
     public void setReference(String reference) { this.reference = reference; }
+    public void setNomUtilisateur(String nomUtilisateur) { this.nomUtilisateur = nomUtilisateur; }
+    public void setMontantTotal(double montantTotal) { this.montantTotal = montantTotal; }
+    public void setStatut(String statut) { this.statut = statut; }
+    public void setDateCommande(String dateCommande) { this.dateCommande = dateCommande; }
+    public void setLignes(List<LigneCommandeDTO> lignes) { this.lignes = lignes; }
 
-    public LocalDateTime getDateCommande() { return dateCommande; }
-    public void setDateCommande(LocalDateTime dateCommande) { this.dateCommande = dateCommande; }
-
-    public BigDecimal getMontantTotal() { return montantTotal; }
-    public void setMontantTotal(BigDecimal montantTotal) { this.montantTotal = montantTotal; }
-
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
-    public List<LignePanierDTO> getLignes() { return lignes; }
-    public void setLignes(List<LignePanierDTO> lignes) { this.lignes = lignes; }
-
-    public String getClientNom() { return clientNom; }
-    public void setClientNom(String clientNom) { this.clientNom = clientNom; }
-
-    public String getClientPrenom() { return clientPrenom; }
-    public void setClientPrenom(String clientPrenom) { this.clientPrenom = clientPrenom; }
-
-    public String getClientEmail() { return clientEmail; }
-    public void setClientEmail(String clientEmail) { this.clientEmail = clientEmail; }
-
-    public String getClientTelephone() { return clientTelephone; }
-    public void setClientTelephone(String clientTelephone) { this.clientTelephone = clientTelephone; }
-
-    public String getClientAdresse() { return clientAdresse; }
-    public void setClientAdresse(String clientAdresse) { this.clientAdresse = clientAdresse; }
+    // ───── toString ─────
+    @Override
+    public String toString() {
+        return "CommandeDTO{" +
+                "idCommande='" + idCommande + '\'' +
+                ", nomUtilisateur='" + nomUtilisateur + '\'' +
+                ", montantTotal=" + montantTotal +
+                ", statut='" + statut + '\'' +
+                ", dateCommande='" + dateCommande + '\'' +
+                ", lignes=" + lignes.size() +
+                '}';
+    }
 }

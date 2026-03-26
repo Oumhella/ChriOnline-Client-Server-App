@@ -157,6 +157,6 @@ public class PanierService {
     }
 
     private Map<String, Object> erreur(String message) {
-        return Map.of("statut", "ERREUR", "message", message);
+        return Map.of("statut", "ERREUR", "message", message != null ? message : "Erreur inconnue");
     }
 }
