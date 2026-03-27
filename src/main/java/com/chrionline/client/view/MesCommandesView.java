@@ -1,6 +1,7 @@
 package com.chrionline.client.view;
 
 import com.chrionline.client.controller.MesCommandesController;
+import com.chrionline.client.view.utils.HeaderComponent;
 import com.chrionline.shared.dto.CommandeDTO;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -41,62 +42,9 @@ public class MesCommandesView {
         VBox root = new VBox(0);
         root.setStyle("-fx-background-color: " + CREME + ";");
 
-        // Header
-        HBox header = new HBox(40);
-        header.setPadding(new Insets(20, 48, 20, 48));
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.setStyle("-fx-background-color: white; -fx-border-color: transparent transparent " + BORDER + " transparent; -fx-border-width: 0 0 1 0;");
+        // Header Centralisé
+        HBox header = HeaderComponent.build(stage, "Commandes");
 
-        Text logo = new Text("ChriOnline");
-        logo.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
-        logo.setFill(Color.web(BRUN));
-        logo.setCursor(javafx.scene.Cursor.HAND);
-        logo.setOnMouseClicked(e -> new HomeView().start(stage));
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox nav = new HBox(28);
-        nav.setAlignment(Pos.CENTER);
-
-        Hyperlink hAcc = createNavLink("Accueil", stage);
-        hAcc.setOnAction(e -> new HomeView().start(stage));
-
-        Hyperlink hCat = createNavLink("Catalogue", stage);
-        hCat.setOnAction(e -> new CatalogueView().start(stage));
-
-        String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
-        String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
-        String initials = "";
-        if (prenom != null && !prenom.isEmpty()) initials += prenom.toUpperCase().charAt(0);
-        if (nom != null && !nom.isEmpty()) initials += nom.toUpperCase().charAt(0);
-        if (initials.isEmpty()) initials = "U";
-        
-        StackPane avatar = new StackPane();
-        javafx.scene.shape.Circle circle = new javafx.scene.shape.Circle(15, Color.web(TERRACOTTA));
-        Text initText = new Text(initials);
-        initText.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
-        initText.setFill(Color.WHITE);
-        avatar.getChildren().addAll(circle, initText);
-        avatar.setCursor(javafx.scene.Cursor.HAND);
-        avatar.setOnMouseClicked(e -> new ProfilView().start(stage));
-        avatar.setOnMouseEntered(e -> circle.setFill(Color.web(SAUGE_DARK)));
-        avatar.setOnMouseExited(e -> circle.setFill(Color.web(TERRACOTTA)));
-
-        Text hOrd = new Text("Mes Commandes");
-        hOrd.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-        hOrd.setFill(Color.web(SAUGE_DARK));
-
-        Hyperlink hPan = createNavLink("Mon Panier", stage);
-        hPan.setOnAction(e -> {
-            try {
-                new PanierView(5).start(stage);
-            } catch (Exception ex) { ex.printStackTrace(); }
-        });
-
-        nav.getChildren().addAll(hAcc, hCat, hOrd, hPan, avatar);
-
-        header.getChildren().addAll(logo, spacer, nav);
 
         // Titre et bouton Suivre ma commande
         HBox topSection = new HBox(20);
@@ -185,13 +133,5 @@ public class MesCommandesView {
 
         card.getChildren().addAll(details, spacer, amount);
         return card;
-    }
-
-    private Hyperlink createNavLink(String text, Stage stage) {
-        Hyperlink l = new Hyperlink(text);
-        l.setFont(Font.font("Georgia", 14));
-        l.setTextFill(Color.web(BRUN));
-        l.setStyle("-fx-border-color: transparent;");
-        return l;
     }
 }
