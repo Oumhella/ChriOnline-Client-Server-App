@@ -52,6 +52,24 @@ public class CatalogueController {
         return new ArrayList<>();
     }
 
+    @SuppressWarnings("unchecked")
+    public List<com.chrionline.shared.models.Categorie> recupererCategories() {
+        try {
+            client.connecter();
+            Map<String, Object> req = new HashMap<>();
+            req.put("commande", "LISTE_CATEGORIES");
+            client.envoyerRequete(req);
+
+            Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
+            if ("OK".equals(rep.get("statut"))) {
+                return (List<com.chrionline.shared.models.Categorie>) rep.get("categories");
+            }
+        } catch (Exception e) {
+            System.err.println("[CatalogueController] Erreur réseau (categories) : " + e.getMessage());
+        }
+        return new ArrayList<>();
+    }
+
 
     // ── Ajouter au panier ────────────────────────────────────────────────
 
