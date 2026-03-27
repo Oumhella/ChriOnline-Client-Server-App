@@ -118,7 +118,7 @@ public class CatalogueView extends Application {
         root.setStyle("-fx-background-color: " + CREME + ";");
         
         // Header
-        root.getChildren().add(HeaderComponent.build(primaryStage, isWishlistMode ? "Mes Favoris" : "Catalogue", btn -> this.btnNotifications = btn));
+        root.getChildren().add(HeaderComponent.build(primaryStage, isWishlistMode ? "Favoris" : "Catalogue", btn -> this.btnNotifications = btn));
 
         // Barre de filtres (nouveau)
         if (!isWishlistMode) {
