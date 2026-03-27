@@ -390,6 +390,30 @@ public class PanierDAO {
                 lignesRecap.add(l);
             }
             recap.setLignes(lignesRecap);
+
+            // --- 7. Détecter les formats de produit dont le stock est passé sous le seuil d'alerte ---
+            java.util.List<String> alertesStock = new java.util.ArrayList<>();
+            String sqlAlerte = "SELECT p.nom AS nom_produit, pf.id_product_formats, pf.stock, pf.stock_alerte " +
+                    "FROM product_formats pf " +
+                    "JOIN produit p ON p.id_produit = pf.id_produit " +
+                    "WHERE pf.id_product_formats = ? AND pf.stock < pf.stock_alerte";
+            try (PreparedStatement psAlerte = conn.prepareStatement(sqlAlerte)) {
+                for (LignePanier ligne : panier.getLignes()) {
+                    psAlerte.setInt(1, ligne.getIdProductFormats());
+                    ResultSet rsA = psAlerte.executeQuery();
+                    if (rsA.next()) {
+                        String nomProduit  = rsA.getString("nom_produit");
+                        int stockRestant   = rsA.getInt("stock");
+                        int stockAlerteSeuil = rsA.getInt("stock_alerte");
+                        String msg = nomProduit + ":stock=" + stockRestant + ":seuil=" + stockAlerteSeuil;
+                        alertesStock.add(msg);
+                        System.out.println("[PanierDAO] ⚠ STOCK ALERTE — " + msg);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[PanierDAO] Erreur vérification alertes stock : " + e.getMessage());
+            }
+            recap.setAlertesStock(alertesStock);
             return recap;
 
         } catch (SQLException e) {

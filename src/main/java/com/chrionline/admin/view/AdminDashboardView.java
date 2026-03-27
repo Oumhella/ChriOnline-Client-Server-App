@@ -102,6 +102,18 @@ public class AdminDashboardView extends Application {
                     String user = parts.length > 2 ? parts[2] : "";
                     String heure = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
                     affichage = "📦 Nouvelle commande #" + ref + " — " + user + " (à " + heure + ")";
+                } else if (notification.startsWith("STOCK_ALERTE:")) {
+                    String corps = notification.substring("STOCK_ALERTE:".length());
+                    String[] parts = corps.split(":", 3);
+                    String nomProduit = parts.length > 0 ? parts[0] : "Inconnu";
+                    String stockInfo = parts.length > 1 ? parts[1] : "";
+                    String seuilInfo = parts.length > 2 ? parts[2] : "";
+                    String stockVal = stockInfo.replace("stock=", "");
+                    String seuilVal = seuilInfo.replace("seuil=", "");
+                    String heure = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
+                    affichage = "⚠️ Rupture stock — " + nomProduit
+                            + " | Stock : " + stockVal + " (seuil : " + seuilVal + ")"
+                            + " à " + heure;
                 } else if (notification.startsWith("NEWSLETTER:")) {
                     String[] parts = notification.split(":", 3);
                     String sujet = parts.length > 1 ? parts[1] : "Sans sujet";

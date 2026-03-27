@@ -15,6 +15,7 @@ public class CommandeDTO implements Serializable {
     private String statut;
     private String dateCommande;
     private List<LigneCommandeDTO> lignes = new ArrayList<>();
+    private List<String> alertesStock = new ArrayList<>();
 
     // ───── Constructeur complet ─────
     public CommandeDTO(String idCommande, String nomUtilisateur, double montantTotal,
@@ -40,6 +41,7 @@ public class CommandeDTO implements Serializable {
     public String getStatut() { return statut; }
     public String getDateCommande() { return dateCommande; }
     public List<LigneCommandeDTO> getLignes() { return lignes; }
+    public List<String> getAlertesStock() { return alertesStock; }
 
     // ───── Setters ─────
     public void setIdCommande(String idCommande) { this.idCommande = idCommande; }
@@ -49,6 +51,7 @@ public class CommandeDTO implements Serializable {
     public void setStatut(String statut) { this.statut = statut; }
     public void setDateCommande(String dateCommande) { this.dateCommande = dateCommande; }
     public void setLignes(List<LigneCommandeDTO> lignes) { this.lignes = lignes; }
+    public void setAlertesStock(List<String> alertesStock) { this.alertesStock = alertesStock; }
 
     // ───── toString ─────
     @Override
