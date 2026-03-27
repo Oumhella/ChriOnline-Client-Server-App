@@ -47,6 +47,11 @@ public class CatalogueView extends Application {
     private Set<Integer> wishlistIds = new HashSet<>();
     private MenuButton btnNotifications;
 
+    // Filtres et Recherche
+    private List<Produit> masterProductList = new ArrayList<>();
+    private TextField txtSearch;
+    private ComboBox<com.chrionline.shared.models.Categorie> comboCategory;
+
     public CatalogueView() {
         this.userId = com.chrionline.client.session.SessionManager.getInstance().getUserId();
     }
@@ -113,7 +118,12 @@ public class CatalogueView extends Application {
         root.setStyle("-fx-background-color: " + CREME + ";");
         
         // Header
-        root.getChildren().add(HeaderComponent.build(primaryStage, "Catalogue", btn -> this.btnNotifications = btn));
+        root.getChildren().add(HeaderComponent.build(primaryStage, isWishlistMode ? "Mes Favoris" : "Catalogue", btn -> this.btnNotifications = btn));
+
+        // Barre de filtres (nouveau)
+        if (!isWishlistMode) {
+            root.getChildren().add(buildFilterBar());
+        }
 
         productGrid = new FlowPane(35, 35);
         productGrid.setPadding(new Insets(50));
@@ -133,11 +143,90 @@ public class CatalogueView extends Application {
         return root;
     }
 
+    private HBox buildFilterBar() {
+        HBox bar = new HBox(20);
+        bar.setPadding(new Insets(20, 50, 0, 50));
+        bar.setAlignment(Pos.CENTER_LEFT);
+
+        // --- Recherche Textuelle ---
+        txtSearch = new TextField();
+        txtSearch.setPromptText("Rechercher un produit...");
+        txtSearch.setPrefWidth(300);
+        txtSearch.setStyle(
+            "-fx-background-color: white; -fx-border-color: " + BORDER + ";" +
+            "-fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 10 15;" +
+            "-fx-font-family: 'Georgia'; -fx-font-size: 14px;"
+        );
+        txtSearch.setOnKeyReleased(e -> appliquerFiltres());
+
+        // --- Filtre Catégorie ---
+        comboCategory = new ComboBox<>();
+        comboCategory.setPromptText("Toutes les catégories");
+        comboCategory.setPrefWidth(250);
+        comboCategory.setStyle(
+            "-fx-background-color: white; -fx-border-color: " + BORDER + ";" +
+            "-fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 8 10;" +
+            "-fx-font-family: 'Georgia'; -fx-font-size: 14px;"
+        );
+        comboCategory.setOnAction(e -> appliquerFiltres());
+
+        // Label stylé pour l'entrée
+        Label lblFilter = new Label("Filtrer par :");
+        lblFilter.setStyle("-fx-font-family: 'Georgia'; -fx-font-size: 14px; -fx-text-fill: " + BRUN_LIGHT + ";");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        bar.getChildren().addAll(txtSearch, spacer, lblFilter, comboCategory);
+        return bar;
+    }
+
+    private void appliquerFiltres() {
+        String query = (txtSearch != null) ? txtSearch.getText().toLowerCase().trim() : "";
+        com.chrionline.shared.models.Categorie selectedCat = (comboCategory != null) ? comboCategory.getValue() : null;
+
+        List<Produit> filtered = masterProductList.stream()
+            .filter(p -> {
+                // Filtre texte
+                boolean matchesQuery = query.isEmpty() || 
+                                      p.getNom().toLowerCase().contains(query) || 
+                                      p.getDescription().toLowerCase().contains(query);
+                
+                // Filtre catégorie
+                boolean matchesCat = (selectedCat == null || selectedCat.getId() == -1) || 
+                                     (p.getIdCategorie() == selectedCat.getId());
+
+                return matchesQuery && matchesCat;
+            })
+            .toList();
+
+        afficherProduits(filtered);
+    }
+
+
+
     private void chargerDonnees() {
         new Thread(() -> {
             List<Integer> ids = (userId != -1) ? controller.recupererWishlistIds(userId) : new ArrayList<>();
             List<Produit> produitsInit = controller.recupererProduits();
+            List<com.chrionline.shared.models.Categorie> categories = controller.recupererCategories();
+
             Platform.runLater(() -> {
+                this.masterProductList = produitsInit;
+                
+                // Charger le combo catégories
+                if (comboCategory != null) {
+                    comboCategory.getItems().clear();
+                    
+                    com.chrionline.shared.models.Categorie all = new com.chrionline.shared.models.Categorie();
+                    all.setId(-1);
+                    all.setNom("Toutes les catégories");
+                    
+                    comboCategory.getItems().add(all);
+                    comboCategory.getItems().addAll(categories);
+                    comboCategory.getSelectionModel().select(0);
+                }
+
                 wishlistIds.clear();
                 if (ids != null) wishlistIds.addAll(ids);
                 
