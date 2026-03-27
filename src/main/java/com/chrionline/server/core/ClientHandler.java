@@ -237,6 +237,16 @@ public class ClientHandler implements Runnable {
                 String ref = recap != null ? recap.getReference() : "Inconnue";
                 String messageAdmin = "NOUVELLE_COMMANDE:" + ref + ":Utilisateur " + this.userId;
                 server.notifierAdmins(messageAdmin);
+
+                // Notifier les admins pour chaque produit en alerte de stock
+                if (recap != null && recap.getAlertesStock() != null && !recap.getAlertesStock().isEmpty()) {
+                    for (String alerte : recap.getAlertesStock()) {
+                        // "nomProduit:stock=X:seuil=Y"
+                        String msgAlerte = "STOCK_ALERTE:" + alerte;
+                        server.notifierAdmins(msgAlerte);
+                        System.out.println("[HANDLER] Notification stock alerte envoyée : " + msgAlerte);
+                    }
+                }
             }
 
             envoyerMessage(reponse);
