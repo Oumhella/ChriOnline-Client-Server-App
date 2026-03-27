@@ -63,6 +63,7 @@ public class HeaderComponent {
         nav.getChildren().addAll(
             createNavLink("Accueil", "Accueil".equals(activePage), e -> navigate(stage, "Accueil")),
             createNavLink("Catalogue", "Catalogue".equals(activePage), e -> navigate(stage, "Catalogue")),
+            createNavLink("Favoris", "Favoris".equals(activePage), e -> navigate(stage, "Favoris")),
             createNavLink("Mes Commandes", "Commandes".equals(activePage), e -> navigate(stage, "Commandes")),
             createNavLink("Panier", "Panier".equals(activePage), e -> navigate(stage, "Panier"))
         );
@@ -147,6 +148,7 @@ public class HeaderComponent {
             switch (page) {
                 case "Accueil":   new HomeView().start(stage); break;
                 case "Catalogue": new CatalogueView().start(stage); break;
+                case "Favoris":   new CatalogueView(SessionManager.getInstance().getUserId(), true).start(stage); break;
                 case "Commandes": new MesCommandesView().start(stage); break;
                 case "Panier":    new PanierView(SessionManager.getInstance().getUserId()).start(stage); break;
                 case "Profil":    new ProfilView().start(stage); break;

@@ -31,7 +31,13 @@ public class DatabaseConnection {
             this.connection = DriverManager.getConnection(URL, USER, PASSWORD);
             System.out.println("[DB] Connexion à 'chrionline' établie avec succès.");
         } catch (ClassNotFoundException e) {
+            System.err.println("[DB] Driver MySQL introuvable.");
+            e.printStackTrace();
             throw new SQLException("Driver MySQL introuvable : " + e.getMessage());
+        } catch (SQLException e) {
+            System.err.println("[DB] Échec de connexion à la base 'chrionline'. Vérifiez que MySQL est lancé et que la base existe.");
+            e.printStackTrace();
+            throw e;
         }
     }
 

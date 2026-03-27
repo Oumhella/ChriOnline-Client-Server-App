@@ -236,14 +236,14 @@ public class ClientHandler implements Runnable {
                 CommandeDTO recap = (CommandeDTO) reponse.get("commandeResult");
                 String ref = recap != null ? recap.getReference() : "Inconnue";
                 String messageAdmin = "NOUVELLE_COMMANDE:" + ref + ":Utilisateur " + this.userId;
-                server.notifierAdmins(messageAdmin);
+                server.notifierAdmins(messageAdmin, "commande");
 
                 // Notifier les admins pour chaque produit en alerte de stock
                 if (recap != null && recap.getAlertesStock() != null && !recap.getAlertesStock().isEmpty()) {
                     for (String alerte : recap.getAlertesStock()) {
                         // "nomProduit:stock=X:seuil=Y"
                         String msgAlerte = "STOCK_ALERTE:" + alerte;
-                        server.notifierAdmins(msgAlerte);
+                        server.notifierAdmins(msgAlerte, "stock");
                         System.out.println("[HANDLER] Notification stock alerte envoyée : " + msgAlerte);
                     }
                 }
@@ -543,7 +543,7 @@ public class ClientHandler implements Runnable {
             if (resultat.startsWith("SUCCESS") && c != null) {
                 // 3. Notifier l'utilisateur concerné par UDP
                 String msg = "VOTRE COMMANDE #" + c.getReference() + " est passée au statut : " + nouveauStatut;
-                server.notifierClient(c.getIdUtilisateur(), msg);
+                server.notifierClient(c.getIdUtilisateur(), msg, "commande");
             }
 
             Map<String, Object> reponse = new HashMap<>();
@@ -592,7 +592,7 @@ public class ClientHandler implements Runnable {
                 String shortCorps = corps.replaceAll("<[^>]*>", ""); // Enlever HTML pour la notif UDP
                 if (shortCorps.length() > 300) shortCorps = shortCorps.substring(0, 300) + "...";
                 
-                server.notifierTousLesClients("NEWSLETTER:" + sujet + ":" + shortCorps);
+                server.notifierTousLesClients("NEWSLETTER:" + sujet + ":" + shortCorps, "newsletter");
 
             } catch (Exception e) {
                 System.err.println("[NEWSLETTER] Erreur globale: " + e.getMessage());

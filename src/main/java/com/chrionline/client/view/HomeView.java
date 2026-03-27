@@ -23,7 +23,7 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import javafx.util.Duration;
-import javafx.scene.text.FontPosture;
+
 
 import java.util.List;
 
@@ -223,7 +223,7 @@ public class HomeView extends Application {
         CatalogueController ctrl = new CatalogueController(uid);
         new Thread(() -> {
             List<Produit> all = ctrl.recupererProduits();
-            if (all != null) {
+            if (all != null && !all.isEmpty()) {
                 // Take 4 random or top products
                 List<Produit> featured = all.stream().limit(4).toList();
                 Platform.runLater(() -> {
@@ -231,6 +231,14 @@ public class HomeView extends Application {
                     for (Produit p : featured) {
                         featuredGrid.getChildren().add(createSimplePremiumCard(p));
                     }
+                });
+            } else {
+                Platform.runLater(() -> {
+                    featuredGrid.getChildren().clear();
+                    Label placeholder = new Label("Aucun produit disponible pour le moment.");
+                    placeholder.setFont(javafx.scene.text.Font.font("Georgia", 16));
+                    placeholder.setStyle("-fx-text-fill: #95a5a6; -fx-font-style: italic;");
+                    featuredGrid.getChildren().add(placeholder);
                 });
             }
         }).start();

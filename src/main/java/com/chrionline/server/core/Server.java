@@ -8,6 +8,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import com.chrionline.server.dao.NotificationDAO;
+import com.chrionline.server.dao.UserDAO;
 
 /**
  * Classe principale du serveur ChriOnline.
@@ -142,37 +145,56 @@ public class Server {
     }
 
     /**
-     * Envoie une notification UDP à tous les administrateurs connectés.
-     * Le port UDP client conventionnel est 9092.
+     * Envoie une notification UDP à tous les administrateurs connectés et la sauvegarde en BDD.
      *
      * @param message le message de notification à envoyer aux admins
+     * @param type    le type de notification
      */
-    public void notifierAdmins(String message) {
+    public void notifierAdmins(String message, String type) {
         for (ClientHandler handler : clientConnectes) {
             if ("admin".equals(handler.getRole())) {
                 diffuserNotification(message, handler.getSocket().getInetAddress(), handler.getUdpPort());
+                // Sauvegarde en BDD pour chaque admin
+                NotificationDAO.save(handler.getUserId(), message, type);
             }
         }
     }
 
     /**
-     * Envoie une notification UDP à TOUS les clients connectés (utiles pour les Newsletters).
+     * Envoie une notification UDP à TOUS les clients connectés et la sauvegarde en BDD pour TOUS les utilisateurs.
      * @param message le message de notification
+     * @param type    le type de notification
      */
-    public void notifierTousLesClients(String message) {
+    public void notifierTousLesClients(String message, String type) {
+        // 1. Notifier les connectés via UDP
         for (ClientHandler handler : clientConnectes) {
             diffuserNotification(message, handler.getSocket().getInetAddress(), handler.getUdpPort());
         }
+        
+        // 2. Sauvegarder en BDD pour TOUS les utilisateurs inscrits (Newsletter/Alerte globale)
+        // Note: On pourrait aussi ne sauvegarder que pour les connectés, 
+        // mais une newsletter doit être visible par tous à leur prochaine connexion.
+        new Thread(() -> {
+            List<Map<String, Object>> users = UserDAO.listerClients();
+            for (Map<String, Object> u : users) {
+                int uid = (int) u.get("idUtilisateur");
+                NotificationDAO.save(uid, message, type);
+            }
+        }).start();
     }
 
     /**
-     * Envoie une notification UDP à un client spécifique identifié par son userId.
-     * Le port UDP client conventionnel est 9092.
+     * Envoie une notification UDP à un client spécifique et la sauvegarde en BDD.
      *
      * @param userId  l'ID unique de l'utilisateur à notifier
      * @param message le message de notification
+     * @param type    le type de notification
      */
-    public void notifierClient(int userId, String message) {
+    public void notifierClient(int userId, String message, String type) {
+        // Sauvegarde en BDD (pour que l'utilisateur la voie même s'il n'est pas connecté à l'instant T)
+        NotificationDAO.save(userId, message, type);
+
+        // Notification UDP si connecté
         for (ClientHandler handler : clientConnectes) {
             if (handler.getUserId() == userId) {
                 diffuserNotification(message, handler.getSocket().getInetAddress(), handler.getUdpPort());
