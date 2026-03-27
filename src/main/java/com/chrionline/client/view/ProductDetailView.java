@@ -1,8 +1,7 @@
 package com.chrionline.client.view;
 
 import com.chrionline.client.controller.CatalogueController;
-import com.chrionline.client.view.CatalogueView;
-import com.chrionline.client.view.PanierView;
+
 import com.chrionline.shared.models.LabelValue;
 import com.chrionline.shared.models.ProductFormat;
 import com.chrionline.shared.models.Produit;
@@ -15,7 +14,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
-import javafx.scene.control.Hyperlink;
+
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
@@ -312,10 +311,24 @@ public class ProductDetailView {
 
         } else if (userId == -1) {
             // Non connecté
-            Label msg = new Label("Connectez-vous pour ajouter au panier");
-            msg.setFont(Font.font("Georgia", 13));
-            msg.setStyle("-fx-text-fill: " + BRUN_LIGHT + "; -fx-font-style: italic;");
-            info.getChildren().add(msg);
+            VBox guestNotice = new VBox(12);
+            guestNotice.setPadding(new Insets(10, 0, 0, 0));
+            Text msg = new Text("Connectez-vous pour personnaliser votre expérience et commencer vos achats.");
+            msg.setFont(Font.font("Georgia", 14));
+            msg.setFill(Color.web(BRUN_LIGHT));
+            // msg.setStyle("-fx-text-fill: " + BRUN_LIGHT + "; -fx-font-style: italic;"); // Text doesn't use -fx-text-fill
+            msg.setWrappingWidth(400);
+
+            Button btnConnexion = new Button("Se connecter");
+            btnConnexion.setCursor(Cursor.HAND);
+            btnConnexion.setStyle(
+                "-fx-background-color: " + BRUN + "; -fx-text-fill: white; " +
+                "-fx-padding: 12 30; -fx-background-radius: 8; -fx-font-weight: bold;"
+            );
+            btnConnexion.setOnAction(e -> new ConnexionView().start(stage));
+            
+            guestNotice.getChildren().addAll(msg, btnConnexion);
+            info.getChildren().add(guestNotice);
         } else {
             // Pas de format disponible
             Label msg = new Label("Produit indisponible (aucun format trouvé)");
