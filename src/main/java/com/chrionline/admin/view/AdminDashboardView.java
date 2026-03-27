@@ -61,14 +61,22 @@ public class AdminDashboardView extends Application {
         rootPane.setStyle("-fx-background-color: " + CREME + ";");
         rootPane.getChildren().addAll(buildSidebar(stage), buildMainArea());
 
-        Scene scene = new Scene(rootPane, 1100, 700);
         String css = getClass().getResource("/styles/admin.css").toExternalForm();
-        scene.getStylesheets().add(css);
+        if (stage.getScene() == null) {
+            Scene scene = new Scene(rootPane, 1100, 800);
+            scene.getStylesheets().add(css);
+            stage.setScene(scene);
+        } else {
+            Scene scene = stage.getScene();
+            scene.getStylesheets().clear();
+            scene.getStylesheets().add(css);
+            scene.setRoot(rootPane);
+        }
 
-        stage.setScene(scene);
         stage.setTitle("ChriOnline - Administration Premium");
-        stage.setMinWidth(960);
-        stage.setMinHeight(650); // --- Inscription à l'écouteur UDP pour les notifications Administrateur ---
+        stage.setMinWidth(1000);
+        stage.setMinHeight(750);
+        if (!stage.isShowing()) stage.show();
         try {
             com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("127.0.0.1",
                     12345);

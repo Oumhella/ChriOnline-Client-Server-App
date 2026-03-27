@@ -86,11 +86,16 @@ public class InscriptionView extends Application {
         card.setOpacity(0);
         card.setTranslateY(20);
 
-        Scene scene = new Scene(root, 980, 720);
-        stage.setScene(scene);
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        
         stage.setMinWidth(820);
         stage.setMinHeight(600);
-        stage.show();
+        if (!stage.isShowing()) stage.show();
 
         FadeTransition fade = new FadeTransition(Duration.millis(500), card);
         fade.setFromValue(0); fade.setToValue(1);

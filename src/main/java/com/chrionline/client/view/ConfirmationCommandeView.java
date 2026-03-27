@@ -5,6 +5,7 @@ import com.chrionline.shared.dto.LigneCommandeDTO;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -71,9 +72,14 @@ public class ConfirmationCommandeView extends Application {
         VBox.setVgrow(scroll, Priority.ALWAYS);
         root.getChildren().add(scroll);
 
-        stage.setScene(new Scene(root, 1000, 700));
-        stage.centerOnScreen();
-        stage.show();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+            stage.centerOnScreen();
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
     }
 
     // --- EXACT REPRODUCTION OF HOMEVIEW HEADER ---

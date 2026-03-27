@@ -93,10 +93,15 @@ public class SuiviCommandeView extends Application {
 
         mainLayout.getChildren().addAll(header, topSection, scroll);
 
-        Scene scene = new Scene(mainLayout, 1000, 700);
-        stage.setScene(scene);
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(mainLayout, 1100, 800));
+            stage.centerOnScreen();
+        } else {
+            stage.getScene().setRoot(mainLayout);
+            stage.getScene().getStylesheets().clear();
+        }
         stage.setTitle("ChriOnline - Suivi de ma Commande");
-        stage.show();
+        if (!stage.isShowing()) stage.show();
     }
 
     private HBox buildHeader(Stage stage) {

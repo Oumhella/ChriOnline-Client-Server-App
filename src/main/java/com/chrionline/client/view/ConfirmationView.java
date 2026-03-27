@@ -93,9 +93,13 @@ public class ConfirmationView extends Application {
         card.getChildren().addAll(title, info, codeField, msgLabel, btnValider, retour);
         root.getChildren().addAll(bg1, card);
 
-        Scene scene = new Scene(root, 980, 720);
-        stage.setScene(scene);
-        stage.show();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
 
         card.setOpacity(0);
         card.setTranslateY(20);

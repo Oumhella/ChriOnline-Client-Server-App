@@ -8,6 +8,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -95,8 +96,14 @@ public class CatalogueView extends Application {
         }
 
         stage.setTitle(isWishlistMode ? "ChriOnline — Mes Favoris" : "ChriOnline — Catalogue");
-        stage.setScene(new Scene(buildCatalogueRoot(), 1100, 800));
-        stage.show();
+        Parent root = buildCatalogueRoot();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
     }
 
     // ═══════════════════════════════════════════════════════

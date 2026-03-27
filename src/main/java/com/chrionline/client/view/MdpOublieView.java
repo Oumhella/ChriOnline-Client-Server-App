@@ -66,9 +66,13 @@ public class MdpOublieView extends Application {
 
         root.getChildren().addAll(bg1, cardContainer);
 
-        Scene scene = new Scene(root, 980, 720);
-        stage.setScene(scene);
-        stage.show();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
 
         // Animation d'entrée
         cardContainer.setOpacity(0);

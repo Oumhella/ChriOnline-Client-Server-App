@@ -74,11 +74,16 @@ public class ConnexionView extends Application {
         card.getChildren().addAll(left, right);
         root.getChildren().addAll(bg1, bg2, card);
 
-        Scene scene = new Scene(root, 980, 720);
-        stage.setScene(scene);
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear(); // On s'assure de nettoyer les styles admin si on revient de là
+        }
+        
         stage.setMinWidth(820);
         stage.setMinHeight(600);
-        stage.show();
+        if (!stage.isShowing()) stage.show();
 
         // Animation d'entrée
         card.setOpacity(0);

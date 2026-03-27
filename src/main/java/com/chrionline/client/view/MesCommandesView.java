@@ -5,6 +5,7 @@ import com.chrionline.shared.dto.CommandeDTO;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -131,9 +132,13 @@ public class MesCommandesView {
 
         root.getChildren().addAll(header, scrollPane);
 
-        Scene scene = new Scene(root, 1000, 700);
-        stage.setScene(scene);
-        stage.show();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
 
         loadOrders();
     }
@@ -141,6 +146,7 @@ public class MesCommandesView {
     private void loadOrders() {
         Map<String, Object> res = controller.getMyOrders();
         if ("OK".equals(res.get("statut"))) {
+            @SuppressWarnings("unchecked")
             List<CommandeDTO> orders = (List<CommandeDTO>) res.get("commandes");
             if (orders == null || orders.isEmpty()) {
                 listContainer.getChildren().add(new Label("Vous n'avez pas encore passé de commande."));

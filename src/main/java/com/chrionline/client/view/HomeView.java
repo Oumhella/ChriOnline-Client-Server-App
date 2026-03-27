@@ -53,9 +53,13 @@ public class HomeView extends Application {
         scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
-        Scene scene = new Scene(scrollPane, 1100, 800);
-        stage.setScene(scene);
-        stage.show();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(scrollPane, 1100, 800));
+        } else {
+            stage.getScene().setRoot(scrollPane);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
     }
 
     private HBox buildHeader(Stage stage) {

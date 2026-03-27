@@ -3,6 +3,7 @@ package com.chrionline.client.view;
 import com.chrionline.client.controller.ProfilController;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -116,9 +117,13 @@ public class ProfilView {
 
         root.getChildren().addAll(header, form);
 
-        Scene scene = new Scene(root, 1000, 700);
-        stage.setScene(scene);
-        stage.show();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
 
         loadData();
     }

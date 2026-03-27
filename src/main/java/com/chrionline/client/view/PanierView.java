@@ -7,6 +7,7 @@ import com.chrionline.shared.dto.PanierDTO;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.*;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -86,9 +87,13 @@ public class PanierView extends Application {
         content.getChildren().addAll(leftCol, rightCol);
         root.getChildren().add(content);
 
-        Scene scene = new Scene(root, 1100, 800);
-        stage.setScene(scene);
-        stage.show();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
 
         // Charger le panier dans un thread séparé
         chargerPanier();

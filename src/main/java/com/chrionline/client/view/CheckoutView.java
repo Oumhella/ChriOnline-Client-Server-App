@@ -7,6 +7,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -88,9 +89,14 @@ public class CheckoutView extends Application {
 
         root.getChildren().add(scroll);
 
-        stage.setScene(new Scene(root, 1000, 700));
-        stage.centerOnScreen();
-        stage.show();
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(root, 1100, 800));
+            stage.centerOnScreen();
+        } else {
+            stage.getScene().setRoot(root);
+            stage.getScene().getStylesheets().clear();
+        }
+        if (!stage.isShowing()) stage.show();
     }
 
     // --- EXACT REPRODUCTION OF HOMEVIEW HEADER ---
