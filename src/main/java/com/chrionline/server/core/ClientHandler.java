@@ -2,6 +2,7 @@ package com.chrionline.server.core;
 
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.service.AuthenticationService;
+import com.chrionline.server.service.EmailService;
 import com.chrionline.server.service.PanierService;
 import com.chrionline.server.service.ProduitService;
 import com.chrionline.shared.models.User;
@@ -140,6 +141,7 @@ public class ClientHandler implements Runnable {
             }
             case "ADMIN_LISTE_USERS" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
             case "ADMIN_CHANGER_STATUT_USER" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
+            case "ENVOYER_NEWSLETTER" -> handleEnvoyerNewsletter(req);
 
             case "REGISTER_UDP" -> {
                 this.udpPort = (int) req.getOrDefault("udpPort", 9092);
@@ -541,6 +543,55 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", e.getMessage()));
         }
+    }
+
+    private void handleEnvoyerNewsletter(Map<String, Object> req) {
+        if (!"admin".equals(userRole)) {
+            envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+            return;
+        }
+
+        String sujet = (String) req.get("sujet");
+        String corps = (String) req.get("corps");
+
+        if (sujet == null || sujet.isEmpty() || corps == null || corps.isEmpty()) {
+            envoyerMessage(creerReponse("ERREUR", "Sujet et corps obligatoires."));
+            return;
+        }
+
+        // Exécuter en arrière-plan pour ne pas bloquer le handler TCP
+        new Thread(() -> {
+            try {
+                System.out.println("[NEWSLETTER] Démarrage de l'envoi massif...");
+                
+                // 1. Emails réels (Mailing list)
+                List<String> emails = UserDAO.getAllEmails();
+                int successCount = 0;
+                for (String email : emails) {
+                    try {
+                        EmailService.envoyer(email, sujet, corps);
+                        successCount++;
+                    } catch (Exception e) {
+                        System.err.println("[NEWSLETTER] Échec envoi à " + email + ": " + e.getMessage());
+                    }
+                }
+                System.out.println("[NEWSLETTER] Fin d'envoi SMTP : " + successCount + "/" + emails.size());
+
+                // 2. Notification UDP (In-app) pour les clients connectés
+                // On limite la taille pour l'UDP (max ~1KB par paquet)
+                String shortCorps = corps.replaceAll("<[^>]*>", ""); // Enlever HTML pour la notif UDP
+                if (shortCorps.length() > 300) shortCorps = shortCorps.substring(0, 300) + "...";
+                
+                server.notifierTousLesClients("NEWSLETTER:" + sujet + ":" + shortCorps);
+
+            } catch (Exception e) {
+                System.err.println("[NEWSLETTER] Erreur globale: " + e.getMessage());
+            }
+        }).start();
+
+        Map<String, Object> res = creerReponse("OK", "Envoi en cours...");
+        res.put("count", UserDAO.getAllEmails().size());
+        envoyerMessage(res);
     }
 
     // Getters/Setters session

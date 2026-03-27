@@ -356,6 +356,21 @@ public class UserDAO {
         }
     }
 
+    public static java.util.List<String> getAllEmails() {
+        java.util.List<String> emails = new java.util.ArrayList<>();
+        String sql = "SELECT email FROM utilisateur";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                emails.add(rs.getString("email"));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return emails;
+    }
+
     private static void rollback(Connection conn) {
         if (conn != null) {
             try { conn.rollback(); } catch (SQLException ignored) {}

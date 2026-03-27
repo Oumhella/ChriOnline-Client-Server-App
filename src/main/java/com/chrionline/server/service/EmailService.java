@@ -98,9 +98,9 @@ public class EmailService {
         envoyer(destinataire, sujet, corps);
     }
 
-    // ─── Méthode privée commune ────────────────────────────────────────────────
-
-    private static void envoyer(String destinataire, String sujet, String corpsHtml) throws MessagingException {
+    // ─── Méthode publique d'envoi ─────────────────────────────────────────────
+    
+    public static void envoyer(String destinataire, String sujet, String corpsHtml) throws MessagingException {
         if (username == null || password == null) {
             throw new MessagingException("Config SMTP incomplète (email.properties)");
         }

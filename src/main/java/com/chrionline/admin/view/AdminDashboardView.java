@@ -94,6 +94,10 @@ public class AdminDashboardView extends Application {
                     String user = parts.length > 2 ? parts[2] : "";
                     String heure = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
                     affichage = "📦 Nouvelle commande #" + ref + " — " + user + " (à " + heure + ")";
+                } else if (notification.startsWith("NEWSLETTER:")) {
+                    String[] parts = notification.split(":", 3);
+                    String sujet = parts.length > 1 ? parts[1] : "Sans sujet";
+                    affichage = "📧 NEWSLETTER : " + sujet;
                 } else if (notification.startsWith("VOTRE COMMANDE")) {
                     affichage = notification; // message de suivi commande client
                 } else {
@@ -215,6 +219,9 @@ public class AdminDashboardView extends Application {
                 navSection("UTILISATEURS"),
                 itemClients,
                 navSection("SYSTÈME"),
+                navItem("📧", "Newsletter", false, () -> {
+                    afficherVue(new AdminNewsletterView().getView());
+                }),
                 itemParams,
                 navSection("COMPTE"),
                 logoutItem);
@@ -266,6 +273,10 @@ public class AdminDashboardView extends Application {
         txt.setFont(Font.font("Georgia", actif ? FontWeight.BOLD : FontWeight.NORMAL, 13));
         txt.setFill(Color.web(BRUN, actif ? 1.0 : 0.78));
         item.getChildren().addAll(ico, txt);
+
+        if (action != null) {
+            item.setOnMouseClicked(e -> action.run());
+        }
 
         item.setOnMouseEntered(e -> {
             if (!item.getStyle().contains("0.22")) {
