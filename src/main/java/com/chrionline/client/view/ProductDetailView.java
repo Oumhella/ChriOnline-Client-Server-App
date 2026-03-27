@@ -1,9 +1,13 @@
 package com.chrionline.client.view;
 
 import com.chrionline.client.controller.CatalogueController;
+import com.chrionline.client.view.CatalogueView;
+import com.chrionline.client.view.PanierView;
 import com.chrionline.shared.models.LabelValue;
 import com.chrionline.shared.models.ProductFormat;
 import com.chrionline.shared.models.Produit;
+import com.chrionline.client.view.utils.HeaderComponent;
+import javafx.geometry.Insets;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
@@ -39,7 +43,7 @@ public class ProductDetailView {
 
     private final Produit             produit;
     private final Stage               stage;
-    private final CatalogueView       catalogueView;
+    private final CatalogueView catalogueView;
     private final CatalogueController controller;
     private final int                 userId;
 
@@ -69,19 +73,20 @@ public class ProductDetailView {
         }
     }
 
-    private Hyperlink createNavLink(String text, Stage stage) {
-        Hyperlink l = new Hyperlink(text);
-        l.setFont(Font.font("Georgia", 14));
-        l.setTextFill(Color.web(BRUN));
-        l.setStyle("-fx-border-color: transparent;");
-        return l;
-    }
 
     public VBox build() {
         VBox root = new VBox(0);
         root.setStyle("-fx-background-color: " + CREME + ";");
 
-        root.getChildren().add(buildTopBar());
+        // Header Centralisé
+        root.getChildren().add(HeaderComponent.build(stage, "Catalogue"));
+
+        // Bouton Retour subtil
+        Button btnBack = new Button("← Retour au catalogue");
+        btnBack.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BRUN_LIGHT + "; -fx-font-family: 'Georgia'; -fx-cursor: hand;");
+        btnBack.setPadding(new Insets(20, 60, 0, 60));
+        btnBack.setOnAction(e -> catalogueView.retourCatalogue());
+        root.getChildren().add(btnBack);
 
         HBox content = new HBox(50);
         content.setPadding(new Insets(40, 60, 40, 60));
@@ -102,117 +107,6 @@ public class ProductDetailView {
     //  Top Bar — retour + logo + bouton panier
     // ══════════════════════════════════════════════════════════════
 
-    private HBox buildTopBar() {
-        HBox bar = new HBox(20);
-        bar.setPadding(new Insets(20, 60, 20, 60));
-        bar.setAlignment(Pos.CENTER_LEFT);
-        bar.setStyle("-fx-border-color: transparent transparent " + BORDER + " transparent; -fx-border-width: 0 0 1 0;");
-
-        // ── Bouton retour ──────────────────────────────────────
-        Button btnRetour = new Button("← Retour au catalogue");
-        btnRetour.setFont(Font.font("Georgia", 14));
-        btnRetour.setStyle(
-                "-fx-background-color: transparent;" +
-                        "-fx-text-fill: " + BRUN + ";" +
-                        "-fx-border-color: " + BORDER + ";" +
-                        "-fx-border-radius: 6;" +
-                        "-fx-padding: 8 18;"
-        );
-        btnRetour.setCursor(Cursor.HAND);
-        btnRetour.setOnMouseEntered(e -> btnRetour.setStyle(
-                "-fx-background-color: " + BORDER + ";" +
-                        "-fx-text-fill: " + BRUN + ";" +
-                        "-fx-border-color: " + BORDER + ";" +
-                        "-fx-border-radius: 6; -fx-padding: 8 18;"
-        ));
-        btnRetour.setOnMouseExited(e -> btnRetour.setStyle(
-                "-fx-background-color: transparent;" +
-                        "-fx-text-fill: " + BRUN + ";" +
-                        "-fx-border-color: " + BORDER + ";" +
-                        "-fx-border-radius: 6; -fx-padding: 8 18;"
-        ));
-        btnRetour.setOnAction(e -> catalogueView.retourCatalogue());
-
-        // ── Logo centré ────────────────────────────────────────
-        Region spacerL = new Region();
-        HBox.setHgrow(spacerL, Priority.ALWAYS);
-
-        Text logo = new Text("ChriOnline");
-        logo.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
-        logo.setFill(Color.web(BRUN));
-        logo.setCursor(Cursor.HAND);
-        logo.setOnMouseClicked(e -> {
-            try { new HomeView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-        });
-
-        Region spacerR = new Region();
-        HBox.setHgrow(spacerR, Priority.ALWAYS);
-
-        // ── Navigation ──────
-        if (userId != -1) {
-            HBox nav = new HBox(25);
-            nav.setAlignment(Pos.CENTER);
-
-            Hyperlink hAcc = createNavLink("Accueil", stage);
-            hAcc.setOnAction(e -> {
-                try { new HomeView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-            });
-
-            Hyperlink hCat = createNavLink("Catalogue", stage);
-            hCat.setOnAction(e -> {
-                try { new CatalogueView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-            });
-
-            String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
-            String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
-            String initials = "";
-            if (prenom != null && !prenom.isEmpty()) initials += prenom.toUpperCase().charAt(0);
-            if (nom != null && !nom.isEmpty()) initials += nom.toUpperCase().charAt(0);
-            if (initials.isEmpty()) initials = "U";
-            
-            StackPane avatar = new StackPane();
-            javafx.scene.shape.Circle circle = new javafx.scene.shape.Circle(15, Color.web(TERRACOTTA));
-            Text initText = new Text(initials);
-            initText.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
-            initText.setFill(Color.WHITE);
-            avatar.getChildren().addAll(circle, initText);
-            avatar.setCursor(javafx.scene.Cursor.HAND);
-            avatar.setOnMouseClicked(e -> {
-                try { new ProfilView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-            });
-            avatar.setOnMouseEntered(e -> circle.setFill(Color.web(SAUGE_DARK)));
-            avatar.setOnMouseExited(e -> circle.setFill(Color.web(TERRACOTTA)));
-
-            Hyperlink hOrd = createNavLink("Mes Commandes", stage);
-            hOrd.setOnAction(e -> {
-                try { new MesCommandesView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-            });
-
-            Button btnPanier = new Button("🛒 Mon panier");
-            btnPanier.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
-            btnPanier.setStyle(
-                    "-fx-background-color: " + TERRACOTTA + ";" +
-                            "-fx-text-fill: white;" +
-                            "-fx-background-radius: 20;" +
-                            "-fx-padding: 8 18;"
-            );
-            btnPanier.setCursor(Cursor.HAND);
-            btnPanier.setOnMouseEntered(e -> btnPanier.setStyle(
-                    "-fx-background-color: " + TERRA_HOVER + "; -fx-text-fill: white; -fx-background-radius: 20; -fx-padding: 8 18;"
-            ));
-            btnPanier.setOnMouseExited(e -> btnPanier.setStyle(
-                    "-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; -fx-background-radius: 20; -fx-padding: 8 18;"
-            ));
-            btnPanier.setOnAction(e -> ouvrirPanier());
-
-            nav.getChildren().addAll(hAcc, hCat, hOrd, btnPanier, avatar);
-            bar.getChildren().addAll(btnRetour, spacerL, logo, spacerR, nav);
-        } else {
-            bar.getChildren().addAll(btnRetour, spacerL, logo, spacerR);
-        }
-
-        return bar;
-    }
 
     // ══════════════════════════════════════════════════════════════
     //  Image Panel

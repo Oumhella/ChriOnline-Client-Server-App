@@ -4,6 +4,7 @@ import com.chrionline.client.controller.PanierController;
 import com.chrionline.shared.dto.CommandeDTO;
 import com.chrionline.shared.dto.LignePanierDTO;
 import com.chrionline.shared.dto.PanierDTO;
+import com.chrionline.client.view.utils.HeaderComponent;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.*;
@@ -63,6 +64,12 @@ public class PanierView extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
+        
+        // Si l'idUtilisateur n'a pas été fourni au constructeur, on le récupère du SessionManager
+        if (this.idUtilisateur <= 0) {
+            this.idUtilisateur = com.chrionline.client.session.SessionManager.getInstance().getUserId();
+        }
+        
         this.controller = new PanierController(idUtilisateur);
 
         stage.setTitle("ChriOnline — Mon Panier");
@@ -70,7 +77,7 @@ public class PanierView extends Application {
         VBox root = new VBox(0);
         root.setStyle("-fx-background-color: " + CREME + ";");
 
-        root.getChildren().add(buildHeader());
+        root.getChildren().add(HeaderComponent.build(stage, "Panier"));
 
         // ── Contenu ──────────────────────────────────────────
         HBox content = new HBox(28);
@@ -102,84 +109,6 @@ public class PanierView extends Application {
     // ═════════════════════════════════════════════════════════════════════
     // HEADER
     // ═════════════════════════════════════════════════════════════════════
-
-    private HBox buildHeader() {
-        HBox header = new HBox(40);
-        header.setPadding(new Insets(22, 48, 22, 48));
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.setStyle(
-                "-fx-background-color: " + CREME_CARD + ";" +
-                        "-fx-border-color: transparent transparent " + BORDER + " transparent;" +
-                        "-fx-border-width: 0 0 1 0;");
-
-        Text logo = new Text("ChriOnline");
-        logo.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
-        logo.setFill(Color.web(BRUN));
-        logo.setCursor(javafx.scene.Cursor.HAND);
-        logo.setOnMouseClicked(e -> retourCatalogue());
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox nav = new HBox(28);
-        nav.setAlignment(Pos.CENTER);
-
-        Hyperlink hAcc = navLink("Accueil");
-        hAcc.setOnAction(e -> {
-            try { new HomeView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-        });
-
-        Hyperlink hCat = navLink("Catalogue");
-        hCat.setOnAction(e -> {
-            try { new CatalogueView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-        });
-
-        String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
-        String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
-        String initials = "";
-        if (prenom != null && !prenom.isEmpty()) initials += prenom.toUpperCase().charAt(0);
-        if (nom != null && !nom.isEmpty()) initials += nom.toUpperCase().charAt(0);
-        if (initials.isEmpty()) initials = "U";
-        
-        javafx.scene.layout.StackPane avatar = new javafx.scene.layout.StackPane();
-        javafx.scene.shape.Circle circle = new javafx.scene.shape.Circle(15, Color.web(TERRACOTTA));
-        Text initText = new Text(initials);
-        initText.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
-        initText.setFill(Color.WHITE);
-        avatar.getChildren().addAll(circle, initText);
-        avatar.setCursor(javafx.scene.Cursor.HAND);
-        avatar.setOnMouseClicked(e -> {
-            try { new ProfilView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-        });
-        avatar.setOnMouseEntered(e -> circle.setFill(Color.web(SAUGE_DARK)));
-        avatar.setOnMouseExited(e -> circle.setFill(Color.web(TERRACOTTA)));
-
-        Hyperlink hOrd = navLink("Mes Commandes");
-        hOrd.setOnAction(e -> {
-            try { new MesCommandesView().start(stage); } catch (Exception ex) { ex.printStackTrace(); }
-        });
-
-        nav.getChildren().addAll(hAcc, hCat, hOrd, navLinkActif("Mon Panier"), avatar);
-
-        header.getChildren().addAll(logo, spacer, nav);
-        return header;
-    }
-
-    private Hyperlink navLink(String text) {
-        Hyperlink l = new Hyperlink(text);
-        l.setFont(Font.font("Georgia", 14));
-        l.setTextFill(Color.web(BRUN));
-        l.setStyle("-fx-border-color: transparent;");
-        l.setOnAction(e -> retourCatalogue());
-        return l;
-    }
-
-    private Text navLinkActif(String text) {
-        Text t = new Text(text);
-        t.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-        t.setFill(Color.web(SAUGE_DARK));
-        return t;
-    }
 
     // ═════════════════════════════════════════════════════════════════════
     // COLONNE GAUCHE — Liste des articles

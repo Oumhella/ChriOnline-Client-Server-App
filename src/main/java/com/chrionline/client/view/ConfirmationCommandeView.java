@@ -2,10 +2,10 @@ package com.chrionline.client.view;
 
 import com.chrionline.shared.dto.CommandeDTO;
 import com.chrionline.shared.dto.LigneCommandeDTO;
+import com.chrionline.client.view.utils.HeaderComponent;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
@@ -13,11 +13,11 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
-import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
+
 import java.io.File;
 
 public class ConfirmationCommandeView extends Application {
@@ -50,10 +50,9 @@ public class ConfirmationCommandeView extends Application {
         VBox root = new VBox(0);
         root.setStyle("-fx-background-color: " + CREME + ";");
 
-        // Header (Same as HomeView)
-        root.getChildren().addAll(buildHeader(stage), buildBanner());
+        // Header Centralisé
+        root.getChildren().addAll(HeaderComponent.build(stage, "Commandes"), buildBanner());
 
-        // --- Contenu scrollable ---
         VBox content = new VBox(30);
         content.setPadding(new Insets(30, 60, 50, 60));
         content.setAlignment(Pos.TOP_CENTER);
@@ -63,96 +62,21 @@ public class ConfirmationCommandeView extends Application {
             buildTrackingCard(),
             buildQuickRecap(),
             buildItemsSection(),
-            buildFooter()
+            buildFooterButtons()
         );
 
         ScrollPane scroll = new ScrollPane(content);
         scroll.setFitToWidth(true);
-        scroll.setStyle("-fx-background-color: transparent; -fx-background: " + CREME + "; -fx-border-color: transparent;");
+        scroll.setStyle("-fx-background: " + CREME + "; -fx-background-color: transparent; -fx-border-color: transparent;");
         VBox.setVgrow(scroll, Priority.ALWAYS);
         root.getChildren().add(scroll);
 
         if (stage.getScene() == null) {
             stage.setScene(new Scene(root, 1100, 800));
-            stage.centerOnScreen();
         } else {
             stage.getScene().setRoot(root);
-            stage.getScene().getStylesheets().clear();
         }
         if (!stage.isShowing()) stage.show();
-    }
-
-    // --- EXACT REPRODUCTION OF HOMEVIEW HEADER ---
-    private HBox buildHeader(Stage stage) {
-        HBox header = new HBox(40);
-        header.setPadding(new Insets(25, 60, 25, 60));
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.setStyle("-fx-background-color: " + CREME + "; -fx-border-color: transparent transparent " + BORDER + " transparent; -fx-border-width: 0 0 1 0;");
-
-        Text logo = new Text("ChriOnline");
-        logo.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
-        logo.setFill(Color.web(BRUN));
-        logo.setCursor(javafx.scene.Cursor.HAND);
-        logo.setOnMouseClicked(e -> { try { new HomeView().start(stage); } catch (Exception ex) {} });
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox nav = new HBox(35);
-        nav.setAlignment(Pos.CENTER);
-        
-        Hyperlink hAcc = navLink("Accueil", false);
-        Hyperlink hCat = navLink("Catalogue", false);
-        Hyperlink hOrd = navLink("Mes Commandes", false);
-        Hyperlink hAbo = navLink("À propos", false);
-        
-        hAcc.setOnAction(e -> { try { new HomeView().start(stage); } catch (Exception ex) {} });
-        hCat.setOnAction(e -> { try { new CatalogueView().start(stage); } catch (Exception ex) {} });
-        hOrd.setOnAction(e -> { try { new MesCommandesView().start(stage); } catch (Exception ex) {} });
-
-        nav.getChildren().addAll(hAcc, hCat, hOrd, hAbo);
-        
-        HBox rightControls = new HBox(20);
-        rightControls.setAlignment(Pos.CENTER);
-        
-        boolean isLogged = com.chrionline.client.session.SessionManager.getInstance().isLogged();
-        if (isLogged) {
-            String prenom = com.chrionline.client.session.SessionManager.getInstance().getPrenom();
-            String nom = com.chrionline.client.session.SessionManager.getInstance().getNom();
-            String initials = (prenom != null && !prenom.isEmpty() ? prenom.toUpperCase().substring(0,1) : "") + 
-                              (nom != null && !nom.isEmpty() ? nom.toUpperCase().substring(0,1) : "");
-            if (initials.isEmpty()) initials = "U";
-            
-            StackPane avatar = new StackPane();
-            Circle circle = new Circle(18, Color.web(TERRACOTTA));
-            Text initText = new Text(initials);
-            initText.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-            initText.setFill(Color.WHITE);
-            avatar.getChildren().addAll(circle, initText);
-            avatar.setCursor(javafx.scene.Cursor.HAND);
-            avatar.setOnMouseClicked(e -> { try { new ProfilView().start(stage); } catch (Exception ex) {} });
-            rightControls.getChildren().add(avatar);
-        }
-
-        Button btnLogout = new Button(isLogged ? "Déconnexion" : "Connexion");
-        btnLogout.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BRUN + "; -fx-border-color: " + BRUN + "; -fx-border-radius: 20; -fx-padding: 8 20; -fx-font-family: 'Georgia';");
-        btnLogout.setOnAction(e -> {
-            if (isLogged) com.chrionline.client.session.SessionManager.getInstance().clear();
-            try { new ConnexionView().start(stage); } catch (Exception ex) {}
-        });
-        rightControls.getChildren().add(btnLogout);
-
-        header.getChildren().addAll(logo, spacer, nav, rightControls);
-        return header;
-    }
-
-    private Hyperlink navLink(String text, boolean actif) {
-        Hyperlink link = new Hyperlink(text);
-        link.setFont(Font.font("Georgia", actif ? FontWeight.BOLD : FontWeight.NORMAL, 16));
-        link.setTextFill(Color.web(actif ? SAUGE_DARK : BRUN));
-        link.setUnderline(false);
-        link.setStyle("-fx-border-color: transparent;");
-        return link;
     }
 
     private VBox buildBanner() {
@@ -162,20 +86,16 @@ public class ConfirmationCommandeView extends Application {
         box.setStyle("-fx-background-color: " + SAUGE_DARK + ";");
 
         Circle iconContainer = new Circle(35, Color.web(CREME_CARD));
-        Text icon = new Text("✓");
-        icon.setFont(Font.font("Georgia", FontWeight.BOLD, 40));
-        icon.setFill(Color.web(SAUGE_DARK));
-        StackPane checkBadge = new StackPane(iconContainer, icon);
+        Text icon = new Text("✓"); icon.setFont(Font.font("Georgia", FontWeight.BOLD, 40)); icon.setFill(Color.web(SAUGE_DARK));
+        StackPane badge = new StackPane(iconContainer, icon);
 
         Text title = new Text("Merci pour votre commande !");
-        title.setFont(Font.font("Georgia", FontWeight.BOLD, 32));
-        title.setFill(Color.WHITE);
+        title.setFont(Font.font("Georgia", FontWeight.BOLD, 32)); title.setFill(Color.WHITE);
 
-        Text sub = new Text("Votre commande a été validée avec succès et est en cours de préparation.");
-        sub.setFont(Font.font("Georgia", 16));
-        sub.setFill(Color.web("#E8F3EB"));
+        Text sub = new Text("Votre commande a été validée avec succès.");
+        sub.setFont(Font.font("Georgia", 16)); sub.setFill(Color.web("#E8F3EB"));
 
-        box.getChildren().addAll(checkBadge, title, sub);
+        box.getChildren().addAll(badge, title, sub);
         return box;
     }
 
@@ -185,38 +105,25 @@ public class ConfirmationCommandeView extends Application {
         card.setPadding(new Insets(20, 30, 20, 30));
         card.setStyle("-fx-background-color: #FFF3E0; -fx-background-radius: 12; -fx-border-color: #FFE0B2; -fx-border-radius: 12; -fx-border-width: 2;");
         
-        DropShadow shadow = new DropShadow(8, Color.web(BRUN, 0.05));
-        card.setEffect(shadow);
-
-        Text warningIcon = new Text("🔔 À CONSERVER");
-        warningIcon.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-        warningIcon.setFill(Color.web("#E65100"));
-
-        Text trackingMsg = new Text("Veuillez conserver précieusement votre référence de commande ci-dessous.\nElle est indispensable pour suivre l'état d'avancement de votre livraison.");
-        trackingMsg.setFont(Font.font("Georgia", 15));
-        trackingMsg.setTextAlignment(TextAlignment.CENTER);
-        trackingMsg.setFill(Color.web(BRUN));
+        Text trackingMsg = new Text("Conservez votre référence pour le suivi :");
+        trackingMsg.setFont(Font.font("Georgia", 15)); trackingMsg.setFill(Color.web(BRUN));
         
         Label refLabel = new Label(recap.getReference() != null ? recap.getReference() : "N/A");
-        refLabel.setFont(Font.font("Courier New", FontWeight.BOLD, 26));
-        refLabel.setTextFill(Color.web(TERRACOTTA));
-        refLabel.setStyle("-fx-background-color: white; -fx-padding: 10 20; -fx-background-radius: 8; -fx-border-color: " + BORDER + "; -fx-border-radius: 8;");
+        refLabel.setFont(Font.font("Courier New", FontWeight.BOLD, 26)); refLabel.setTextFill(Color.web(TERRACOTTA));
+        refLabel.setStyle("-fx-background-color: white; -fx-padding: 10 20; -fx-background-radius: 8; -fx-border-color: " + BORDER + ";");
 
-        card.getChildren().addAll(warningIcon, trackingMsg, refLabel);
+        card.getChildren().addAll(trackingMsg, refLabel);
         return card;
     }
 
     private HBox buildQuickRecap() {
         HBox box = new HBox(40);
         box.setAlignment(Pos.CENTER);
-        box.setPadding(new Insets(20, 30, 20, 30));
-        box.setStyle("-fx-background-color: " + CREME_CARD + "; -fx-background-radius: 12; -fx-border-color: " + BORDER + "; -fx-border-radius: 12;");
-        box.setEffect(new DropShadow(5, Color.web(BRUN, 0.03)));
-
+        box.setPadding(new Insets(20));
+        box.setStyle("-fx-background-color: " + CREME_CARD + "; -fx-background-radius: 12; -fx-border-color: " + BORDER + ";");
         box.getChildren().addAll(
-            buildInfoItem("DATE DE COMMANDE", recap.getDateCommande() != null ? recap.getDateCommande() : "—"),
-            buildInfoItem("CLIENT",           recap.getNomUtilisateur() != null ? recap.getNomUtilisateur() : "—"),
-            buildInfoItem("STATUT ACTUEL",    "En préparation", TERRACOTTA)
+            buildInfoItem("DATE", recap.getDateCommande() != null ? recap.getDateCommande() : "—"),
+            buildInfoItem("STATUT", "En préparation", TERRACOTTA)
         );
         return box;
     }
@@ -224,114 +131,62 @@ public class ConfirmationCommandeView extends Application {
     private VBox buildItemsSection() {
         VBox box = new VBox(15);
         box.setPadding(new Insets(25));
-        box.setStyle("-fx-background-color: " + CREME_CARD + "; -fx-background-radius: 12; -fx-border-color: " + BORDER + "; -fx-border-radius: 12;");
-
-        Label title = new Label("Détails des articles");
+        box.setStyle("-fx-background-color: " + CREME_CARD + "; -fx-background-radius: 12; -fx-border-color: " + BORDER + ";");
+        
+        Label title = new Label("Articles commandés");
         title.setFont(Font.font("Georgia", FontWeight.BOLD, 18));
-        title.setTextFill(Color.web(BRUN));
+        box.getChildren().add(title);
 
-        VBox itemsBox = new VBox(12);
         if (recap.getLignes() != null) {
-            for (LigneCommandeDTO ligne : recap.getLignes()) {
-                itemsBox.getChildren().add(buildItemRow(ligne));
+            for (LigneCommandeDTO l : recap.getLignes()) {
+                HBox row = new HBox(15);
+                row.setAlignment(Pos.CENTER_LEFT);
+                row.setPadding(new Insets(10));
+                row.setStyle("-fx-background-color: white; -fx-border-color: " + BORDER + "; -fx-border-radius: 6;");
+                Label name = new Label(l.getNomProduit()); HBox.setHgrow(name, Priority.ALWAYS);
+                Label qte = new Label("x" + l.getQuantite());
+                Label st = new Label(String.format("%.2f MAD", l.getSousTotal()));
+                row.getChildren().addAll(name, qte, st);
+                box.getChildren().add(row);
             }
         }
-
-        box.getChildren().addAll(title, itemsBox);
+        
+        Label valTotal = new Label(String.format("TOTAL RÉGLÉ : %.2f MAD", recap.getMontantTotal()));
+        valTotal.setFont(Font.font("Georgia", FontWeight.BOLD, 20)); valTotal.setTextFill(Color.web(SAUGE_DARK));
+        box.getChildren().addAll(new Separator(), valTotal);
+        
         return box;
     }
 
-    private HBox buildItemRow(LigneCommandeDTO ligne) {
-        HBox row = new HBox(15);
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.setPadding(new Insets(15));
-        row.setStyle("-fx-background-color: " + CREME + "; -fx-background-radius: 8; -fx-border-color: " + BORDER + "; -fx-border-radius: 8;");
-
-        Label name = new Label(ligne.getNomProduit());
-        name.setFont(Font.font("Georgia", FontWeight.BOLD, 15));
-        name.setTextFill(Color.web(BRUN));
-        HBox.setHgrow(name, Priority.ALWAYS);
-        name.setMaxWidth(Double.MAX_VALUE);
-
-        Label qte = new Label("Quantité : " + ligne.getQuantite());
-        qte.setFont(Font.font("Georgia", 14));
-        qte.setTextFill(Color.web(BRUN_MED));
-        qte.setMinWidth(90);
-
-        Label prix = new Label(String.format("%,.2f MAD", ligne.getSousTotal()));
-        prix.setFont(Font.font("Georgia", FontWeight.BOLD, 16));
-        prix.setTextFill(Color.web(BRUN));
-        prix.setMinWidth(110);
-        prix.setAlignment(Pos.CENTER_RIGHT);
-
-        row.getChildren().addAll(name, qte, prix);
-        return row;
-    }
-
-    private VBox buildFooter() {
-        VBox box = new VBox(25);
+    private HBox buildFooterButtons() {
+        HBox box = new HBox(20);
         box.setAlignment(Pos.CENTER);
 
-        HBox totalBox = new HBox(20);
-        totalBox.setAlignment(Pos.CENTER_RIGHT);
-        totalBox.setPadding(new Insets(20, 30, 20, 30));
-        totalBox.setStyle("-fx-background-color: " + SAUGE_DARK + "; -fx-background-radius: 12;");
-
-        Label lbl = new Label("MONTANT TOTAL RÉGLÉ");
-        lbl.setFont(Font.font("Georgia", FontWeight.BOLD, 16));
-        lbl.setTextFill(Color.WHITE);
-
-        Region space = new Region();
-        HBox.setHgrow(space, Priority.ALWAYS);
-
-        Label val = new Label(String.format("%,.2f MAD", recap.getMontantTotal()));
-        val.setFont(Font.font("Georgia", FontWeight.BOLD, 24));
-        val.setTextFill(Color.WHITE);
-
-        totalBox.getChildren().addAll(lbl, space, val);
-
-        Button btnFacture = new Button("📄 TÉLÉCHARGER LA FACTURE (PDF)");
-        btnFacture.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-        btnFacture.setPadding(new Insets(15, 30, 15, 30));
-        btnFacture.setCursor(javafx.scene.Cursor.HAND);
-        btnFacture.setStyle("-fx-background-color: " + CREME_CARD + "; -fx-border-color: " + SAUGE_DARK + "; -fx-text-fill: " + SAUGE_DARK + "; -fx-background-radius: 30; -fx-border-radius: 30; -fx-border-width: 2;");
-        btnFacture.setOnMouseEntered(e -> btnFacture.setStyle("-fx-background-color: " + SAUGE + "; -fx-border-color: " + SAUGE_DARK + "; -fx-text-fill: white; -fx-background-radius: 30; -fx-border-radius: 30; -fx-border-width: 2;"));
-        btnFacture.setOnMouseExited(e -> btnFacture.setStyle("-fx-background-color: " + CREME_CARD + "; -fx-border-color: " + SAUGE_DARK + "; -fx-text-fill: " + SAUGE_DARK + "; -fx-background-radius: 30; -fx-border-radius: 30; -fx-border-width: 2;"));
+        Button btnFacture = new Button("📄 TÉLÉCHARGER LA FACTURE");
+        btnFacture.setStyle("-fx-background-color: transparent; -fx-border-color: " + SAUGE_DARK + "; -fx-text-fill: " + SAUGE_DARK + "; -fx-background-radius: 30; -fx-padding: 12 25;");
         btnFacture.setOnAction(e -> {
             try {
-                File file = new File("factures/" + recap.getReference() + ".pdf");
-                if (file.exists()) {
-                    java.awt.Desktop.getDesktop().open(file);
-                } else {
-                    System.out.println("Facture non trouvée localement pour : " + file.getAbsolutePath());
-                }
-            } catch (Exception ex) { ex.printStackTrace(); }
+                File f = new File("factures/" + recap.getReference() + ".pdf");
+                if (f.exists()) java.awt.Desktop.getDesktop().open(f);
+            } catch (Exception ex) {}
         });
 
-        Button btnCatalogue = new Button("← RETOURNER AU CATALOGUE");
-        btnCatalogue.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-        btnCatalogue.setPadding(new Insets(15, 30, 15, 30));
-        btnCatalogue.setCursor(javafx.scene.Cursor.HAND);
-        btnCatalogue.setStyle("-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; -fx-background-radius: 30;");
-        btnCatalogue.setOnMouseEntered(e -> btnCatalogue.setStyle("-fx-background-color: " + TERRA_HOVER + "; -fx-text-fill: white; -fx-background-radius: 30;"));
-        btnCatalogue.setOnMouseExited(e -> btnCatalogue.setStyle("-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; -fx-background-radius: 30;"));
-        btnCatalogue.setOnAction(e -> { try { new CatalogueView(idUtilisateur).start(stage); } catch (Exception ex) { ex.printStackTrace(); } });
+        Button btnCatalogue = new Button("← RETOUR AU CATALOGUE");
+        btnCatalogue.setStyle("-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; -fx-background-radius: 30; -fx-padding: 12 35; -fx-font-weight: bold;");
+        btnCatalogue.setOnAction(e -> { try { new CatalogueView(idUtilisateur).start(stage); } catch (Exception ex) {} });
 
-        HBox boutonsBox = new HBox(20);
-        boutonsBox.setAlignment(Pos.CENTER);
-        boutonsBox.getChildren().addAll(btnFacture, btnCatalogue);
-
-        box.getChildren().addAll(totalBox, boutonsBox);
+        box.getChildren().addAll(btnFacture, btnCatalogue);
         return box;
     }
 
-    private VBox buildInfoItem(String label, String value) { return buildInfoItem(label, value, BRUN); }
-
-    private VBox buildInfoItem(String label, String value, String colorHex) {
-        VBox v = new VBox(6); v.setAlignment(Pos.CENTER);
-        Label l = new Label(label); l.setFont(Font.font("System", FontWeight.BOLD, 11)); l.setTextFill(Color.web(BRUN_LIGHT));
-        Label v1 = new Label(value); v1.setFont(Font.font("Georgia", FontWeight.BOLD, 16)); v1.setTextFill(Color.web(colorHex));
-        v.getChildren().addAll(l, v1);
-        return v;
+    private VBox buildInfoItem(String l, String v) { return buildInfoItem(l, v, BRUN); }
+    private VBox buildInfoItem(String l, String v, String color) {
+        VBox box = new VBox(5); box.setAlignment(Pos.CENTER);
+        Label lb = new Label(l); lb.setFont(Font.font("Georgia", FontWeight.BOLD, 12)); lb.setTextFill(Color.web(BRUN_LIGHT));
+        Label va = new Label(v); va.setFont(Font.font("Georgia", FontWeight.BOLD, 16)); va.setTextFill(Color.web(color));
+        box.getChildren().addAll(lb, va);
+        return box;
     }
+
+    public static void main(String[] args) { launch(args); }
 }
