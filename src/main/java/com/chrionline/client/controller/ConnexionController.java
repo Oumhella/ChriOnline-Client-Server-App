@@ -82,8 +82,7 @@ public class ConnexionController {
                                     if ("admin".equals(role)) {
                                         new com.chrionline.admin.view.AdminDashboardView().start(stage);
                                     } else {
-                                        // CatalogueView ne prend plus d'identifiant en paramètre, il lit le SessionManager
-                                        new CatalogueView().start(stage);
+                                        new com.chrionline.client.view.HomeView().start(stage);
                                     }
                                 } catch (Exception ex) {
                                     ex.printStackTrace();
