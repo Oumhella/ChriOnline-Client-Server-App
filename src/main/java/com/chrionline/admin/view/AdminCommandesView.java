@@ -3,7 +3,9 @@ package com.chrionline.admin.view;
 import com.chrionline.admin.controller.AdminCommandesController;
 import com.chrionline.shared.dto.CommandeDTO;
 import com.chrionline.shared.dto.LigneCommandeDTO;
-
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.*;
@@ -17,7 +19,7 @@ import javafx.scene.text.*;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
-
+import javafx.util.Duration;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -35,14 +37,20 @@ public class AdminCommandesView extends Application {
     private static final String BRUN_MED    = "#6B4F3A";
     private static final String BRUN_LIGHT  = "#9A7B65";
     private static final String SAUGE_DARK  = "#6B9E7A";
+    private static final String TERRACOTTA  = "#C96B4A";
+    private static final String WARNING     = "#D4920A";
+    private static final String WARNING_BG  = "#FDF3DC";
+    private static final String DANGER      = "#B03A2E";
+    private static final String DANGER_BG   = "#FBEAEA";
     private static final String INFO        = "#2471A3";
     private static final String INFO_BG     = "#E8F4FB";
-
+    private static final String SUCCESS_BG  = "#EAF5ED";
 
     // ─── État de la vue ─────────────────────────────────────────────────────────
     private AdminCommandesController controller;
     private List<CommandeDTO>         toutesLesCommandes = new ArrayList<>();
     private VBox                      tableContainer;
+    private Label                     toastLabel;
     private String                    filtreStatut    = "TOUS";
     private String                    recherche       = "";
     private boolean                   triDateDesc     = true;   // true = récent→ancien
@@ -433,7 +441,22 @@ public class AdminCommandesView extends Application {
         return b;
     }
 
-
+    // ─── Badge coloré par statut ──────────────────────────────────────────────
+    private void appliquerStyleStatut(ComboBox<String> box, String statut) {
+        String bg, fg, border;
+        switch (statut != null ? statut.toUpperCase() : "") {
+            case "EXPEDIEE" -> { bg = "#E8F4FD"; fg = "#2874A6"; border = "#2874A6"; }
+            case "LIVREE"   -> { bg = "#E9F7EF"; fg = "#1E8449"; border = "#1E8449"; }
+            case "ANNULEE"  -> { bg = "#FDEDEC"; fg = "#C0392B"; border = "#C0392B"; }
+            default         -> { bg = "#FEF9E7"; fg = "#7D6608"; border = "#D4AC0D"; } // EN_PREPARATION orange
+        }
+        box.setStyle(
+            "-fx-font-family: 'Georgia'; -fx-font-size: 11px;" +
+            "-fx-background-color: " + bg + ";" +
+            "-fx-border-color: " + border + "; -fx-border-radius: 12; -fx-background-radius: 12;" +
+            "-fx-text-fill: " + fg + "; -fx-padding: 2 8;"
+        );
+    }
 
 
     // ═══════════════════════════════════════════════════════════════════════════
