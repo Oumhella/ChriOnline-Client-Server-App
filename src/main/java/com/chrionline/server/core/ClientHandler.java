@@ -327,7 +327,14 @@ public class ClientHandler implements Runnable {
 
     private void handleAjouterProduit(Map<String, Object> req) {
         try {
-            envoyerMessage(produitService.handleAjouterProduit(req));
+            Map<String, Object> resp = produitService.handleAjouterProduit(req);
+            envoyerMessage(resp);
+
+            // Si succès, on notifie tous les clients
+            if ("OK".equals(resp.get("statut"))) {
+                String nom = (String) req.get("nom");
+                server.notifierTousLesClients("NOUVEAU_PRODUIT:" + nom, "nouveaute");
+            }
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", e.getMessage()));
         }
