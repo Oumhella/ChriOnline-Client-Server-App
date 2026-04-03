@@ -126,6 +126,7 @@ public class Server {
     }
 
     /**
+     *
      * Diffuse une notification UDP à une adresse/port donnés.
      *
      * @param message        le message de notification
@@ -142,6 +143,7 @@ public class Server {
         } catch (IOException e) {
             System.err.println("[UDP] Erreur d'envoi de notification : " + e.getMessage());
         }
+
     }
 
     /**
