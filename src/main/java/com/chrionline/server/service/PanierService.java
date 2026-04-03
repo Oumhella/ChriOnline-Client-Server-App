@@ -10,12 +10,16 @@ import com.chrionline.shared.models.Panier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Service panier : orchestre les opérations et convertit Model → DTO.
  * Appelé par ClientHandler, retourne toujours une Map statut/message/data.
  */
 public class PanierService {
+
+    private static final Logger logger = LogManager.getLogger(PanierService.class);
 
     public Map<String, Object> getPanier(Map<String, Object> req) {
         int idUtilisateur = getInt(req, "idUtilisateur");
@@ -116,16 +120,20 @@ public class PanierService {
         String nomCarte = (String) req.get("nomCarte");
         String numeroCarte = (String) req.get("numeroCarte");
 
-        if (idUtilisateur == -1 || methodePaiement == null)
+        if (idUtilisateur == -1 || methodePaiement == null) {
+            logger.warn("Tentative de paiement échouée : paramètres manquants pour l'utilisateur ID: {}", idUtilisateur);
             return erreur("Parametres manquants.");
+        }
 
         try {
             CommandeDTO recap = PanierDAO.confirmerCommande(idUtilisateur, methodePaiement, nomCarte, numeroCarte);
+            logger.info("Paiement réussi pour l'utilisateur ID: {} avec la méthode: {}. Référence commande: {}", idUtilisateur, methodePaiement, recap.getReference());
             return Map.of(
                     "statut", "OK",
                     "message", "Commande confirmee avec succes !",
                     "commandeResult", recap);
         } catch (Exception e) {
+            logger.error("Échec du paiement pour l'utilisateur ID: {}. Erreur: {}", idUtilisateur, e.getMessage(), e);
             return erreur(e.getMessage());
         }
     }
