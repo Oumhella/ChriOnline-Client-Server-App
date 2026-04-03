@@ -5,6 +5,7 @@ import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.*;
 import java.util.Map;
+import java.security.SecureRandom;
 
 /**
  * Gère toutes les opérations BDD liées aux utilisateurs.
@@ -91,96 +92,220 @@ public class UserDAO {
     }
 
     /**
-     * Authentifie un utilisateur.
-     * Retourne le rôle dans "data" pour permettre la redirection côté client.
+     * Authentifie un utilisateur (Etape 1: Verification + OTP).
+     * Retourne REQUIRES_2FA pour déclencher l'authentification à deux facteurs.
      */
     public static Map<String, Object> connexion(Map<String, Object> data) {
         String email = (String) data.get("email");
         String mdp   = (String) data.get("mdp");
 
-        try (Connection conn = DatabaseConnection.getInstance().getConnection()) {
+        // Requête unifiée pour récupérer l'utilisateur, l'état de son compte, et son rôle
+        String sql = """
+            SELECT u.*, 
+                   c.statut_compte, 
+                   CASE WHEN a.idAdmin IS NOT NULL THEN 'admin' ELSE 'client' END as role
+            FROM utilisateur u
+            LEFT JOIN client c ON u.idUtilisateur = c.idUtilisateur
+            LEFT JOIN admin a ON u.idUtilisateur = a.idAdmin
+            WHERE u.email = ?
+        """;
 
-            // ── Admin : on vérifie la présence de l'id dans la table `admin` ──
-            String sqlAdmin = """
-                SELECT u.idUtilisateur, u.nom, u.prenom, u.email, u.password
-                FROM utilisateur u
-                JOIN admin a ON a.idAdmin = u.idUtilisateur
-                WHERE u.email = ?
-            """;
-            try (PreparedStatement ps = conn.prepareStatement(sqlAdmin)) {
-                ps.setString(1, email);
-                ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    if (BCrypt.checkpw(mdp, rs.getString("password"))) {
-                        System.out.println("[UserDAO] Admin trouvé : id=" + rs.getInt("idUtilisateur"));
-                        Map<String, Object> innerData = new java.util.HashMap<>();
-                        innerData.put("userId",  rs.getInt("idUtilisateur"));
-                        innerData.put("nom",     rs.getString("nom"));
-                        innerData.put("prenom",  rs.getString("prenom"));
-                        innerData.put("email",   rs.getString("email"));
-                        innerData.put("role",    "admin");
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+             
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
 
-                        Map<String, Object> rep = new java.util.HashMap<>();
-                        rep.put("statut",  "OK");
-                        rep.put("message", "Bienvenue, " + rs.getString("prenom") + " !");
-                        rep.put("data", innerData);
-                        return rep;
-                    }
+            if (!rs.next()) {
+                return Map.of("statut", "ERREUR", "message", "Email ou mot de passe incorrect.");
+            }
+
+            int idUtilisateur = rs.getInt("idUtilisateur");
+            boolean accountLocked = rs.getBoolean("account_locked");
+            Timestamp lockTime = rs.getTimestamp("lock_time");
+            int failedAttempts = rs.getInt("failed_attempts");
+            String role = rs.getString("role");
+            String statutCompte = rs.getString("statut_compte");
+
+            // 1. Vérifier si le compte est bloqué temporairement
+            if (accountLocked && lockTime != null) {
+                int dureeMinutes = calculerDureeBlocage(failedAttempts);
+                long tempsEcouleMillis = System.currentTimeMillis() - lockTime.getTime();
+                long tempsRestantSec = (long)(dureeMinutes * 60) - (tempsEcouleMillis / 1000);
+
+                if (tempsRestantSec > 0) {
+                    Map<String, Object> res = new java.util.HashMap<>();
+                    res.put("statut", "ERREUR_BLOQUE");
+                    res.put("message", "Compte temporairement suspendu.");
+                    res.put("delaySeconds", tempsRestantSec);
+                    return res;
+                } else {
+                    // Délai expiré : on peut autoriser une tentative
+                    // Note : on ne réinitialise pas failed_attempts ici, 
+                    // pour que la PROCHAINE erreur passe au palier supérieur.
                 }
             }
 
-            // ── Client : on vérifie la présence de l'id dans la table `client` ──
-            String sqlClient = """
-                SELECT u.idUtilisateur, u.nom, u.prenom, u.email, u.password, c.statut_compte
-                FROM utilisateur u
-                JOIN client c ON c.idUtilisateur = u.idUtilisateur
-                WHERE u.email = ?
-            """;
-            try (PreparedStatement ps = conn.prepareStatement(sqlClient)) {
-                ps.setString(1, email);
-                ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    if (BCrypt.checkpw(mdp, rs.getString("password"))) {
-                        String statut = rs.getString("statut_compte");
-                        if ("bloque".equals(statut)) {
-                            Map<String, Object> rep = new java.util.HashMap<>();
-                            // Compte explicitement bloqué par l'admin
-                            rep.put("statut",  "ERREUR");
-                            rep.put("message", "Votre compte a été bloqué par un administrateur.");
-                            return rep;
-                        } else if ("non actif".equals(statut)) {
-                            Map<String, Object> rep = new java.util.HashMap<>();
-                            rep.put("statut",  "EN_ATTENTE");
-                            rep.put("message", "Confirmez votre email avant de vous connecter.");
-                            return rep;
-                        }
-                        System.out.println("[UserDAO] Client trouvé : id=" + rs.getInt("idUtilisateur"));
-                        Map<String, Object> innerData = new java.util.HashMap<>();
-                        innerData.put("userId",  rs.getInt("idUtilisateur"));
-                        innerData.put("nom",     rs.getString("nom"));
-                        innerData.put("prenom",  rs.getString("prenom"));
-                        innerData.put("email",   rs.getString("email"));
-                        innerData.put("role",    "client");
-
-                        Map<String, Object> rep = new java.util.HashMap<>();
-                        rep.put("statut",  "OK");
-                        rep.put("message", "Bienvenue, " + rs.getString("prenom") + " !");
-                        rep.put("data", innerData);
-                        return rep;
-                    }
+            // 2. Vérifier si le compte est bloqué par l'admin ou non actif (pour les clients)
+            if ("client".equals(role)) {
+                if ("bloque".equals(statutCompte)) {
+                    return Map.of("statut", "ERREUR", "message", "Votre compte a été bloqué par un administrateur.");
+                } else if ("non actif".equals(statutCompte)) {
+                    return Map.of("statut", "EN_ATTENTE", "message", "Confirmez votre email avant de vous connecter.");
                 }
             }
 
-            Map<String, Object> rep = new java.util.HashMap<>();
-            rep.put("statut",  "ERREUR");
-            rep.put("message", "Email ou mot de passe incorrect.");
-            return rep;
+            // 3. Vérifier le mot de passe
+            if (!BCrypt.checkpw(mdp, rs.getString("password"))) {
+                failedAttempts++;
+                // Blocage tous les 3 essais (3, 6, 9, 12...)
+                if (failedAttempts % 3 == 0) {
+                    bloquerCompte(conn, idUtilisateur, failedAttempts);
+                    int dureeMinutes = calculerDureeBlocage(failedAttempts);
+                    Map<String, Object> res = new java.util.HashMap<>();
+                    res.put("statut", "ERREUR_BLOQUE");
+                    res.put("message", "Compte bloqué suite à " + failedAttempts + " échecs.");
+                    res.put("delaySeconds", (long)dureeMinutes * 60);
+                    return res;
+                } else {
+                    incrementerTentatives(conn, idUtilisateur, failedAttempts);
+                    return Map.of("statut", "ERREUR", "message", "Mot de passe incorrect. Tentatives restantes : " + (3 - (failedAttempts % 3)));
+                }
+            }
+
+            // 4. Succès d'identification : Réinitialisation des échecs
+            reinitialiserTentatives(conn, idUtilisateur);
+
+            // 5. Génération et sauvegarde du code OTP (6 chiffres)
+            String otpCode = genererOTP();
+            sauvegarderOTP(conn, idUtilisateur, otpCode);
+
+            // 6. Envoi de l'OTP par email
+            try {
+                com.chrionline.server.service.EmailService.envoyerOTP2FA(email, otpCode);
+            } catch (Exception e) {
+                return Map.of("statut", "ERREUR", "message", "Erreur lors de l'envoi de l'email OTP. Veuillez réessayer.");
+            }
+
+            return Map.of("statut", "REQUIRES_2FA", "message", "Un code à 6 chiffres vous a été envoyé par email.");
 
         } catch (Exception e) {
-            Map<String, Object> rep = new java.util.HashMap<>();
-            rep.put("statut",  "ERREUR");
-            rep.put("message", "Erreur serveur : " + e.getMessage());
-            return rep;
+            return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
+        }
+    }
+
+    /**
+     * ÉTAPE 2 : Vérification du code OTP pour finaliser la connexion
+     */
+    public static Map<String, Object> verifierOTP(String email, String otpCodeSaisi) {
+        String sql = """
+            SELECT u.*, 
+                   CASE WHEN a.idAdmin IS NOT NULL THEN 'admin' ELSE 'client' END as role
+            FROM utilisateur u
+            LEFT JOIN admin a ON u.idUtilisateur = a.idAdmin
+            WHERE u.email = ?
+        """;
+
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                String dbOtpCode = rs.getString("otp_code");
+                Timestamp otpExpiry = rs.getTimestamp("otp_expiry");
+
+                // Vérifier si le code correspond et n'est pas expiré
+                if (dbOtpCode != null && dbOtpCode.equals(otpCodeSaisi)) {
+                    if (otpExpiry != null && otpExpiry.getTime() > System.currentTimeMillis()) {
+                        
+                        // OTP Valide : on nettoie les colonnes OTP pour des raisons de sécurité
+                        nettoyerOTP(conn, rs.getInt("idUtilisateur"));
+
+                        // On construit l'objet de connexion finale
+                        Map<String, Object> innerData = new java.util.HashMap<>();
+                        innerData.put("userId", rs.getInt("idUtilisateur"));
+                        innerData.put("nom", rs.getString("nom"));
+                        innerData.put("prenom", rs.getString("prenom"));
+                        innerData.put("email", rs.getString("email"));
+                        innerData.put("role", rs.getString("role"));
+
+                        return Map.of(
+                            "statut", "OK", 
+                            "message", "Authentification validée !", 
+                            "data", innerData
+                        );
+                    } else {
+                        return Map.of("statut", "ERREUR", "message", "Le code OTP a expiré (limite de 5 minutes).");
+                    }
+                }
+            }
+            return Map.of("statut", "ERREUR", "message", "Code OTP invalide.");
+
+        } catch (Exception e) {
+            return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
+        }
+    }
+
+    private static String genererOTP() {
+        SecureRandom random = new SecureRandom();
+        int otp = 100000 + random.nextInt(900000); // Génère entre 100000 et 999999
+        return String.valueOf(otp);
+    }
+
+    private static void sauvegarderOTP(Connection conn, int idUtilisateur, String otp) throws Exception {
+        Timestamp expiry = new Timestamp(System.currentTimeMillis() + (5 * 60 * 1000));
+        String sql = "UPDATE utilisateur SET otp_code = ?, otp_expiry = ? WHERE idUtilisateur = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, otp);
+            ps.setTimestamp(2, expiry);
+            ps.setInt(3, idUtilisateur);
+            ps.executeUpdate();
+        }
+    }
+
+    private static void nettoyerOTP(Connection conn, int idUtilisateur) throws Exception {
+        String sql = "UPDATE utilisateur SET otp_code = NULL, otp_expiry = NULL WHERE idUtilisateur = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idUtilisateur);
+            ps.executeUpdate();
+        }
+    }
+
+    private static int calculerDureeBlocage(int failedAttempts) {
+        if (failedAttempts >= 12) return 1440; // 24 heures
+        if (failedAttempts >= 9)  return 60;   // 1 heure
+        if (failedAttempts >= 6)  return 15;   // 15 minutes
+        if (failedAttempts >= 3)  return 1;    // 1 minute
+        return 0;
+    }
+
+    private static void incrementerTentatives(Connection conn, int idUtilisateur, int failedAttempts) throws Exception {
+        String sql = "UPDATE utilisateur SET failed_attempts = ? WHERE idUtilisateur = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, failedAttempts);
+            ps.setInt(2, idUtilisateur);
+            ps.executeUpdate();
+        }
+    }
+
+    private static void bloquerCompte(Connection conn, int idUtilisateur, int failedAttempts) throws Exception {
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        String sql = "UPDATE utilisateur SET failed_attempts = ?, account_locked = true, lock_time = ? WHERE idUtilisateur = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, failedAttempts);
+            ps.setTimestamp(2, now);
+            ps.setInt(3, idUtilisateur);
+            ps.executeUpdate();
+        }
+    }
+
+    private static void reinitialiserTentatives(Connection conn, int idUtilisateur) throws Exception {
+        String sql = "UPDATE utilisateur SET failed_attempts = 0, account_locked = false, lock_time = NULL WHERE idUtilisateur = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idUtilisateur);
+            ps.executeUpdate();
         }
     }
 
