@@ -240,11 +240,27 @@ public class ClientHandler implements Runnable {
 
                 // Notifier les admins pour chaque produit en alerte de stock
                 if (recap != null && recap.getAlertesStock() != null && !recap.getAlertesStock().isEmpty()) {
+                    List<String> adminEmails = com.chrionline.server.dao.UserDAO.getAllAdminEmails();
                     for (String alerte : recap.getAlertesStock()) {
                         // "nomProduit:stock=X:seuil=Y"
                         String msgAlerte = "STOCK_ALERTE:" + alerte;
                         server.notifierAdmins(msgAlerte, "stock");
                         System.out.println("[HANDLER] Notification stock alerte envoyée : " + msgAlerte);
+
+                        // --- Envoi d'email aux admins ---
+                        new Thread(() -> {
+                            try {
+                                String[] parts = alerte.split(":");
+                                String nomP = parts.length > 0 ? parts[0] : "Inconnu";
+                                String stockP = parts.length > 1 ? parts[1].replace("stock=", "") : "?";
+                                String seuilP = parts.length > 2 ? parts[2].replace("seuil=", "") : "?";
+                                for (String emailAdmin : adminEmails) {
+                                    com.chrionline.server.service.EmailService.envoyerAlerteStock(emailAdmin, nomP, stockP, seuilP);
+                                }
+                            } catch (Exception ex) {
+                                System.err.println("[HANDLER] Erreur email alerte stock : " + ex.getMessage());
+                            }
+                        }).start();
                     }
                 }
             }
