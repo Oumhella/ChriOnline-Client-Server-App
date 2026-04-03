@@ -98,6 +98,26 @@ public class EmailService {
         envoyer(destinataire, sujet, corps);
     }
 
+    /**
+     * Envoie une alerte de stock à un administrateur.
+     */
+    public static void envoyerAlerteStock(String destinataire, String nomProduit, String stock, String seuil) throws MessagingException {
+        String sujet = "⚠️ Alerte de Stock — " + nomProduit;
+        String corps = """
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
+              <h2 style="color:#d32f2f">Alerte de Rupture de Stock</h2>
+              <p>Le produit suivant a atteint ou dépassé son seuil d'alerte :</p>
+              <div style="background:#f4f4f4;padding:16px;border-radius:8px;border-left:4px solid #d32f2f;">
+                <p><strong>Produit :</strong> %s</p>
+                <p><strong>Stock restant :</strong> <span style="color:#d32f2f;font-weight:bold;">%s</span></p>
+                <p><strong>Seuil d'alerte :</strong> %s</p>
+              </div>
+              <p style="color:#888;font-size:12px;margin-top:20px;">Veuillez vous connecter au tableau de bord pour réapprovisionner le stock de ce produit.</p>
+            </div>
+            """.formatted(nomProduit, stock, seuil);
+        envoyer(destinataire, sujet, corps);
+    }
+
     // ─── Méthode publique d'envoi ─────────────────────────────────────────────
     
     public static void envoyer(String destinataire, String sujet, String corpsHtml) throws MessagingException {
