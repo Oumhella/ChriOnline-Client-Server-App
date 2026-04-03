@@ -43,6 +43,7 @@ public class InscriptionView extends Application {
     private TextField     cpField;
     private TextField     paysField;
     private Label         msgLabel;
+    private TextField     dateNaissanceField;
 
     @Override
     public void start(Stage stage) {
@@ -222,6 +223,11 @@ public class InscriptionView extends Application {
                 labelField("Adresse email *", emailField),
                 labelField("Téléphone", telField)
         ));
+
+        dateNaissanceField = inputField("ex: 31/03/2005");
+        form.getChildren().add(
+                labelField("Date de naissance", dateNaissanceField)
+        );
 
         // ══ Bloc 2 : Sécurité ═════════════════════════════════
         form.getChildren().add(blocTitre("Mot de passe"));
@@ -579,13 +585,43 @@ public class InscriptionView extends Application {
 
     private double calculerForce(String mdp) {
         if (mdp == null || mdp.isEmpty()) return 0;
+
         double s = 0;
-        if (mdp.length() >= 6)  s += 0.25;
-        if (mdp.length() >= 10) s += 0.25;
-        if (mdp.matches(".*[A-Z].*")) s += 0.20;
-        if (mdp.matches(".*[0-9].*")) s += 0.15;
+
+        // criteres de base
+        if (mdp.length() >= 6)               s += 0.20;
+        if (mdp.length() >= 10)              s += 0.15;
+        if (mdp.matches(".*[A-Z].*"))        s += 0.15;
+        if (mdp.matches(".*[0-9].*"))        s += 0.15;
         if (mdp.matches(".*[^a-zA-Z0-9].*")) s += 0.15;
-        return Math.min(s, 1.0);
+
+
+        String dateNaissance = dateNaissanceField != null
+                ? dateNaissanceField.getText().trim()
+                : "";
+
+        if (!dateNaissance.isEmpty()) {
+
+            String chiffresDate = dateNaissance.replaceAll("[^0-9]", "");
+
+            if (chiffresDate.length() >= 4) {
+                String annee  = chiffresDate.substring(chiffresDate.length() - 4);
+                String jour   = chiffresDate.length() >= 6
+                        ? chiffresDate.substring(0, 2) : "";
+
+                boolean contientDate = mdp.contains(chiffresDate)
+                        || mdp.contains(annee)
+                        || (!jour.isEmpty() && mdp.contains(jour));
+
+                if (!contientDate) {
+                    s += 0.20;
+                } else {
+                    s -= 0.20;
+                }
+            }
+        }
+
+        return Math.min(Math.max(s, 0), 1.0);
     }
 
     public static void main(String[] args) { launch(args); }
