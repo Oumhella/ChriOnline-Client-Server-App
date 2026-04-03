@@ -118,6 +118,68 @@ public class EmailService {
         envoyer(destinataire, sujet, corps);
     }
 
+    /**
+     * Envoie une alerte de sécurité au client lorsque son profil a été modifié.
+     * Le client peut ainsi signaler un changement non autorisé.
+     *
+     * @param destinataire  email du client
+     * @param prenom        prénom du client (pour personnaliser le message)
+     * @param champsModifies description des champs qui ont changé (ex: "Nom, Téléphone")
+     * @param dateHeure     horodatage de la modification
+     */
+    public static void envoyerAlerteModificationProfil(String destinataire, String prenom,
+                                                        String champsModifies, String dateHeure)
+            throws MessagingException {
+        String sujet = "🔔 Modification de votre profil ChriOnline — Vérifiez vos informations";
+        String corps = """
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
+
+              <!-- En-tête -->
+              <div style="background:linear-gradient(135deg,#A8C4B0,#6B9E7A);padding:28px 32px">
+                <h2 style="margin:0;color:#fff;font-size:20px">Votre profil a été modifié</h2>
+                <p  style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px">ChriOnline — Alerte de sécurité</p>
+              </div>
+
+              <!-- Corps -->
+              <div style="padding:28px 32px;background:#fff">
+                <p style="font-size:15px;color:#3E2C1E">Bonjour <strong>%s</strong>,</p>
+                <p style="color:#555;line-height:1.6">
+                  Nous vous informons qu'une modification a été apportée à votre profil
+                  le <strong>%s</strong>.
+                </p>
+
+                <!-- Détail des champs modifiés -->
+                <div style="background:#FAF7F2;border-left:4px solid #C96B4A;border-radius:6px;padding:14px 18px;margin:20px 0">
+                  <p style="margin:0;font-size:13px;color:#6B4F3A;font-weight:bold">Champs modifiés :</p>
+                  <p style="margin:8px 0 0;font-size:14px;color:#3E2C1E">%s</p>
+                </div>
+
+                <p style="color:#555;line-height:1.6">
+                  <strong>Nous avez effectué ce changement vous-même ?</strong><br>
+                  Tout est en ordre — vous pouvez ignorer cet email.
+                </p>
+
+                <!-- Alerte si non autorisé -->
+                <div style="background:#fff3f0;border:1px solid #f5c6c0;border-radius:8px;padding:16px 18px;margin:20px 0">
+                  <p style="margin:0;font-size:13px;color:#c0392b;font-weight:bold">⚠️ Ce changement n'est pas de vous ?</p>
+                  <p style="margin:8px 0 0;font-size:13px;color:#555;line-height:1.5">
+                    Connectez-vous immédiatement à votre compte, changez votre mot de passe
+                    et contactez notre support. Votre compte a peut-être été compromis.
+                  </p>
+                </div>
+
+                <p style="color:#888;font-size:12px;margin-top:24px;border-top:1px solid #eee;padding-top:16px">
+                  Cet email a été envoyé automatiquement par ChriOnline.<br>
+                  Ne répondez pas directement à ce message.
+                </p>
+              </div>
+
+            </div>
+            """.formatted(prenom, dateHeure, champsModifies);
+        envoyer(destinataire, sujet, corps);
+    }
+
+
     // ─── Méthode publique d'envoi ─────────────────────────────────────────────
     
     public static void envoyer(String destinataire, String sujet, String corpsHtml) throws MessagingException {

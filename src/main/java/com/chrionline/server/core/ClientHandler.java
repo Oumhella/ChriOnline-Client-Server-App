@@ -1,6 +1,7 @@
 package com.chrionline.server.core;
 
 import com.chrionline.server.dao.UserDAO;
+import com.chrionline.server.security.SecurityLogger;
 import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.server.service.EmailService;
 import com.chrionline.server.service.PanierService;
@@ -139,8 +140,23 @@ public class ClientHandler implements Runnable {
                  "UPDATE_ORDER_STATUS" -> {
                 handleAdminCommande(commande, req);
             }
-            case "ADMIN_LISTE_USERS" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
-            case "ADMIN_CHANGER_STATUT_USER" -> envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
+            case "ADMIN_LISTE_USERS" -> {
+                if (!"admin".equals(userRole)) {
+                    SecurityLogger.accesNonAutorise("ADMIN_LISTE_USERS", userId, userRole, socket.getInetAddress().getHostAddress());
+                    envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+                } else {
+                    envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
+                }
+            }
+            case "ADMIN_CHANGER_STATUT_USER" -> {
+                if (!"admin".equals(userRole)) {
+                    SecurityLogger.accesNonAutorise("ADMIN_CHANGER_STATUT_USER", userId, userRole, socket.getInetAddress().getHostAddress());
+                    envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+                } else {
+                    req.put("adminId", this.userId);
+                    envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
+                }
+            }
             case "ENVOYER_NEWSLETTER" -> handleEnvoyerNewsletter(req);
 
             case "REGISTER_UDP" -> {
@@ -157,6 +173,8 @@ public class ClientHandler implements Runnable {
 
     private void handleConnexion(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleConnexion appelée");
+        // Injecter l'IP client pour que UserDAO puisse la journaliser
+        req.put("clientIp", socket.getInetAddress().getHostAddress());
         try {
             Map<String, Object> reponse = authService.login(req);
 
@@ -164,15 +182,16 @@ public class ClientHandler implements Runnable {
 
             if ("OK".equals(reponse.get("statut"))) {
                 Map<String, Object> data = (Map<String, Object>) reponse.get("data");
-                this.userId = (int) data.get("userId");
+                this.userId    = (int)    data.get("userId");
                 this.userEmail = (String) data.get("email");
-                this.userRole = (String) data.get("role");
+                this.userRole  = (String) data.get("role");
             }
 
             envoyerMessage(reponse);
         } catch (Exception e) {
             System.err.println("[HANDLER] Exception handleConnexion : " + e.getMessage());
             e.printStackTrace();
+            SecurityLogger.erreurServeur("handleConnexion", e.getMessage());
             envoyerMessage(creerReponse("ERREUR", "Erreur technique : " + e.getMessage()));
         }
     }
@@ -502,6 +521,12 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleAdminCommande(String commande, Map<String, Object> req) {
+        if (!"admin".equals(userRole)) {
+            SecurityLogger.accesNonAutorise(commande, userId, userRole,
+                    socket.getInetAddress().getHostAddress());
+            envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+            return;
+        }
         switch (commande) {
             case "GET_ALL_ORDERS"      -> handleGetAllOrders(req);
             case "GET_ORDER_DETAILS"   -> handleGetOrderDetails(req);
@@ -580,6 +605,8 @@ public class ClientHandler implements Runnable {
 
     private void handleEnvoyerNewsletter(Map<String, Object> req) {
         if (!"admin".equals(userRole)) {
+            SecurityLogger.accesNonAutorise("ENVOYER_NEWSLETTER", userId, userRole,
+                    socket.getInetAddress().getHostAddress());
             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
             return;
         }

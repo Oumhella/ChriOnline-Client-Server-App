@@ -1,6 +1,7 @@
 package com.chrionline.server.dao;
 
 import com.chrionline.database.DatabaseConnection;
+import com.chrionline.server.security.SecurityLogger;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.*;
@@ -95,8 +96,9 @@ public class UserDAO {
      * Retourne le rôle dans "data" pour permettre la redirection côté client.
      */
     public static Map<String, Object> connexion(Map<String, Object> data) {
-        String email = (String) data.get("email");
-        String mdp   = (String) data.get("mdp");
+        String email    = (String) data.get("email");
+        String mdp      = (String) data.get("mdp");
+        String clientIp = (String) data.getOrDefault("clientIp", "inconnue");
 
         try (Connection conn = DatabaseConnection.getInstance().getConnection()) {
 
@@ -112,9 +114,10 @@ public class UserDAO {
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     if (BCrypt.checkpw(mdp, rs.getString("password"))) {
-                        System.out.println("[UserDAO] Admin trouvé : id=" + rs.getInt("idUtilisateur"));
+                        int id = rs.getInt("idUtilisateur");
+                        SecurityLogger.loginSucces(email, "admin", id, clientIp);
                         Map<String, Object> innerData = new java.util.HashMap<>();
-                        innerData.put("userId",  rs.getInt("idUtilisateur"));
+                        innerData.put("userId",  id);
                         innerData.put("nom",     rs.getString("nom"));
                         innerData.put("prenom",  rs.getString("prenom"));
                         innerData.put("email",   rs.getString("email"));
@@ -125,6 +128,9 @@ public class UserDAO {
                         rep.put("message", "Bienvenue, " + rs.getString("prenom") + " !");
                         rep.put("data", innerData);
                         return rep;
+                    } else {
+                        // Email admin reconnu mais mot de passe incorrect
+                        SecurityLogger.loginEchec(email, clientIp);
                     }
                 }
             }
@@ -143,20 +149,22 @@ public class UserDAO {
                     if (BCrypt.checkpw(mdp, rs.getString("password"))) {
                         String statut = rs.getString("statut_compte");
                         if ("bloque".equals(statut)) {
+                            SecurityLogger.compteBloque(email, clientIp);
                             Map<String, Object> rep = new java.util.HashMap<>();
-                            // Compte explicitement bloqué par l'admin
                             rep.put("statut",  "ERREUR");
                             rep.put("message", "Votre compte a été bloqué par un administrateur.");
                             return rep;
                         } else if ("non actif".equals(statut)) {
+                            SecurityLogger.compteNonActif(email, clientIp);
                             Map<String, Object> rep = new java.util.HashMap<>();
                             rep.put("statut",  "EN_ATTENTE");
                             rep.put("message", "Confirmez votre email avant de vous connecter.");
                             return rep;
                         }
-                        System.out.println("[UserDAO] Client trouvé : id=" + rs.getInt("idUtilisateur"));
+                        int id = rs.getInt("idUtilisateur");
+                        SecurityLogger.loginSucces(email, "client", id, clientIp);
                         Map<String, Object> innerData = new java.util.HashMap<>();
-                        innerData.put("userId",  rs.getInt("idUtilisateur"));
+                        innerData.put("userId",  id);
                         innerData.put("nom",     rs.getString("nom"));
                         innerData.put("prenom",  rs.getString("prenom"));
                         innerData.put("email",   rs.getString("email"));
@@ -167,16 +175,22 @@ public class UserDAO {
                         rep.put("message", "Bienvenue, " + rs.getString("prenom") + " !");
                         rep.put("data", innerData);
                         return rep;
+                    } else {
+                        // Mot de passe incorrect pour un email client reconnu
+                        SecurityLogger.loginEchec(email, clientIp);
                     }
                 }
             }
 
+            // Email introuvable dans les deux tables
+            SecurityLogger.loginEchec(email, clientIp);
             Map<String, Object> rep = new java.util.HashMap<>();
             rep.put("statut",  "ERREUR");
             rep.put("message", "Email ou mot de passe incorrect.");
             return rep;
 
         } catch (Exception e) {
+            SecurityLogger.erreurServeur("connexion", e.getMessage());
             Map<String, Object> rep = new java.util.HashMap<>();
             rep.put("statut",  "ERREUR");
             rep.put("message", "Erreur serveur : " + e.getMessage());
@@ -204,8 +218,10 @@ public class UserDAO {
             ps.setString(1, hash);
             ps.setInt(2, idUtilisateur);
             ps.executeUpdate();
+            SecurityLogger.changementMotDePasse(idUtilisateur);
             return Map.of("statut", "OK", "message", "Mot de passe réinitialisé avec succès !");
         } catch (Exception e) {
+            SecurityLogger.erreurServeur("majMotDePasse userId=" + idUtilisateur, e.getMessage());
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
         }
     }
@@ -340,18 +356,24 @@ public class UserDAO {
     }
 
     public static Map<String, Object> changerStatutCompte(int idUtilisateur, String nouveauStatut) {
+        return changerStatutCompte(-1, idUtilisateur, nouveauStatut);
+    }
+
+    public static Map<String, Object> changerStatutCompte(int adminId, int idUtilisateur, String nouveauStatut) {
         String sql = "UPDATE client SET statut_compte = ? WHERE idUtilisateur = ?";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, nouveauStatut); // 'actif' ou 'non actif'
+            ps.setString(1, nouveauStatut);
             ps.setInt(2, idUtilisateur);
             int rows = ps.executeUpdate();
             if (rows > 0) {
+                SecurityLogger.changementStatutCompte(adminId, idUtilisateur, nouveauStatut);
                 return Map.of("statut", "OK", "message", "Statut mis à jour avec succès.");
             } else {
                 return Map.of("statut", "ERREUR", "message", "Client introuvable.");
             }
         } catch (Exception e) {
+            SecurityLogger.erreurServeur("changerStatutCompte userId=" + idUtilisateur, e.getMessage());
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
         }
     }
