@@ -42,7 +42,7 @@ public class InscriptionController {
         this.stage        = stage;
     }
 
-    public void inscrire() {
+    public void inscrire(String captchaToken) {
 
         String nom    = nomField.getText().trim();
         String prenom = prenomField.getText().trim();
@@ -82,6 +82,7 @@ public class InscriptionController {
         req.put("prenom",      prenom);
         req.put("email",       email);
         req.put("mdp",         mdp);
+        req.put("recaptchaToken", captchaToken);
 
         // Table client
         req.put("telephone", tel);

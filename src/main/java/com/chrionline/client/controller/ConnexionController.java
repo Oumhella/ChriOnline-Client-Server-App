@@ -29,7 +29,7 @@ public class ConnexionController {
     }
 
     @SuppressWarnings("unchecked")
-    public void connecter() {
+    public void connecter(String captchaToken) {
         String email = emailField.getText().trim();
         String mdp   = mdpField.getText();
 
@@ -50,6 +50,7 @@ public class ConnexionController {
                 req.put("commande", "CONNEXION");
                 req.put("email", email);
                 req.put("mdp", mdp);
+                req.put("recaptchaToken", captchaToken);
 
                 client.envoyerRequete(req);
                 Map<String, Object> rep = (Map<String, Object>) client.lireReponse();

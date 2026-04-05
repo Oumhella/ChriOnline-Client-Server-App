@@ -12,6 +12,8 @@ public class AuthenticationService {
     // ─── Inscription ──────────────────────────────────────────────────────────
 
     public Map<String, Object> register(Map<String, Object> req) {
+        // Validation captcha effectuée côté client (checkbox JavaFX)
+
         Map<String, Object> result = UserDAO.inscrire(req);
         if (!"OK".equals(result.get("statut"))) return result;
 
@@ -37,6 +39,7 @@ public class AuthenticationService {
     // ─── Connexion ────────────────────────────────────────────────────────────
 
     public Map<String, Object> login(Map<String, Object> req) {
+        // Validation captcha effectuée côté client (checkbox JavaFX)
         return UserDAO.connexion(req);
     }
 

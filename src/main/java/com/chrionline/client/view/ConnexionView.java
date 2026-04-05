@@ -1,9 +1,9 @@
 package com.chrionline.client.view;
 
 import com.chrionline.client.controller.ConnexionController;
-import com.chrionline.client.view.MdpOublieView;
 import javafx.animation.*;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.*;
 import javafx.scene.Node;
 import javafx.scene.Scene;
@@ -34,7 +34,8 @@ public class ConnexionView extends Application {
 
     private TextField     emailField;
     private PasswordField mdpField;
-    private Label         msgLabel;
+    private Label            msgLabel;
+    private RecaptchaWidget  captchaWidget;
 
     @Override
     public void start(Stage stage) {
@@ -208,26 +209,30 @@ public class ConnexionView extends Application {
         link.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
         footer.getChildren().addAll(txt, link);
 
-        // Action contrôleur
+        // ── Widget reCAPTCHA (pixel-perfect) ────────────────────
+        captchaWidget = new RecaptchaWidget();
+
+        // ── Action bouton ──────────────────────────────────
         ConnexionController ctrl = new ConnexionController(emailField, mdpField, msgLabel, stage, btnLogin);
-        btnLogin.setOnAction(e -> ctrl.connecter());
+        btnLogin.setOnAction(e -> {
+            if (!captchaWidget.estValide()) {
+                msgLabel.setText("✗ Veuillez cocher \"Je ne suis pas un robot\".");
+                msgLabel.setStyle("-fx-text-fill: #C96B4A;");
+                return;
+            }
+            ctrl.connecter("VERIFIED");
+        });
+
         link.setOnAction(e -> {
-            try {
-                new InscriptionView().start(stage);
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
+            try { new InscriptionView().start(stage); }
+            catch (Exception ex) { ex.printStackTrace(); }
         });
-
         linkOublie.setOnAction(e -> {
-            try {
-                new MdpOublieView().start(stage);
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
+            try { new MdpOublieView().start(stage); }
+            catch (Exception ex) { ex.printStackTrace(); }
         });
 
-        right.getChildren().addAll(title, emailBox, mdpBox, linkOublie, msgLabel, btnLogin, footer);
+        right.getChildren().addAll(title, emailBox, mdpBox, linkOublie, captchaWidget, msgLabel, btnLogin, footer);
         return right;
     }
 
