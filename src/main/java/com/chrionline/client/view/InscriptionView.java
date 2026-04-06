@@ -341,7 +341,7 @@ public class InscriptionView extends Application {
                 msgLabel.setStyle("-fx-text-fill: " + TERRACOTTA + ";");
                 return;
             }
-            ctrl.inscrire("VERIFIED");
+            ctrl.inscrire(captchaWidget.getToken());
         });
         lienCnx.setOnAction(e -> {
             try {

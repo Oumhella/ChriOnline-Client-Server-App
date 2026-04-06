@@ -1,229 +1,119 @@
 package com.chrionline.client.view;
 
-import javafx.animation.*;
-import javafx.geometry.*;
-import javafx.scene.Cursor;
-import javafx.scene.control.Label;
-import javafx.scene.layout.*;
-import javafx.scene.paint.*;
-import javafx.scene.shape.*;
-import javafx.scene.text.*;
-import javafx.util.Duration;
+import com.sun.net.httpserver.HttpServer;
+import javafx.geometry.Pos;
+import javafx.scene.layout.HBox;
+import javafx.scene.web.WebEngine;
+import javafx.scene.web.WebView;
+import netscape.javascript.JSObject;
+
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.util.Scanner;
 
 /**
- * Widget reCAPTCHA v2 "Je ne suis pas un robot"
- * Reproduction fidèle du widget Google officiel en JavaFX pur.
+ * Widget reCAPTCHA v2 utilisant l'implémentation HTML officielle.
+ * Utilise un mini-serveur HTTP local pour contourner le blocage du domaine (file://) de Google.
  */
 public class RecaptchaWidget extends HBox {
 
-    // ── Couleurs exactes du widget Google ──────────────────────────
-    private static final String BG = "#f9f9f9";
-    private static final String BORDER_CLR = "#c1c1c1";
-    private static final String BORDER_ACT = "#c8c8c8";
-    private static final String TEXT_CLR = "#4a4a4a";
-    private static final String HINT_CLR = "#9aa0a6";
-    private static final String CHECK_BG = "#4285F4"; // bleu Google quand coché
-    private static final String CHECK_MARK = "#ffffff";
-    private static final String LOGO_BLUE = "#4A90D9";
-    private static final String LOGO_RED = "#D0312D";
-
     private boolean valide = false;
+    private String token = null;
+    private final WebView webView;
+    private final WebEngine webEngine;
 
-    // Éléments visuels de la checkbox
-    private final Rectangle checkBox;
-    private final Polyline checkMark;
-    private final StackPane checkPane;
+    // ── Serveur HTTP local statique pour tromper reCAPTCHA ──
+    private static HttpServer server;
+    private static int serverPort = -1;
 
-    public RecaptchaWidget() {
-        super(0);
-        setAlignment(Pos.CENTER_LEFT);
-        setPrefHeight(74);
-        setMaxWidth(Double.MAX_VALUE);
-        setStyle(
-                "-fx-background-color: " + BG + ";" +
-                        "-fx-border-color: " + BORDER_CLR + ";" +
-                        "-fx-border-radius: 3;" +
-                        "-fx-background-radius: 3;" +
-                        "-fx-border-width: 1;" +
-                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.10), 4, 0, 0, 2);");
-
-        // ── Checkbox personnalisée ─────────────────────────────────
-        checkBox = new Rectangle(24, 24);
-        checkBox.setFill(Color.WHITE);
-        checkBox.setStroke(Color.web("#c1c1c1"));
-        checkBox.setStrokeWidth(2);
-        checkBox.setArcWidth(4);
-        checkBox.setArcHeight(4);
-
-        checkMark = new Polyline(5.0, 12.0, 10.0, 18.0, 20.0, 6.0);
-        checkMark.setStroke(Color.web(CHECK_MARK));
-        checkMark.setStrokeWidth(2.8);
-        checkMark.setStrokeLineCap(StrokeLineCap.ROUND);
-        checkMark.setStrokeLineJoin(StrokeLineJoin.ROUND);
-        checkMark.setFill(Color.TRANSPARENT);
-        checkMark.setVisible(false);
-
-        checkPane = new StackPane(checkBox, checkMark);
-        checkPane.setPrefSize(24, 24);
-        checkPane.setMaxSize(24, 24);
-        checkPane.setCursor(Cursor.HAND);
-        HBox.setMargin(checkPane, new Insets(0, 0, 0, 22));
-
-        // Hover
-        checkPane.setOnMouseEntered(e -> {
-            if (!valide)
-                checkBox.setStroke(Color.web("#4285F4"));
-        });
-        checkPane.setOnMouseExited(e -> {
-            if (!valide)
-                checkBox.setStroke(Color.web("#c1c1c1"));
-        });
-
-        // Clic
-        checkPane.setOnMouseClicked(e -> toggle());
-
-        // ── Label ──────────────────────────────────────────────────
-        Label label = new Label("Je ne suis pas un robot");
-        label.setFont(Font.font("Arial", FontWeight.NORMAL, 14));
-        label.setTextFill(Color.web(TEXT_CLR));
-        label.setWrapText(false);
-        HBox.setMargin(label, new Insets(0, 0, 0, 16));
-        HBox.setHgrow(label, Priority.ALWAYS);
-
-        // ── Logo + branding ────────────────────────────────────────
-        VBox logoBox = buildLogoBox();
-        HBox.setMargin(logoBox, new Insets(6, 12, 6, 6));
-
-        getChildren().addAll(checkPane, label, logoBox);
-    }
-
-    // ────────────────────────────────────────────────────────────────
-    // Toggle avec animation
-    // ────────────────────────────────────────────────────────────────
-    private void toggle() {
-        valide = !valide;
-
-        if (valide) {
-            // Remplissage bleu + coche
-            checkBox.setFill(Color.web(CHECK_BG));
-            checkBox.setStroke(Color.web(CHECK_BG));
-            checkMark.setVisible(true);
-
-            // Petit "pop" de scale
-            ScaleTransition pop = new ScaleTransition(Duration.millis(150), checkPane);
-            pop.setFromX(1.0);
-            pop.setFromY(1.0);
-            pop.setToX(1.15);
-            pop.setToY(1.15);
-            pop.setAutoReverse(true);
-            pop.setCycleCount(2);
-            pop.setInterpolator(Interpolator.EASE_BOTH);
-            pop.play();
-
-        } else {
-            checkBox.setFill(Color.WHITE);
-            checkBox.setStroke(Color.web("#c1c1c1"));
-            checkMark.setVisible(false);
+    static {
+        try {
+            // Port = 0 laisse l'OS choisir un port libre, évitant les conflits
+            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/captcha", exchange -> {
+                try (InputStream in = RecaptchaWidget.class.getResourceAsStream("/recaptcha.html")) {
+                    if (in == null) {
+                        exchange.sendResponseHeaders(404, -1);
+                        exchange.close();
+                        return;
+                    }
+                    Scanner s = new Scanner(in, "UTF-8").useDelimiter("\\A");
+                    String html = s.hasNext() ? s.next() : "";
+                    
+                    byte[] bytes = html.getBytes("UTF-8");
+                    exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+                    exchange.sendResponseHeaders(200, bytes.length);
+                    exchange.getResponseBody().write(bytes);
+                    exchange.getResponseBody().close();
+                } catch (Exception ex) {
+                    exchange.sendResponseHeaders(500, -1);
+                    exchange.close();
+                }
+            });
+            // Désactiver l'exécuteur explicite pour utiliser le thread par défaut
+            server.setExecutor(null); 
+            server.start();
+            serverPort = server.getAddress().getPort();
+            System.out.println("[reCAPTCHA] Mini-serveur démarré sur http://127.0.0.1:" + serverPort);
+        } catch (Exception e) {
+            System.err.println("[reCAPTCHA] Erreur de démarrage du mini-serveur HTTP: " + e.getMessage());
         }
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // Logo reCAPTCHA (dessiné en pur JavaFX)
-    // ────────────────────────────────────────────────────────────────
-    private VBox buildLogoBox() {
-        VBox box = new VBox(2);
-        box.setAlignment(Pos.CENTER);
-        box.setPrefWidth(68);
+    public RecaptchaWidget() {
+        super();
+        setAlignment(Pos.CENTER);
+        setPrefHeight(80);
+        setMaxWidth(300);
+        setStyle("-fx-background-color: transparent;");
 
-        Pane logoPane = new Pane();
-        logoPane.setPrefSize(32, 32);
-        logoPane.setMaxSize(32, 32);
+        webView = new WebView();
+        webEngine = webView.getEngine();
+        
+        webView.setContextMenuEnabled(false);
+        webView.setPrefSize(300, 80);
+        webView.setMaxSize(300, 80);
 
-        double cx = 16, cy = 16, r = 11.5;
+        // Pont JS <-> JavaFX
+        webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+            if (newState == javafx.concurrent.Worker.State.SUCCEEDED) {
+                JSObject window = (JSObject) webEngine.executeScript("window");
+                window.setMember("jsConnector", new JSBridge());
+            }
+        });
 
-        // ── Arc bleu (en haut, sens horaire ~200°) ──────────────────
-        Arc arcBlue = new Arc(cx, cy, r, r, 95, -210);
-        arcBlue.setType(ArcType.OPEN);
-        arcBlue.setStroke(Color.web(LOGO_BLUE));
-        arcBlue.setStrokeWidth(3.8);
-        arcBlue.setFill(Color.TRANSPARENT);
-        arcBlue.setStrokeLineCap(StrokeLineCap.BUTT);
+        // Chargement via le VRAI protocole HTTP local (plus d'erreur de domaine de Google!)
+        if (serverPort != -1) {
+            webEngine.load("http://127.0.0.1:" + serverPort + "/captcha");
+        } else {
+            // Fallback si le serveur plante
+            webEngine.load(getClass().getResource("/recaptcha.html").toExternalForm());
+        }
 
-        // Flèche bleu (pointe en haut-gauche)
-        Polygon arrowBlue = arrowHead(
-                cx - r * Math.cos(Math.toRadians(97)),
-                cy - r * Math.sin(Math.toRadians(97)),
-                -30, LOGO_BLUE);
-
-        // ── Arc rouge (en bas, sens horaire ~200°) ──────────────────
-        Arc arcRed = new Arc(cx, cy, r, r, -85, -210);
-        arcRed.setType(ArcType.OPEN);
-        arcRed.setStroke(Color.web(LOGO_RED));
-        arcRed.setStrokeWidth(3.8);
-        arcRed.setFill(Color.TRANSPARENT);
-        arcRed.setStrokeLineCap(StrokeLineCap.BUTT);
-
-        // Flèche rouge (pointe en bas-droite)
-        Polygon arrowRed = arrowHead(
-                cx - r * Math.cos(Math.toRadians(-83)),
-                cy - r * Math.sin(Math.toRadians(-83)),
-                150, LOGO_RED);
-
-        // Animation de rotation douce au hover du widget
-        RotateTransition spin = new RotateTransition(Duration.millis(800), logoPane);
-        spin.setByAngle(360);
-        spin.setCycleCount(1);
-        spin.setInterpolator(Interpolator.EASE_BOTH);
-
-        setOnMouseEntered(e -> spin.playFromStart());
-
-        logoPane.getChildren().addAll(arcBlue, arcRed, arrowBlue, arrowRed);
-
-        // ── Texte "reCAPTCHA" ───────────────────────────────────────
-        Text brand = new Text("reCAPTCHA");
-        brand.setFont(Font.font("Arial", FontWeight.BOLD, 8));
-        brand.setFill(Color.web(HINT_CLR));
-
-        // ── "Privacy - Terms" ───────────────────────────────────────
-        Text privacy = new Text("Privacy - Terms");
-        privacy.setFont(Font.font("Arial", 7));
-        privacy.setFill(Color.web(HINT_CLR));
-        privacy.setCursor(Cursor.HAND);
-        privacy.setOnMouseEntered(e -> privacy.setUnderline(true));
-        privacy.setOnMouseExited(e -> privacy.setUnderline(false));
-
-        box.getChildren().addAll(logoPane, brand, privacy);
-        return box;
+        getChildren().add(webView);
     }
 
-    /**
-     * Crée une petite flèche triangulaire positionnée à (px, py)
-     * avec une rotation donnée et une couleur de remplissage.
-     */
-    private Polygon arrowHead(double px, double py, double rotation, String color) {
-        Polygon p = new Polygon(0.0, -5.0, 4.0, 3.0, -4.0, 3.0);
-        p.setFill(Color.web(color));
-        p.setStroke(Color.TRANSPARENT);
-        p.setTranslateX(px);
-        p.setTranslateY(py);
-        p.setRotate(rotation);
-        return p;
+    public class JSBridge {
+        public void captchaResolved(String t) {
+            valide = true;
+            token = t;
+            System.out.println("[reCAPTCHA] Vérifié avec succès.");
+        }
+
+        public void captchaExpired() {
+            valide = false;
+            token = null;
+            System.out.println("[reCAPTCHA] Le token a expiré.");
+        }
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // API publique
-    // ────────────────────────────────────────────────────────────────
+    public boolean estValide() { return valide; }
+    public String getToken() { return token; }
 
-    /** @return true si l'utilisateur a coché la case */
-    public boolean estValide() {
-        return valide;
-    }
-
-    /** Réinitialise le widget (décoché) */
     public void reset() {
         valide = false;
-        checkBox.setFill(Color.WHITE);
-        checkBox.setStroke(Color.web("#c1c1c1"));
-        checkMark.setVisible(false);
+        token = null;
+        try { webEngine.executeScript("if (typeof grecaptcha !== 'undefined') { grecaptcha.reset(); }"); } 
+        catch (Exception ignored) { }
     }
 }
