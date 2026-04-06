@@ -13,7 +13,8 @@
 .button {
     -fx-background-radius: 6;
     -fx-cursor: hand;
-    -fx-transition: all 0.2sease-in-out;
+    -fx-transition: all 0.2
+    sease-in-out;
 }
 
 .button:hover {
