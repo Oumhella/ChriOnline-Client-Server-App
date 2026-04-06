@@ -603,7 +603,16 @@ public class PanierDAO {
             infoTable.setWidthPercentage(100);
             infoTable.getDefaultCell().setBorder(com.itextpdf.text.Rectangle.NO_BORDER);
 
-            String methodeStr = methodePaiement.equals("livraison") ? "À la livraison" : "Carte Bancaire";
+            String methodeStr;
+            if ("livraison_espece".equals(methodePaiement)) {
+                methodeStr = "À la livraison (Espèce)";
+            } else if ("livraison_carte".equals(methodePaiement)) {
+                methodeStr = "À la livraison (Carte Bancaire)";
+            } else if ("livraison".equals(methodePaiement)) {
+                methodeStr = "À la livraison";
+            } else {
+                methodeStr = "Carte Bancaire (En ligne)";
+            }
             com.itextpdf.text.Paragraph clientInfo = new com.itextpdf.text.Paragraph();
             clientInfo.add(new com.itextpdf.text.Chunk("FACTURÉ À :\n", boldFont));
             clientInfo.add(new com.itextpdf.text.Chunk(nomClient + "\n", normalFont));
