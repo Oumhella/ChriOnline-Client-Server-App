@@ -220,7 +220,7 @@ public class ConnexionView extends Application {
                 msgLabel.setStyle("-fx-text-fill: #C96B4A;");
                 return;
             }
-            ctrl.connecter("VERIFIED");
+            ctrl.connecter(captchaWidget.getToken());
         });
 
         link.setOnAction(e -> {
