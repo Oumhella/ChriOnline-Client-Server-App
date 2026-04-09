@@ -49,17 +49,7 @@ public class AdminProduitsView extends Application {
     private static final String TERRACOTTA  = "#C96B4A";
     private static final String DANGER      = "#B03A2E";
 
-    /*
-     * - [x] Redesign UI (Cards/Bloques)
-     *   - [x] Remplacement de la TableView par un TilePane.
-     *   - [x] Design de cartes produits premium avec images et badges de prix.
-     *   - [x] Mise à jour de la recherche et du chargement pour les cartes.
-     * - [x] Correction Finale Modification Produit
-     *   - [x] Implémentation de GET_PRODUIT_BY_ID sur le serveur (manquait dans le dispatcher).
-     *   - [x] Initialisation systématique de `labelValues` dans `ProductFormat`.
-     *   - [x] Ajout de sécurités null-check dans `AdminProduitsView`.
-     *   - [x] Fix dans ProduitDAO pour gérer les retours MySQL et l'aliasing de colonnes.
-     */
+
     private AdminProduitsController controller;
     private TilePane cardsPane;
     private ObservableList<Produit> produitsData;

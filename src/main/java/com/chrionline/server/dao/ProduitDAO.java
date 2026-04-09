@@ -14,7 +14,7 @@ public class ProduitDAO {
     public static List<Produit> findAll() {
         Map<Integer, Produit> produitsMap = new LinkedHashMap<>();
         // Note: Joining with product_formats to get basic format info for the list
-        String sql = "SELECT p.id_produit AS pid, p.nom, p.description, p.date_ajout, p.id_categorie, " +
+        String sql = "SELECT p.id_produit AS pid, p.nom, p.description, p.date_ajout, p.id_categorie," +
                 "pf.id_product_formats, pf.prix, pf.stock, pf.stock_alerte, pf.image_url " +
                 "FROM produit p LEFT JOIN product_formats pf ON p.id_produit = pf.id_produit " +
                 "ORDER BY pid";
@@ -337,7 +337,7 @@ public class ProduitDAO {
 
     public static List<Categorie> findAllCategories() {
         List<Categorie> list = new ArrayList<>();
-        String sql = "SELECT id_categorie, id_parent, nom, description FROM categorie";
+        String sql = "SELECT id_categorie, id_parent, nom, description , discount FROM categorie";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -347,6 +347,7 @@ public class ProduitDAO {
                 c.setIdParent(rs.getInt("id_parent"));
                 c.setNom(rs.getString("nom"));
                 c.setDescription(rs.getString("description"));
+                c.setDiscount(rs.getDouble("discount"));
                 list.add(c);
             }
         } catch (SQLException e) {
@@ -356,13 +357,14 @@ public class ProduitDAO {
     }
 
     public static int insertCategorie(Categorie c) {
-        String sql = "INSERT INTO categorie (id_parent, nom, description) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO categorie (id_parent, nom, description , discount) VALUES (?, ?, ?)";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             if (c.getIdParent() > 0) ps.setInt(1, c.getIdParent());
             else ps.setNull(1, Types.INTEGER);
             ps.setString(2, c.getNom());
             ps.setString(3, c.getDescription());
+            ps.setDouble(4, c.getDiscount());
             ps.executeUpdate();
             ResultSet rs = ps.getGeneratedKeys();
             if (rs.next()) return rs.getInt(1);
@@ -374,7 +376,7 @@ public class ProduitDAO {
     }
 
     public static boolean updateCategorie(Categorie c) {
-        String sql = "UPDATE categorie SET id_parent = ?, nom = ?, description = ? WHERE id_categorie = ?";
+        String sql = "UPDATE categorie SET id_parent = ?, nom = ?, description = ?  , discount = ? WHERE id_categorie = ?  ";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             if (c.getIdParent() > 0) ps.setInt(1, c.getIdParent());
@@ -382,6 +384,7 @@ public class ProduitDAO {
             ps.setString(2, c.getNom());
             ps.setString(3, c.getDescription());
             ps.setInt(4, c.getId());
+            ps.setDouble(5, c.getDiscount());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("[ProduitDAO] Erreur updateCategorie : " + e.getMessage());
@@ -398,6 +401,24 @@ public class ProduitDAO {
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("[ProduitDAO] Erreur deleteCategorie : " + e.getMessage());
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public static boolean applyDiscount(int idCategorie, double pourcentage) {
+        // Appliquer un discount en baissant le prix des produits
+        String sql = "UPDATE product_formats pf " +
+                     "JOIN produit p ON pf.id_produit = p.id_produit " +
+                     "SET pf.prix = pf.prix - (pf.prix * ? / 100) " +
+                     "WHERE p.id_categorie = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDouble(1, pourcentage);
+            ps.setInt(2, idCategorie);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("[ProduitDAO] Erreur applyDiscount : " + e.getMessage());
             e.printStackTrace();
         }
         return false;

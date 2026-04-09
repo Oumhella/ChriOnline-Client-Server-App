@@ -1,6 +1,7 @@
 package com.chrionline.client.view;
 
 import com.sun.net.httpserver.HttpServer;
+import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.layout.HBox;
 import javafx.scene.web.WebEngine;
@@ -21,6 +22,7 @@ public class RecaptchaWidget extends HBox {
     private String token = null;
     private final WebView webView;
     private final WebEngine webEngine;
+    private final JSBridge bridge = new JSBridge();
 
     // ── Serveur HTTP local statique pour tromper reCAPTCHA ──
     private static HttpServer server;
@@ -74,11 +76,10 @@ public class RecaptchaWidget extends HBox {
         webView.setPrefSize(300, 80);
         webView.setMaxSize(300, 80);
 
-        // Pont JS <-> JavaFX
+        // Pont JS <-> JavaFX (runLater : WebKit peut notifier avant que le contexte soit stable)
         webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
             if (newState == javafx.concurrent.Worker.State.SUCCEEDED) {
-                JSObject window = (JSObject) webEngine.executeScript("window");
-                window.setMember("jsConnector", new JSBridge());
+                Platform.runLater(this::injectJsBridge);
             }
         });
 
@@ -93,17 +94,33 @@ public class RecaptchaWidget extends HBox {
         getChildren().add(webView);
     }
 
+    private void injectJsBridge() {
+        try {
+            JSObject window = (JSObject) webEngine.executeScript("window");
+            window.setMember("jsConnector", bridge);
+            webEngine.executeScript(
+                    "(function(){var t=window.__captchaPending;if(t&&window.jsConnector){"
+                            + "window.jsConnector.captchaResolved(t);window.__captchaPending=null;}})();");
+        } catch (Exception e) {
+            System.err.println("[reCAPTCHA] Injection du pont JS: " + e.getMessage());
+        }
+    }
+
     public class JSBridge {
         public void captchaResolved(String t) {
-            valide = true;
-            token = t;
-            System.out.println("[reCAPTCHA] Vérifié avec succès.");
+            Platform.runLater(() -> {
+                valide = true;
+                token = t;
+                System.out.println("[reCAPTCHA] Vérifié avec succès.");
+            });
         }
 
         public void captchaExpired() {
-            valide = false;
-            token = null;
-            System.out.println("[reCAPTCHA] Le token a expiré.");
+            Platform.runLater(() -> {
+                valide = false;
+                token = null;
+                System.out.println("[reCAPTCHA] Le token a expiré.");
+            });
         }
     }
 
