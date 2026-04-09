@@ -165,6 +165,7 @@ public class ClientHandler implements Runnable {
                 System.out.println("[HANDLER] Port UDP enregistré pour " + (userId != -1 ? userId : "guest") + " : " + udpPort);
             }
 
+            case "VERIFIER_OTP"         -> handleVerifierOTP(req);
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -181,6 +182,7 @@ public class ClientHandler implements Runnable {
 
             System.out.println("[HANDLER] Login statut = " + reponse.get("statut"));
 
+            // Note: On n'établit pas la session (userId, etc.) tant que le 2FA n'est pas OK
             if ("OK".equals(reponse.get("statut"))) {
                 Map<String, Object> data = (Map<String, Object>) reponse.get("data");
                 this.userId    = (int)    data.get("userId");
@@ -194,6 +196,24 @@ public class ClientHandler implements Runnable {
             e.printStackTrace();
             SecurityLogger.erreurServeur("handleConnexion", e.getMessage());
             envoyerMessage(creerReponse("ERREUR", "Erreur technique : " + e.getMessage()));
+        }
+    }
+
+    private void handleVerifierOTP(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleVerifierOTP appelée");
+        try {
+            Map<String, Object> reponse = authService.verifierOTPConnexion(req);
+
+            if ("OK".equals(reponse.get("statut"))) {
+                Map<String, Object> data = (Map<String, Object>) reponse.get("data");
+                this.userId = (int) data.get("userId");
+                this.userEmail = (String) data.get("email");
+                this.userRole = (String) data.get("role");
+            }
+
+            envoyerMessage(reponse);
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur verification OTP : " + e.getMessage()));
         }
     }
     private void handleInscription(Map<String, Object> req) {

@@ -26,6 +26,8 @@ public class AuthenticationService {
             );
         }
 
+        // Validation captcha effectuée côté client (checkbox JavaFX)
+
         Map<String, Object> result = UserDAO.inscrire(req);
         if (!"OK".equals(result.get("statut"))) return result;
 
@@ -51,7 +53,19 @@ public class AuthenticationService {
     // ─── Connexion ────────────────────────────────────────────────────────────
 
     public Map<String, Object> login(Map<String, Object> req) {
+        // Validation captcha effectuée côté client (checkbox JavaFX)
         return UserDAO.connexion(req);
+    }
+
+    public Map<String, Object> verifierOTPConnexion(Map<String, Object> req) {
+        String email = (String) req.get("email");
+        String otp   = (String) req.get("otp");
+
+        if (email == null || otp == null || otp.isBlank()) {
+            return Map.of("statut", "ERREUR", "message", "L'email ou le code OTP est manquant.");
+        }
+
+        return UserDAO.verifierOTP(email, otp);
     }
 
     // ─── Confirmation email ───────────────────────────────────────────────────

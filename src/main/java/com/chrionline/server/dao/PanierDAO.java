@@ -357,13 +357,15 @@ public class PanierDAO {
             System.out.println("[PanierDAO] Commande confirmee - ref=" + reference);
 
             // --- 6. Fetch user info for DTO ---
-            String sqlUser = "SELECT nom, prenom FROM utilisateur WHERE idUtilisateur = ?";
+            String sqlUser = "SELECT nom, prenom, email FROM utilisateur WHERE idUtilisateur = ?";
             String nomUtilisateur = "Client";
+            String emailUtilisateur = null;
             try (PreparedStatement ps = conn.prepareStatement(sqlUser)) {
                 ps.setInt(1, idUtilisateur);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     nomUtilisateur = rs.getString("prenom") + " " + rs.getString("nom");
+                    emailUtilisateur = rs.getString("email");
                 }
             }
 
@@ -406,6 +408,26 @@ public class PanierDAO {
                 System.err.println("[PanierDAO] Erreur vérification alertes stock : " + e.getMessage());
             }
             recap.setAlertesStock(alertesStock);
+
+            // --- 8. Envoi de l'email de confirmation au client ---
+            if (emailUtilisateur != null && !emailUtilisateur.isEmpty()) {
+                final String finalEmail = emailUtilisateur;
+                final String finalNom = nomUtilisateur;
+                final String finalRef = reference;
+                final double finalTotal = panier.getMontantTotal().doubleValue();
+                final java.util.List<LigneCommandeDTO> finalLignes = new java.util.ArrayList<>(lignesRecap);
+                
+                new Thread(() -> {
+                    try {
+                        com.chrionline.server.service.EmailService.envoyerConfirmationCommande(
+                            finalEmail, finalNom, finalRef, finalTotal, finalLignes
+                        );
+                    } catch (Exception e) {
+                        System.err.println("[PanierDAO] Erreur envoi email confirmation : " + e.getMessage());
+                    }
+                }).start();
+            }
+
             return recap;
 
         } catch (SQLException e) {
@@ -595,7 +617,16 @@ public class PanierDAO {
             infoTable.setWidthPercentage(100);
             infoTable.getDefaultCell().setBorder(com.itextpdf.text.Rectangle.NO_BORDER);
 
-            String methodeStr = methodePaiement.equals("livraison") ? "À la livraison" : "Carte Bancaire";
+            String methodeStr;
+            if ("livraison_espece".equals(methodePaiement)) {
+                methodeStr = "À la livraison (Espèce)";
+            } else if ("livraison_carte".equals(methodePaiement)) {
+                methodeStr = "À la livraison (Carte Bancaire)";
+            } else if ("livraison".equals(methodePaiement)) {
+                methodeStr = "À la livraison";
+            } else {
+                methodeStr = "Carte Bancaire (En ligne)";
+            }
             com.itextpdf.text.Paragraph clientInfo = new com.itextpdf.text.Paragraph();
             clientInfo.add(new com.itextpdf.text.Chunk("FACTURÉ À :\n", boldFont));
             clientInfo.add(new com.itextpdf.text.Chunk(nomClient + "\n", normalFont));

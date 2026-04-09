@@ -181,8 +181,83 @@ public class EmailService {
     }
 
 
+    /**
+     * Envoie le code OTP à 6 chiffres pour l'authentification 2FA.
+     */
+    public static void envoyerOTP2FA(String destinataire, String codeOTP) throws MessagingException {
+        String sujet = "Code de connexion sécurisé — ChriOnline";
+        String corps = """
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
+              <h2 style="color:#1a1a2e">Vérification de connexion</h2>
+              <p>Voici votre code d'authentification unique :</p>
+              <div style="font-size:36px;font-weight:bold;letter-spacing:10px;
+                          background:#f4f4f4;padding:20px;text-align:center;
+                          border-radius:8px;color:#2c3e50;">%s</div>
+              <p style="color:#e74c3c;font-weight:bold;margin-top:20px;">Indication de sécurité : Ce code expire dans 5 minutes.</p>
+              <p style="color:#888;font-size:12px">Si vous n'êtes pas à l'origine de cette tentative de connexion, veuillez changer votre mot de passe immédiatement.</p>
+            </div>
+            """.formatted(codeOTP);
+        envoyer(destinataire, sujet, corps);
+    }
+
     // ─── Méthode publique d'envoi ─────────────────────────────────────────────
     
+    /**
+     * Envoie une confirmation de commande au client.
+     */
+    public static void envoyerConfirmationCommande(String destinataire, String nomClient, String reference, double total, java.util.List<com.chrionline.shared.dto.LigneCommandeDTO> lignes) throws MessagingException {
+        String sujet = "Confirmation de votre commande " + reference + " — ChriOnline";
+
+        StringBuilder lignesHtml = new StringBuilder();
+        for (com.chrionline.shared.dto.LigneCommandeDTO l : lignes) {
+            double sousTotal = l.getSousTotal() > 0 ? l.getSousTotal() : l.getQuantite() * l.getPrixUnitaire();
+            lignesHtml.append("<tr>")
+                      .append("<td style=\"padding:8px;border-bottom:1px solid #ddd;\">").append(l.getNomProduit()).append("</td>")
+                      .append("<td style=\"padding:8px;border-bottom:1px solid #ddd;text-align:center;\">").append(l.getQuantite()).append("</td>")
+                      .append("<td style=\"padding:8px;border-bottom:1px solid #ddd;text-align:right;\">").append(String.format("%.2f MAD", sousTotal)).append("</td>")
+                      .append("</tr>");
+        }
+
+        String corps = """
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
+              <h2 style="color:#6B9E7A">Merci pour votre commande, %s !</h2>
+              <p>Votre commande a été passée avec succès et est actuellement en cours de préparation.</p>
+              
+              <div style="background:#FDFBF7;padding:20px;border-radius:8px;border:1px solid #E8E0D5;margin:20px 0;">
+                <p style="margin-top:0"><strong>Référence de la commande :</strong> <span style="color:#C96B4A;font-size:18px;font-weight:bold">%s</span></p>
+                <p style="color:#666;font-size:13px">Conservez cette référence pour suivre l'état de votre commande.</p>
+              </div>
+
+              <h3 style="color:#3E2C1E">Récapitulatif de votre commande</h3>
+              <table style="width:100%%;border-collapse:collapse;margin-bottom:20px;">
+                <thead>
+                  <tr style="background:#F5EFE8;text-align:left;">
+                    <th style="padding:10px;color:#6B4F3A">Produit</th>
+                    <th style="padding:10px;text-align:center;color:#6B4F3A">Qté</th>
+                    <th style="padding:10px;text-align:right;color:#6B4F3A">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  %s
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="2" style="padding:10px;text-align:right;font-weight:bold;color:#3E2C1E">TOTAL :</td>
+                    <td style="padding:10px;text-align:right;font-weight:bold;color:#C96B4A;font-size:16px">%.2f MAD</td>
+                  </tr>
+                </tfoot>
+              </table>
+              <p style="color:#888;font-size:12px;margin-top:30px;text-align:center;">
+                Si vous avez la moindre question, n'hésitez pas à nous contacter.<br>
+                L'équipe ChriOnline
+              </p>
+            </div>
+            """.formatted(nomClient, reference, lignesHtml.toString(), total);
+        envoyer(destinataire, sujet, corps);
+    }
+
+    // ─── Utilitaires d'envoi ─────────────────────────────────────────────
+
     public static void envoyer(String destinataire, String sujet, String corpsHtml) throws MessagingException {
         if (username == null || password == null) {
             throw new MessagingException("Config SMTP incomplète (email.properties)");

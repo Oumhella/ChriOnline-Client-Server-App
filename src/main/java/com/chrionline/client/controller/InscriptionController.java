@@ -46,6 +46,8 @@ public class InscriptionController {
 
     public void inscrire() {
         System.out.println("[DEBUG] Tentative d'inscription avec validation de mot de passe fort...");
+    public void inscrire(String captchaToken) {
+
         String nom    = nomField.getText().trim();
         String prenom = prenomField.getText().trim();
         String email  = emailField.getText().trim();
@@ -92,6 +94,7 @@ public class InscriptionController {
         req.put("email",       email);
         req.put("mdp",         mdp);
         req.put("date_naissance", dob);
+        req.put("recaptchaToken", captchaToken);
 
         // Table client
         req.put("telephone", tel);

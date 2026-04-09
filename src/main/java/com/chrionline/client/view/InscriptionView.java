@@ -45,6 +45,8 @@ public class InscriptionView extends Application {
     private Label         msgLabel;
     private TextField     dateNaissanceField;
 
+    private RecaptchaWidget  captchaWidget;
+
     @Override
     public void start(Stage stage) {
         stage.setTitle("ChriOnline — Créer un compte");
@@ -332,7 +334,9 @@ public class InscriptionView extends Application {
         mentionsBox.setAlignment(Pos.CENTER);
         mentionsBox.setPadding(new Insets(6, 0, 0, 0));
 
-        form.getChildren().addAll(btnInscrire, lienBox, mentionsBox);
+        // ── Widget reCAPTCHA (pixel-perfect) ────────────────────
+        captchaWidget = new RecaptchaWidget();
+        form.getChildren().addAll(captchaWidget, btnInscrire, lienBox, mentionsBox);
 
         // ── Contrôleur ────────────────────────────────────────
         InscriptionController ctrl = new InscriptionController(
@@ -341,8 +345,14 @@ public class InscriptionView extends Application {
                 rueField, villeField, cpField, paysField,
                 msgLabel, stage, dateNaissanceField
         );
-        btnInscrire.setOnAction(e -> ctrl.inscrire());
-        //lien vers la page de connexion
+        btnInscrire.setOnAction(e -> {
+            if (!captchaWidget.estValide()) {
+                msgLabel.setText("✗ Veuillez cocher \"Je ne suis pas un robot\".");
+                msgLabel.setStyle("-fx-text-fill: " + TERRACOTTA + ";");
+                return;
+            }
+            ctrl.inscrire(captchaWidget.getToken());
+        });
         lienCnx.setOnAction(e -> {
             try {
                 new ConnexionView().start(stage);

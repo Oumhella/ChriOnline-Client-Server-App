@@ -41,6 +41,8 @@ public class CheckoutView extends Application {
     private VBox carteDetailsBox;
     private TextField txtNomCarte;
     private TextField txtNumeroCarte;
+    private VBox livraisonDetailsBox;
+    private ToggleGroup livraisonSousGroup;
     private Label msgLabel;
 
     public CheckoutView(int idUtilisateur, CommandeDTO recap) {
@@ -165,7 +167,18 @@ public class CheckoutView extends Application {
         RadioButton rbLivraison = new RadioButton(" Paiement à la livraison");
         rbLivraison.setToggleGroup(paymentGroup); rbLivraison.setUserData("livraison"); rbLivraison.setSelected(true);
 
-        RadioButton rbCarte = new RadioButton(" Paiement par Carte Bancaire");
+        livraisonSousGroup = new ToggleGroup();
+        RadioButton rbLivraisonEspece = new RadioButton(" Par espèce");
+        rbLivraisonEspece.setToggleGroup(livraisonSousGroup); rbLivraisonEspece.setUserData("livraison_espece"); rbLivraisonEspece.setSelected(true);
+
+        RadioButton rbLivraisonCarte = new RadioButton(" Par carte bancaire (TPE)");
+        rbLivraisonCarte.setToggleGroup(livraisonSousGroup); rbLivraisonCarte.setUserData("livraison_carte");
+        
+        livraisonDetailsBox = new VBox(10);
+        livraisonDetailsBox.setPadding(new Insets(0, 0, 0, 30));
+        livraisonDetailsBox.getChildren().addAll(rbLivraisonEspece, rbLivraisonCarte);
+        
+        RadioButton rbCarte = new RadioButton(" Paiement en ligne (Carte Bancaire)");
         rbCarte.setToggleGroup(paymentGroup); rbCarte.setUserData("carte");
 
         carteDetailsBox = new VBox(10);
@@ -176,10 +189,12 @@ public class CheckoutView extends Application {
 
         paymentGroup.selectedToggleProperty().addListener((obs, oldV, newV) -> {
             boolean isCarte = "carte".equals(newV.getUserData().toString());
+            boolean isLivraison = "livraison".equals(newV.getUserData().toString());
             carteDetailsBox.setVisible(isCarte); carteDetailsBox.setManaged(isCarte);
+            livraisonDetailsBox.setVisible(isLivraison); livraisonDetailsBox.setManaged(isLivraison);
         });
 
-        box.getChildren().addAll(new Label("Méthode de Paiement"), rbLivraison, rbCarte, carteDetailsBox);
+        box.getChildren().addAll(new Label("Méthode de Paiement"), rbLivraison, livraisonDetailsBox, rbCarte, carteDetailsBox);
         return box;
     }
 
@@ -201,12 +216,17 @@ public class CheckoutView extends Application {
 
     private void confirmer() {
         String methode = paymentGroup.getSelectedToggle().getUserData().toString();
+        if ("livraison".equals(methode)) {
+            methode = livraisonSousGroup.getSelectedToggle().getUserData().toString();
+        }
+        
         if ("carte".equals(methode) && (txtNomCarte.getText().isEmpty() || txtNumeroCarte.getText().isEmpty())) {
             msgLabel.setText("⚠ Veuillez remplir les informations de la carte."); return;
         }
         msgLabel.setText("Traitement en cours...");
+        final String methodeFinale = methode;
         new Thread(() -> {
-            CommandeDTO res = controller.confirmerCommande(methode, txtNomCarte.getText(), txtNumeroCarte.getText());
+            CommandeDTO res = controller.confirmerCommande(methodeFinale, txtNomCarte.getText(), txtNumeroCarte.getText());
             Platform.runLater(() -> {
                 if (res != null) {
                     try { new ConfirmationCommandeView(idUtilisateur, res).start(stage); } catch (Exception ex) {}
