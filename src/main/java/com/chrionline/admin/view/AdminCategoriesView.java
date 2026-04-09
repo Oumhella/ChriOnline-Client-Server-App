@@ -213,6 +213,12 @@ public class AdminCategoriesView {
         HBox actions = new HBox(8);
         actions.setAlignment(Pos.CENTER_RIGHT);
 
+        Button btnDiscount = new Button("🈹 Remise");
+        btnDiscount.setFont(Font.font(11));
+        btnDiscount.setStyle("-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; " +
+                             "-fx-background-radius: 6; -fx-padding: 5 12; -fx-cursor: hand;");
+        btnDiscount.setOnAction(e -> ouvrirPopupDiscount(c));
+
         Button btnEdit = new Button("✏️ Modifier");
         btnEdit.setFont(Font.font(11));
         btnEdit.setStyle("-fx-background-color: " + SAUGE_DARK + "; -fx-text-fill: white; " +
@@ -228,7 +234,7 @@ public class AdminCategoriesView {
 
         Region sp = new Region();
         HBox.setHgrow(sp, Priority.ALWAYS);
-        actions.getChildren().addAll(sp, btnEdit, btnDel);
+        actions.getChildren().addAll(sp, btnDiscount, btnEdit, btnDel);
 
         card.getChildren().addAll(topRow, desc, subBadge, sep, actions);
 
@@ -442,5 +448,67 @@ public class AdminCategoriesView {
         alert.setHeaderText(null);
         alert.setContentText(msg);
         alert.showAndWait();
+    }
+
+    private void showInfoAlert(String title, String msg) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(msg);
+        alert.showAndWait();
+    }
+
+    private void ouvrirPopupDiscount(Categorie c) {
+        Stage modal = new Stage();
+        modal.initModality(Modality.APPLICATION_MODAL);
+        modal.setTitle("Appliquer une remise");
+
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(20));
+        root.setStyle("-fx-background-color: " + CREME + ";");
+
+        Text heading = new Text("Remise sur : " + c.getNom());
+        heading.setFont(Font.font("Georgia", FontWeight.BOLD, 16));
+        heading.setFill(Color.web(BRUN));
+
+        Label lblInst = new Label("Pourcentage de remise (%) :");
+        lblInst.setTextFill(Color.web(BRUN_MED));
+
+        TextField txtPct = new TextField();
+        txtPct.setPromptText("ex: 15");
+        txtPct.setStyle("-fx-background-color: " + CREME_INPUT + "; -fx-background-radius: 8; " +
+                        "-fx-border-color: " + BORDER + "; -fx-border-radius: 8; -fx-padding: 8;");
+
+        Label lblErr = new Label("");
+        lblErr.setTextFill(Color.web(DANGER));
+        lblErr.setFont(Font.font(11));
+
+        Button btnValider = new Button("Appliquer");
+        btnValider.setStyle("-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; " +
+                            "-fx-background-radius: 8; -fx-padding: 8 20; -fx-font-weight: bold;");
+        btnValider.setOnAction(e -> {
+            try {
+                double pct = Double.parseDouble(txtPct.getText().trim());
+                if(pct < 0 || pct > 100) {
+                    lblErr.setText("⚠ Entrez une valeur entre 0 et 100.");
+                    return;
+                }
+                boolean success = controller.appliquerDiscount(c.getId(), pct);
+                if (success) {
+                    modal.close();
+                    showInfoAlert("Succès", "La remise de " + pct + "% a été appliquée aux produits.");
+                    chargerDonnees();
+                } else {
+                    lblErr.setText("❌ Erreur lors de l'application.");
+                }
+            } catch(NumberFormatException ex) {
+                lblErr.setText("⚠ Format numérique invalide.");
+            }
+        });
+
+        root.getChildren().addAll(heading, lblInst, txtPct, lblErr, btnValider);
+        Scene scene = new Scene(root);
+        modal.setScene(scene);
+        modal.show();
     }
 }

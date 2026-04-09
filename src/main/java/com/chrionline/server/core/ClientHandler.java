@@ -131,6 +131,7 @@ public class ClientHandler implements Runnable {
             case "AJOUTER_CATEGORIE"     -> handleAjouterCategorie(req);
             case "MODIFIER_CATEGORIE"    -> handleModifierCategorie(req);
             case "SUPPRIMER_CATEGORIE"    -> handleSupprimerCategorie(req);
+            case "APPLY_DISCOUNT_CATEGORIE" -> envoyerMessage(produitService.handleApplyDiscountCategorie(req));
 
             case "PANIER_VALIDER"        -> handlePanierValider(req);
             case "COMMANDE_CONFIRMER"    -> handleCommandeConfirmer(req);
