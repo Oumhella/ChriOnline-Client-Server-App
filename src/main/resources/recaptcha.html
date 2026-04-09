@@ -3,7 +3,6 @@
 
 <head>
     <meta charset="UTF-8">
-    <base href="http://localhost/">
     <title>reCAPTCHA Verification</title>
     <script src="https://www.google.com/recaptcha/api.js"></script>
     <style>
@@ -13,16 +12,21 @@
     <script type="text/javascript">
         // Fonction appelée par le reCAPTCHA une fois validé
         function onCaptchaSuccess(token) {
-            // Le token généré est envoyé à l'application Java via l'objet jsConnector (qui sera injecté plus tard)
             if (window.jsConnector) {
-                window.jsConnector.captchaResolved(token);
+                try {
+                    window.jsConnector.captchaResolved(token);
+                    window.__captchaPending = null;
+                    return;
+                } catch (e) { /* ignore, file d'attente ci-dessous */ }
             }
+            window.__captchaPending = token;
         }
 
         // Fonction appelée en cas d'expiration du captcha
         function onCaptchaExpired() {
+            window.__captchaPending = null;
             if (window.jsConnector) {
-                window.jsConnector.captchaExpired();
+                try { window.jsConnector.captchaExpired(); } catch (e) { }
             }
         }
     </script>
