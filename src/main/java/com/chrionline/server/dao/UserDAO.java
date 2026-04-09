@@ -447,8 +447,8 @@ public class UserDAO {
             ORDER BY u.idUtilisateur DESC
         """;
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 Map<String, Object> cli = new java.util.HashMap<>();
                 cli.put("idUtilisateur", rs.getInt("idUtilisateur"));
@@ -485,8 +485,8 @@ public class UserDAO {
         java.util.List<String> emails = new java.util.ArrayList<>();
         String sql = "SELECT email FROM utilisateur";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 emails.add(rs.getString("email"));
             }
@@ -504,8 +504,8 @@ public class UserDAO {
             JOIN admin a ON a.idAdmin = u.idUtilisateur
         """;
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 emails.add(rs.getString("email"));
             }

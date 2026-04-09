@@ -3,6 +3,7 @@ package com.chrionline.server.core;
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.server.service.EmailService;
+import com.chrionline.server.service.InputValidator;
 import com.chrionline.server.service.PanierService;
 import com.chrionline.server.service.ProduitService;
 import com.chrionline.shared.models.User;
@@ -39,6 +40,26 @@ public class ClientHandler implements Runnable {
     private int    userId   = -1;
     private String userEmail = null;
     private String userRole      = null;
+
+    // ─── Commandes publiques (pas besoin d'authentification) ──────────────────
+    private static final Set<String> PUBLIC_COMMANDS = Set.of(
+        "CONNEXION", "INSCRIPTION", "CONFIRMER_EMAIL",
+        "OUBLIER_MOT_DE_PASSE", "REINITIALISER_MDP", "VERIFIER_OTP",
+        "LISTE_PRODUITS", "DETAIL_PRODUIT", "GET_PRODUIT_BY_ID"
+    );
+
+    // ─── Commandes réservées aux administrateurs ─────────────────────────────
+    private static final Set<String> ADMIN_COMMANDS = Set.of(
+        "AJOUTER_PRODUIT", "MODIFIER_PRODUIT", "SUPPRIMER_PRODUIT",
+        "UPLOAD_IMAGE",
+        "LISTE_CATEGORIES", "LISTE_LABELS", "LISTE_LABEL_VALUES",
+        "AJOUTER_LABEL", "AJOUTER_LABEL_VALUE", "SUPPRIMER_LABEL_VALUE",
+        "AJOUTER_CATEGORIE", "MODIFIER_CATEGORIE", "SUPPRIMER_CATEGORIE",
+        "ADMIN_LISTE_USERS", "ADMIN_CHANGER_STATUT_USER",
+        "ENVOYER_NEWSLETTER",
+        "GET_ALL_ORDERS", "UPDATE_ORDER_STATUS"
+    );
+
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
         this.server = server;
@@ -89,9 +110,24 @@ public class ClientHandler implements Runnable {
         Map<String, Object> req = (Map<String, Object>) objet;
         String commande = (String) req.getOrDefault("commande", "INCONNUE");
 
-        System.out.println("[HANDLER] Reçu : " + commande);
+        System.out.println("[HANDLER] Reçu : " + commande + " de " + socket.getInetAddress().getHostAddress());
 
-        // TODO : Plus tard, ces appels seront redirigés vers des Services ou DAOs
+        // ─── Contrôle d'accès : Authentification ────────────────────────────
+        if (!PUBLIC_COMMANDS.contains(commande) && userId <= 0) {
+            System.out.println("[SECURITY] Commande '" + commande + "' rejetée : utilisateur non authentifié ("
+                    + socket.getInetAddress().getHostAddress() + ")");
+            envoyerMessage(creerReponse("ERREUR", "Vous devez être connecté pour effectuer cette action."));
+            return;
+        }
+
+        // ─── Contrôle d'accès : Autorisation Admin ──────────────────────────
+        if (ADMIN_COMMANDS.contains(commande) && !"admin".equals(userRole)) {
+            System.out.println("[SECURITY] Commande admin '" + commande + "' rejetée : rôle='"
+                    + userRole + "' userId=" + userId + " (" + socket.getInetAddress().getHostAddress() + ")");
+            envoyerMessage(creerReponse("ERREUR", "Accès refusé. Droits administrateur requis."));
+            return;
+        }
+
         switch (commande) {
             case "CONNEXION" -> handleConnexion(req);
             case "INSCRIPTION" -> handleInscription(req);

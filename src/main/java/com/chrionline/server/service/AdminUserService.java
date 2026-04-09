@@ -25,7 +25,16 @@ public class AdminUserService {
         Map<String, Object> reponse = new HashMap<>();
         try {
             int idUtilisateur = (int) requete.get("idUtilisateur");
-            String statut = (String) requete.get("statut"); // 'actif' ou 'non actif'
+            String statut = (String) requete.get("statut");
+
+            // ─── Validation du statut contre la liste blanche ────────────
+            if (!InputValidator.isValidAccountStatut(statut)) {
+                reponse.put("statut", "ERREUR");
+                reponse.put("message", "Statut invalide : '" + statut + "'. Valeurs autorisées : actif, bloque.");
+                System.out.println("[SECURITY] Tentative de changement de statut invalide : '" + statut 
+                        + "' pour utilisateur " + idUtilisateur);
+                return reponse;
+            }
 
             Map<String, Object> daoRes = UserDAO.changerStatutCompte(idUtilisateur, statut);
             return daoRes;
