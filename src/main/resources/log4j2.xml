@@ -1,38 +1,26 @@
-z<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="WARN">
 
     <Appenders>
 
-        <!-- Console : logs généraux de l'application -->
+        <!-- Console : logs généraux affichés dans le terminal -->
         <Console name="Console" target="SYSTEM_OUT">
-            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{30} - %msg%n"/>
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} [%t] %-5level %logger{36} - %msg%n"/>
         </Console>
 
-        <!-- Fichier tournant quotidiennement : uniquement les événements de sécurité -->
-        <RollingFile name="SecurityFile"
-                     fileName="logs/security.log"
-                     filePattern="logs/security-%d{yyyy-MM-dd}-%i.log.gz">
-            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] - %msg%n"/>
-            <Policies>
-                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
-                <SizeBasedTriggeringPolicy size="10 MB"/>
-            </Policies>
-            <DefaultRolloverStrategy max="30"/>
-        </RollingFile>
+        <!-- Fichier général de l'application -->
+        <File name="AppFile" fileName="logs/app.log" bufferedIO="true">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} [%t] %-5level %logger{36} - %msg%n"/>
+        </File>
 
     </Appenders>
 
     <Loggers>
 
-
-        <Logger name="SECURITY" level="INFO" additivity="false">
-            <AppenderRef ref="SecurityFile"/>
-            <AppenderRef ref="Console"/>
-        </Logger>
-
-        <!-- Logger racine pour tout le reste -->
+        <!-- Logger racine : console + fichier app.log -->
         <Root level="INFO">
             <AppenderRef ref="Console"/>
+            <AppenderRef ref="AppFile"/>
         </Root>
 
     </Loggers>

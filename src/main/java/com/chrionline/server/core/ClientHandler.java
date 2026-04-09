@@ -1,5 +1,6 @@
 package com.chrionline.server.core;
 
+import com.chrionline.server.utils.AppLogger;
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.security.SecurityLogger;
 import com.chrionline.server.service.AuthenticationService;
@@ -58,7 +59,7 @@ public class ClientHandler implements Runnable {
             this.out.flush();
             this.in  = new ObjectInputStream(socket.getInputStream());
 
-            System.out.println("[HANDLER] Client connecté : " + socket.getInetAddress().getHostAddress());
+            AppLogger.info("[HANDLER] Client connecté : " + socket.getInetAddress().getHostAddress());
 
             Object requete;
             while ((requete = in.readObject()) != null) {
@@ -66,9 +67,9 @@ public class ClientHandler implements Runnable {
             }
 
         } catch (EOFException | SocketException e) {
-            System.out.println("[HANDLER] Déconnexion du client.");
+            AppLogger.info("[HANDLER] Déconnexion du client.");
         } catch (IOException | ClassNotFoundException e) {
-            System.err.println("[HANDLER] Erreur réseau : " + e.getMessage());
+            AppLogger.error("[HANDLER] Erreur réseau : " + e.getMessage());
         } finally {
             server.gererDeconnexion(this);
             fermerConnexion();
@@ -90,7 +91,7 @@ public class ClientHandler implements Runnable {
         Map<String, Object> req = (Map<String, Object>) objet;
         String commande = (String) req.getOrDefault("commande", "INCONNUE");
 
-        System.out.println("[HANDLER] Reçu : " + commande);
+        AppLogger.info("[HANDLER] Reçu : " + commande);
 
         // TODO : Plus tard, ces appels seront redirigés vers des Services ou DAOs
         switch (commande) {

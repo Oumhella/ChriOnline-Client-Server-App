@@ -2,6 +2,7 @@ package com.chrionline.server.dao;
 
 import com.chrionline.database.DatabaseConnection;
 import com.chrionline.server.security.SecurityLogger;
+import com.chrionline.server.utils.AppLogger;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.*;
@@ -274,7 +275,22 @@ public class UserDAO {
             conn = DatabaseConnection.getInstance().getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Utilisateur
+            // ── 0. Récupérer l'ancienne adresse email AVANT toute modification ─
+            //    Ceci garantit que l'alerte part toujours vers l'adresse connue du client,
+            //    même si l'attaquant tente de changer l'email pour détourner la notification.
+            String ancienEmail  = "";
+            String ancienPrenom = "Client";
+            String sqlAncien = "SELECT email, prenom FROM utilisateur WHERE idUtilisateur = ?";
+            try (PreparedStatement ps = conn.prepareStatement(sqlAncien)) {
+                ps.setInt(1, userId);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    ancienEmail  = rs.getString("email");
+                    ancienPrenom = rs.getString("prenom");
+                }
+            }
+
+            // ── 1. Utilisateur ────────────────────────────────────────────────
             String sqlU = "UPDATE utilisateur SET nom = ?, prenom = ?, email = ? WHERE idUtilisateur = ?";
             try (PreparedStatement ps = conn.prepareStatement(sqlU)) {
                 ps.setString(1, (String) data.get("nom"));
@@ -284,7 +300,7 @@ public class UserDAO {
                 ps.executeUpdate();
             }
 
-            // 2. Client (téléphone)
+            // ── 2. Client (téléphone) ─────────────────────────────────────────
             String sqlC = "UPDATE client SET telephone = ? WHERE idUtilisateur = ?";
             try (PreparedStatement ps = conn.prepareStatement(sqlC)) {
                 String tel = (String) data.getOrDefault("telephone", "");
@@ -293,8 +309,9 @@ public class UserDAO {
                 ps.executeUpdate();
             }
 
-            // 3. Adresse (UPSERT / simple update si existe)
-            String sqlA = "UPDATE adresse SET rue = ?, ville = ?, code_postal = ?, pays = ? WHERE idUtilisateur = ? AND type_adresse = 'livraison'";
+            // ── 3. Adresse (UPSERT) ───────────────────────────────────────────
+            String sqlA = "UPDATE adresse SET rue = ?, ville = ?, code_postal = ?, pays = ? "
+                        + "WHERE idUtilisateur = ? AND type_adresse = 'livraison'";
             try (PreparedStatement ps = conn.prepareStatement(sqlA)) {
                 ps.setString(1, (String) data.get("rue"));
                 ps.setString(2, (String) data.get("ville"));
@@ -302,10 +319,10 @@ public class UserDAO {
                 ps.setString(4, (String) data.get("pays"));
                 ps.setInt(5, userId);
                 int rows = ps.executeUpdate();
-                
-                // Si pas d'adresse, on l'insère
-                if (rows == 0 && data.get("rue") != null && !((String)data.get("rue")).isBlank()) {
-                    String sqlIns = "INSERT INTO adresse (idUtilisateur, type_adresse, rue, ville, code_postal, pays) VALUES (?, 'livraison', ?, ?, ?, ?)";
+
+                if (rows == 0 && data.get("rue") != null && !((String) data.get("rue")).isBlank()) {
+                    String sqlIns = "INSERT INTO adresse (idUtilisateur, type_adresse, rue, ville, code_postal, pays) "
+                                  + "VALUES (?, 'livraison', ?, ?, ?, ?)";
                     try (PreparedStatement psi = conn.prepareStatement(sqlIns)) {
                         psi.setInt(1, userId);
                         psi.setString(2, (String) data.get("rue"));
@@ -318,9 +335,60 @@ public class UserDAO {
             }
 
             conn.commit();
+
+            // ── Log de sécurité ───────────────────────────────────────────────
+            SecurityLogger.majProfil(userId, "serveur");
+
+            // ── Email d'alerte (tâche de fond) ────────────────────────────────
+            String nouvelEmail = (String) data.getOrDefault("email", "");
+            boolean emailChange = !ancienEmail.isBlank() && !ancienEmail.equalsIgnoreCase(nouvelEmail);
+
+            // Description des champs modifiés
+            java.util.List<String> champs = new java.util.ArrayList<>();
+            if (data.get("nom")         != null) champs.add("Nom : "         + data.get("nom"));
+            if (data.get("prenom")      != null) champs.add("Prénom : "      + data.get("prenom"));
+            if (data.get("email")       != null) champs.add("Email : "       + data.get("email"));
+            if (data.get("telephone")   != null) champs.add("Téléphone : "   + data.get("telephone"));
+            if (data.get("rue")         != null) champs.add("Adresse : "     + data.get("rue"));
+            if (data.get("ville")       != null) champs.add("Ville : "       + data.get("ville"));
+            if (data.get("code_postal") != null) champs.add("Code postal : " + data.get("code_postal"));
+            if (data.get("pays")        != null) champs.add("Pays : "        + data.get("pays"));
+            String champsStr = "• " + String.join("<br>• ", champs);
+
+            String dateHeure = new java.text.SimpleDateFormat("dd/MM/yyyy 'à' HH:mm:ss")
+                    .format(new java.util.Date());
+
+            final String fAncienEmail = ancienEmail;
+            final String fNouvelEmail = nouvelEmail;
+            final String fPrenom      = ancienPrenom;
+            final String fChamps      = champsStr;
+            final String fDate        = dateHeure;
+
+            new Thread(() -> {
+                try {
+                    // Toujours alerter sur l'ANCIENNE adresse
+                    if (!fAncienEmail.isBlank()) {
+                        com.chrionline.server.service.EmailService
+                                .envoyerAlerteModificationProfil(fAncienEmail, fPrenom, fChamps, fDate);
+                        AppLogger.info("[UserDAO] Alerte profil envoyée à (ancien email) : " + fAncienEmail);
+                    }
+                    // Si l'email a changé, alerter aussi la nouvelle adresse
+                    if (emailChange && !fNouvelEmail.isBlank()) {
+                        com.chrionline.server.service.EmailService
+                                .envoyerAlerteModificationProfil(fNouvelEmail, fPrenom, fChamps, fDate);
+                        AppLogger.info("[UserDAO] Alerte profil envoyée à (nouvel email) : " + fNouvelEmail);
+                    }
+                } catch (Exception ex) {
+                    AppLogger.error("[UserDAO] Échec email alerte profil : " + ex.getMessage());
+                    SecurityLogger.erreurServeur("emailAlerteModificationProfil userId=" + userId, ex.getMessage());
+                }
+            }, "email-profil-alert").start();
+
             return Map.of("statut", "OK", "message", "Profil mis à jour avec succès !");
+
         } catch (Exception e) {
             rollback(conn);
+            SecurityLogger.erreurServeur("majProfil userId=" + userId, e.getMessage());
             return Map.of("statut", "ERREUR", "message", "Échec mise à jour : " + e.getMessage());
         } finally {
             if (conn != null) {
@@ -328,6 +396,8 @@ public class UserDAO {
             }
         }
     }
+
+
 
     public static java.util.List<Map<String, Object>> listerClients() {
         java.util.List<Map<String, Object>> clients = new java.util.ArrayList<>();

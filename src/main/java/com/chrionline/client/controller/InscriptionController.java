@@ -21,12 +21,13 @@ public class InscriptionController {
     private final TextField     paysField;
     private final Label         msgLabel;
     private final Stage         stage;
+    private final TextField     dateNaissanceField;
 
     public InscriptionController(
             TextField nom, TextField prenom, TextField email, TextField tel,
             PasswordField mdp, PasswordField mdpConf,
             TextField rue, TextField ville, TextField cp, TextField pays,
-            Label msg, Stage stage
+            Label msg, Stage stage, TextField dateNaissance
     ) {
         this.nomField     = nom;
         this.prenomField  = prenom;
@@ -40,10 +41,11 @@ public class InscriptionController {
         this.paysField    = pays;
         this.msgLabel     = msg;
         this.stage        = stage;
+        this.dateNaissanceField = dateNaissance;
     }
 
     public void inscrire() {
-
+        System.out.println("[DEBUG] Tentative d'inscription avec validation de mot de passe fort...");
         String nom    = nomField.getText().trim();
         String prenom = prenomField.getText().trim();
         String email  = emailField.getText().trim();
@@ -54,6 +56,7 @@ public class InscriptionController {
         String ville  = villeField.getText().trim();
         String cp     = cpField.getText().trim();
         String pays   = paysField.getText().trim();
+        String dob    = dateNaissanceField.getText().trim();
 
         // ── Validation ────────────────────────────────────────
         if (nom.isEmpty() || prenom.isEmpty() || email.isEmpty() || mdp.isEmpty()) {
@@ -73,6 +76,12 @@ public class InscriptionController {
             return;
         }
 
+        // ── Vérification Force du Mot de Passe ────────────────
+        if (!com.chrionline.shared.utils.PasswordValidator.estFort(mdp, nom, prenom, dob)) {
+            erreur("Mot de passe trop faible. Il ne doit pas contenir votre nom, prénom ou date de naissance, et doit être complexe (8+ chars, majuscule, chiffre, spécial).");
+            return;
+        }
+
         // ── Construction de la requête ─────────────────────────
         Map<String, Object> req = new HashMap<>();
         req.put("commande",    "INSCRIPTION");
@@ -82,6 +91,7 @@ public class InscriptionController {
         req.put("prenom",      prenom);
         req.put("email",       email);
         req.put("mdp",         mdp);
+        req.put("date_naissance", dob);
 
         // Table client
         req.put("telephone", tel);

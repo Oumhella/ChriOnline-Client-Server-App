@@ -3,17 +3,17 @@ package com.chrionline.server.security;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/**
- * Journalisation centralisée des événements de sécurité.
- * Tous les logs sont redirigés vers le logger "SECURITY" (→ logs/security.log).
+/*
+  Journalisation centralisée des événements de sécurité.
+  Tous les logs sont redirigés vers le logger "SECURITY" (→ logs/security.log).
  */
 public final class SecurityLogger {
 
-    private static final Logger LOG = LogManager.getLogger("SECURITY");
+    private static final Logger LOG = LogManager.getRootLogger();
 
     private SecurityLogger() {}
 
-    // ─── Authentification ─────────────────────────────────────────────────────
+    // Authentification
 
     /**
      * Connexion réussie.

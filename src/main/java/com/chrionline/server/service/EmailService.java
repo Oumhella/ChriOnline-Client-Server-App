@@ -1,5 +1,6 @@
 package com.chrionline.server.service;
 
+import com.chrionline.server.utils.AppLogger;
 import javax.mail.*;
 import javax.mail.internet.*;
 import java.io.IOException;
@@ -23,7 +24,7 @@ public class EmailService {
         try (InputStream in = EmailService.class
                 .getClassLoader().getResourceAsStream("email.properties")) {
             if (in == null) {
-                System.err.println("[EMAIL] email.properties introuvable dans le classpath.");
+                AppLogger.error("[EMAIL] email.properties introuvable dans le classpath.");
                 // Ne pas bloquer le démarrage mais log l'erreur
             } else {
                 Properties config = new Properties();
@@ -42,7 +43,7 @@ public class EmailService {
             }
 
         } catch (IOException e) {
-            System.err.println("[EMAIL] Erreur chargement email.properties : " + e.getMessage());
+            AppLogger.error("[EMAIL] Erreur chargement email.properties : " + e.getMessage());
         }
     }
 
@@ -198,6 +199,6 @@ public class EmailService {
         msg.setSubject(sujet);
         msg.setContent(corpsHtml, "text/html; charset=utf-8");
         Transport.send(msg);
-        System.out.println("[EMAIL] Envoyé à " + destinataire + " — " + sujet);
+        AppLogger.info("[EMAIL] Envoyé à " + destinataire + " — " + sujet);
     }
 }

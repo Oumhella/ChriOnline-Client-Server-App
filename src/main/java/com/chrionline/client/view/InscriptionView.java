@@ -251,7 +251,10 @@ public class InscriptionView extends Application {
         forceLbl.setTextFill(Color.web(BRUN_LIGHT));
 
         mdpField.textProperty().addListener((obs, old, val) -> {
-            double f = calculerForce(val);
+            String nom = nomField.getText();
+            String prenom = prenomField.getText();
+            String dob = dateNaissanceField.getText();
+            double f = com.chrionline.shared.utils.PasswordValidator.calculerScore(val, nom, prenom, dob);
             forceMdp.setProgress(f);
             if (f < 0.34) {
                 forceLbl.setText("● Sécurité faible");
@@ -336,7 +339,7 @@ public class InscriptionView extends Application {
                 nomField, prenomField, emailField, telField,
                 mdpField, mdpConfField,
                 rueField, villeField, cpField, paysField,
-                msgLabel, stage
+                msgLabel, stage, dateNaissanceField
         );
         btnInscrire.setOnAction(e -> ctrl.inscrire());
         //lien vers la page de connexion
@@ -584,44 +587,7 @@ public class InscriptionView extends Application {
     }
 
     private double calculerForce(String mdp) {
-        if (mdp == null || mdp.isEmpty()) return 0;
-
-        double s = 0;
-
-        // criteres de base
-        if (mdp.length() >= 6)               s += 0.20;
-        if (mdp.length() >= 10)              s += 0.15;
-        if (mdp.matches(".*[A-Z].*"))        s += 0.15;
-        if (mdp.matches(".*[0-9].*"))        s += 0.15;
-        if (mdp.matches(".*[^a-zA-Z0-9].*")) s += 0.15;
-
-
-        String dateNaissance = dateNaissanceField != null
-                ? dateNaissanceField.getText().trim()
-                : "";
-
-        if (!dateNaissance.isEmpty()) {
-
-            String chiffresDate = dateNaissance.replaceAll("[^0-9]", "");
-
-            if (chiffresDate.length() >= 4) {
-                String annee  = chiffresDate.substring(chiffresDate.length() - 4);
-                String jour   = chiffresDate.length() >= 6
-                        ? chiffresDate.substring(0, 2) : "";
-
-                boolean contientDate = mdp.contains(chiffresDate)
-                        || mdp.contains(annee)
-                        || (!jour.isEmpty() && mdp.contains(jour));
-
-                if (!contientDate) {
-                    s += 0.20;
-                } else {
-                    s -= 0.20;
-                }
-            }
-        }
-
-        return Math.min(Math.max(s, 0), 1.0);
+        return com.chrionline.shared.utils.PasswordValidator.calculerScore(mdp, nomField.getText(), prenomField.getText(), dateNaissanceField.getText());
     }
 
     public static void main(String[] args) { launch(args); }

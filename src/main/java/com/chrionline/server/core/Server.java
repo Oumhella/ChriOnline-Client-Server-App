@@ -1,5 +1,6 @@
 package com.chrionline.server.core;
 
+import com.chrionline.server.utils.AppLogger;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -42,8 +43,8 @@ public class Server {
     public void demarrer() {
         try {
             serverSocket = new ServerSocket(port);
-            System.out.println("[SERVER] Démarré sur le port " + port);
-            System.out.println("[SERVER] En attente de connexions clients...");
+            AppLogger.info("[SERVER] Démarré sur le port " + port);
+            AppLogger.info("[SERVER] En attente de connexions clients...");
 
             // Lancer le thread UDP pour les notifications en parallèle
             Thread udpThread = new Thread(this::ecouterUDP);
@@ -56,7 +57,7 @@ public class Server {
             }
 
         } catch (IOException e) {
-            System.err.println("[SERVER] Erreur au démarrage : " + e.getMessage());
+            AppLogger.error("[SERVER] Erreur au démarrage : " + e.getMessage());
         }
     }
 
@@ -65,7 +66,7 @@ public class Server {
      */
     public void arreter() {
         try {
-            System.out.println("[SERVER] Arrêt en cours...");
+            AppLogger.info("[SERVER] Arrêt en cours...");
 
             // Déconnecter tous les clients
             for (ClientHandler handler : clientConnectes) {
@@ -76,10 +77,9 @@ public class Server {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 serverSocket.close();
             }
-
-            System.out.println("[SERVER] Arrêté avec succès.");
+            AppLogger.info("[SERVER] Arrêté avec succès.");
         } catch (IOException e) {
-            System.err.println("[SERVER] Erreur lors de l'arrêt : " + e.getMessage());
+            AppLogger.error("[SERVER] Erreur lors de l'arrêt : " + e.getMessage());
         }
     }
 
@@ -89,7 +89,7 @@ public class Server {
     public void accepterConnexion() {
         try {
             Socket socketClient = serverSocket.accept();
-            System.out.println("[SERVER] Nouveau client connecté : "
+            AppLogger.info("[SERVER] Nouveau client connecté : "
                     + socketClient.getInetAddress().getHostAddress());
 
             ClientHandler handler = new ClientHandler(socketClient, this);
@@ -100,7 +100,7 @@ public class Server {
 
         } catch (IOException e) {
             if (!serverSocket.isClosed()) {
-                System.err.println("[SERVER] Erreur lors de l'acceptation d'une connexion : " + e.getMessage());
+                AppLogger.error("[SERVER] Erreur lors de l'acceptation d'une connexion : " + e.getMessage());
             }
         }
     }
@@ -122,7 +122,7 @@ public class Server {
      */
     public void gererDeconnexion(ClientHandler handler) {
         clientConnectes.remove(handler);
-        System.out.println("[SERVER] Client déconnecté. Clients actifs : " + clientConnectes.size());
+        AppLogger.info("[SERVER] Client déconnecté. Clients actifs : " + clientConnectes.size());
     }
 
     /**
@@ -137,10 +137,10 @@ public class Server {
             byte[] data = message.getBytes();
             DatagramPacket packet = new DatagramPacket(data, data.length, adresseClient, portClient);
             udpSocket.send(packet);
-            System.out.println("[UDP] Notification envoyée à "
+            AppLogger.info("[UDP] Notification envoyée à "
                     + adresseClient.getHostAddress() + ":" + portClient + " → " + message);
         } catch (IOException e) {
-            System.err.println("[UDP] Erreur d'envoi de notification : " + e.getMessage());
+            AppLogger.error("[UDP] Erreur d'envoi de notification : " + e.getMessage());
         }
     }
 
@@ -210,19 +210,19 @@ public class Server {
      */
     private void ecouterUDP() {
         try (DatagramSocket udpSocket = new DatagramSocket(UDP_PORT)) {
-            System.out.println("[UDP] En écoute sur le port " + UDP_PORT);
+            AppLogger.info("[UDP] En écoute sur le port " + UDP_PORT);
             byte[] buffer = new byte[1024];
 
             while (true) {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 udpSocket.receive(packet);
                 String messageRecu = new String(packet.getData(), 0, packet.getLength());
-                System.out.println("[UDP] Message reçu de "
+                AppLogger.info("[UDP] Message reçu de "
                         + packet.getAddress().getHostAddress() + " : " + messageRecu);
             }
 
         } catch (IOException e) {
-            System.err.println("[UDP] Erreur socket UDP : " + e.getMessage());
+            AppLogger.error("[UDP] Erreur socket UDP : " + e.getMessage());
         }
     }
 
