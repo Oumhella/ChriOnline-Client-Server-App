@@ -38,13 +38,36 @@ public class Server {
     // ─── Méthodes principales ─────────────────────────────────────────────────
 
     /**
-     * Démarre le serveur : ouvre le ServerSocket TCP et commence à accepter les connexions.
+     * Démarre le serveur : ouvre le ServerSocket TCP (SSL) et commence à accepter les connexions.
      */
     public void demarrer() {
         try {
-            serverSocket = new ServerSocket(port);
-            AppLogger.info("[SERVER] Démarré sur le port " + port);
-            AppLogger.info("[SERVER] En attente de connexions clients...");
+            // Chargement de la configuration SSL
+            java.util.Properties props = new java.util.Properties();
+            try (java.io.InputStream in = getClass().getClassLoader().getResourceAsStream("server.properties")) {
+                if (in != null) props.load(in);
+            }
+
+            String ksName = props.getProperty("server.ssl.keystore", "keystore.jks");
+            String ksPass = props.getProperty("server.ssl.password", "password123");
+
+            char[] password = ksPass.toCharArray();
+            java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
+            try (java.io.InputStream ksIn = getClass().getClassLoader().getResourceAsStream(ksName)) {
+                if (ksIn == null) throw new IOException("Keystore introuvable : " + ksName);
+                ks.load(ksIn, password);
+            }
+
+            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance("SunX509");
+            kmf.init(ks, password);
+            javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+            sslContext.init(kmf.getKeyManagers(), null, null);
+
+            javax.net.ssl.SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
+            serverSocket = ssf.createServerSocket(port);
+            
+            AppLogger.info("[SERVER-SSL] Démarré sur le port " + port + " avec TLS");
+            AppLogger.info("[SERVER] En attente de connexions sécurisées...");
 
             // Lancer le thread UDP pour les notifications en parallèle
             Thread udpThread = new Thread(this::ecouterUDP);
@@ -56,8 +79,9 @@ public class Server {
                 accepterConnexion();
             }
 
-        } catch (IOException e) {
-            AppLogger.error("[SERVER] Erreur au démarrage : " + e.getMessage());
+        } catch (Exception e) {
+            AppLogger.error("[SERVER] Erreur au démarrage SSL : " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

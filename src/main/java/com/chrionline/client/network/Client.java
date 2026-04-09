@@ -15,6 +15,7 @@ public class Client {
     private Socket socket;
     private ObjectOutputStream out;
     private ObjectInputStream in;
+    private String jwtToken; // Stockage du token de session
 
     // Attributs UDP pour les notifications
     private DatagramSocket udpSocket;
@@ -43,23 +44,36 @@ public class Client {
     }
 
     /**
-     * Établit la connexion TCP avec le serveur et lance l'écouteur de notifications UDP.
+     * Établit la connexion TCP sécurisée (SSL/TLS) avec le serveur.
      */
     public void connecter() throws IOException {
         if (socket == null || socket.isClosed()) {
-            // Connexion TCP principale
-            this.socket = new Socket(host, port);
+            try {
+                // Pour cette démonstration, on fait confiance à tous les certificats (auto-signés)
+                java.util.Properties props = new java.util.Properties();
+                try (java.io.InputStream in = getClass().getClassLoader().getResourceAsStream("server.properties")) {
+                    if (in != null) props.load(in);
+                }
 
-            this.out = new ObjectOutputStream(socket.getOutputStream());
-            this.out.flush();
-            this.in = new ObjectInputStream(socket.getInputStream());
+                javax.net.ssl.SSLSocketFactory ssf = (javax.net.ssl.SSLSocketFactory) javax.net.ssl.SSLSocketFactory.getDefault();
+                this.socket = ssf.createSocket(host, port);
+                
+                // Forcer le handshake
+                ((javax.net.ssl.SSLSocket)socket).startHandshake();
 
-            System.out.println("[CLIENT] Connexion TCP établie sur le port " + port);
+                this.out = new ObjectOutputStream(socket.getOutputStream());
+                this.out.flush();
+                this.in = new ObjectInputStream(socket.getInputStream());
 
-            // Démarrage de l'écouteur UDP
-            Thread udpThread = new Thread(this::ecouterNotificationsUDP);
-            udpThread.setDaemon(true);
-            udpThread.start();
+                System.out.println("[CLIENT-SSL] Connexion sécurisée établie.");
+
+                // Démarrage de l'écouteur UDP
+                Thread udpThread = new Thread(this::ecouterNotificationsUDP);
+                udpThread.setDaemon(true);
+                udpThread.start();
+            } catch (Exception e) {
+                throw new IOException("Erreur SSL : " + e.getMessage(), e);
+            }
         }
     }
 
@@ -81,14 +95,35 @@ public class Client {
     @SuppressWarnings("unchecked")
     public java.util.Map<String, Object> envoyerRequeteAttendreReponse(java.util.Map<String, Object> requete) {
         try {
+            // Injection automatique des headers de sécurité
+            injectSecurityHeaders(requete);
+            
             envoyerRequete((Object) requete);
-            return (java.util.Map<String, Object>) lireReponse();
+            java.util.Map<String, Object> reponse = (java.util.Map<String, Object>) lireReponse();
+            
+            // Si c'est une connexion réussie, on sauvegarde le JWT
+            if (reponse != null && "OK".equals(reponse.get("statut")) && reponse.containsKey("jwt")) {
+                this.jwtToken = (String) reponse.get("jwt");
+                System.out.println("[CLIENT] JWT de session mis à jour.");
+            }
+            
+            return reponse;
         } catch (Exception e) {
             java.util.Map<String, Object> err = new java.util.HashMap<>();
             err.put("statut", "ERREUR");
             err.put("message", "Erreur réseau : " + e.getMessage());
             return err;
         }
+    }
+
+    private void injectSecurityHeaders(java.util.Map<String, Object> req) {
+        if (jwtToken != null) {
+            req.put("jwt", jwtToken);
+        }
+        // Token pare-feu pour les accès "internes" simulés
+        req.put("firewallToken", "CHRI-FW-2026-SECRET-X91");
+        // IP revendiquée (pour test IP Spoofing)
+        // req.put("claimedIp", "192.168.1.100"); 
     }
 
     /**

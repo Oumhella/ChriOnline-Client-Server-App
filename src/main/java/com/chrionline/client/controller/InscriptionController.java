@@ -5,6 +5,7 @@ import com.chrionline.client.view.ConfirmationView;
 import javafx.application.Platform;
 import javafx.scene.control.*;
 import javafx.stage.Stage;
+import com.chrionline.shared.utils.PasswordValidator;
 import java.util.*;
 
 public class InscriptionController {
@@ -44,9 +45,8 @@ public class InscriptionController {
         this.dateNaissanceField = dateNaissance;
     }
 
-    public void inscrire() {
-        System.out.println("[DEBUG] Tentative d'inscription avec validation de mot de passe fort...");
     public void inscrire(String captchaToken) {
+        System.out.println("[DEBUG] Tentative d'inscription avec validation de mot de passe fort...");
 
         String nom    = nomField.getText().trim();
         String prenom = prenomField.getText().trim();
@@ -71,10 +71,6 @@ public class InscriptionController {
         }
         if (!mdp.equals(mdpC)) {
             erreur("Les mots de passe ne correspondent pas.");
-            return;
-        }
-        if (mdp.length() < 6) {
-            erreur("Mot de passe trop court (minimum 6 caractères).");
             return;
         }
 

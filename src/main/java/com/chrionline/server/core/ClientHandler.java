@@ -3,6 +3,8 @@ package com.chrionline.server.core;
 import com.chrionline.server.utils.AppLogger;
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.security.SecurityLogger;
+import com.chrionline.server.security.SecurityInterceptor;
+import com.chrionline.server.security.JwtService;
 import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.server.service.EmailService;
 import com.chrionline.server.service.PanierService;
@@ -90,8 +92,17 @@ public class ClientHandler implements Runnable {
 
         Map<String, Object> req = (Map<String, Object>) objet;
         String commande = (String) req.getOrDefault("commande", "INCONNUE");
+        String socketIp = socket.getInetAddress().getHostAddress();
 
-        AppLogger.info("[HANDLER] Reçu : " + commande);
+        AppLogger.info("[HANDLER] Reçu : " + commande + " de " + socketIp);
+
+        // --- INTERCEPTEUR DE SÉCURITÉ ---
+        // Vérifie IP Spoofing, Firewall Token, Rate Limiting et JWT
+        String error = SecurityInterceptor.validateRequest(commande, req, socketIp);
+        if (error != null) {
+            envoyerMessage(creerReponse("ERREUR", error));
+            return;
+        }
 
         // TODO : Plus tard, ces appels seront redirigés vers des Services ou DAOs
         switch (commande) {
@@ -166,6 +177,11 @@ public class ClientHandler implements Runnable {
             }
 
             case "VERIFIER_OTP"         -> handleVerifierOTP(req);
+            
+            // Sécurité Monitoring (Admin)
+            case "ADMIN_GET_SECURITY_EVENTS" -> handleGetSecurityEvents(req);
+            case "ADMIN_BLOCK_IP"            -> handleBlockIP(req);
+
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -209,6 +225,10 @@ public class ClientHandler implements Runnable {
                 this.userId = (int) data.get("userId");
                 this.userEmail = (String) data.get("email");
                 this.userRole = (String) data.get("role");
+                
+                // Générer et attacher le JWT à la réponse de succès
+                String token = JwtService.generateToken(userEmail, userRole, userId);
+                reponse.put("jwt", token);
             }
 
             envoyerMessage(reponse);
@@ -234,6 +254,27 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur confirmation : " + e.getMessage()));
         }
+    }
+
+    private void handleGetSecurityEvents(Map<String, Object> req) {
+        if (!"admin".equals(userRole)) {
+             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+             return;
+        }
+        Map<String, Object> res = new java.util.HashMap<>();
+        res.put("statut", "OK");
+        res.put("events", SecurityLogger.getRecentEvents());
+        envoyerMessage(res);
+    }
+
+    private void handleBlockIP(Map<String, Object> req) {
+        if (!"admin".equals(userRole)) {
+            envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+            return;
+        }
+        String ip = (String) req.get("ip");
+        SecurityLogger.blockIP(ip);
+        envoyerMessage(creerReponse("OK", "IP bloquée avec succès."));
     }
 
     private void handleOublierMotDePasse(Map<String, Object> req) {
