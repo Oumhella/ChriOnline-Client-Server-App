@@ -347,6 +347,22 @@ public class UserDAO {
         }
     }
 
+    /**
+     * Retrouve l'email d'un utilisateur à partir de son ID.
+     * @return l'email ou null si non trouvé
+     */
+    public static String findEmailById(int idUtilisateur) {
+        String sql = "SELECT email FROM utilisateur WHERE idUtilisateur = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idUtilisateur);
+            ResultSet rs = ps.executeQuery();
+            return rs.next() ? rs.getString("email") : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static Map<String, Object> getInfosProfil(int userId) {
         String sql = """
             SELECT u.nom, u.prenom, u.email, c.telephone, a.rue, a.ville, a.code_postal, a.pays

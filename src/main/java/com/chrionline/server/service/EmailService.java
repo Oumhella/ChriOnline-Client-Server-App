@@ -137,6 +137,27 @@ public class EmailService {
         envoyer(destinataire, sujet, corps);
     }
 
+    /**
+     * Envoie une notification de déblocage de compte à l'utilisateur.
+     */
+    public static void envoyerDeblocageCompte(String destinataire) throws MessagingException {
+        String sujet = "Votre compte a été réactivé — ChriOnline";
+        String corps = """
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
+              <h2 style="color:#6B9E7A">Bonne nouvelle !</h2>
+              <p>Votre compte ChriOnline a été <strong>réactivé</strong> par un administrateur.</p>
+              <div style="background:#f4f4f4;padding:16px;border-radius:8px;border-left:4px solid #6B9E7A;">
+                <p style="margin:0">Vous pouvez désormais vous connecter et accéder à l'ensemble de nos services.</p>
+              </div>
+              <p style="color:#888;font-size:12px;margin-top:20px;">
+                Si vous pensez qu'il s'agit d'une erreur, veuillez contacter notre support.<br>
+                L'équipe ChriOnline
+              </p>
+            </div>
+            """;
+        envoyer(destinataire, sujet, corps);
+    }
+
     // ─── Méthode publique d'envoi ─────────────────────────────────────────────
     
     /**
