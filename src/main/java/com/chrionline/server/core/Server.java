@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import com.chrionline.server.dao.NotificationDAO;
 import com.chrionline.server.dao.UserDAO;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Classe principale du serveur ChriOnline.
@@ -23,6 +25,8 @@ public class Server {
     private int port;
     private ServerSocket serverSocket;
     private List<ClientHandler> clientConnectes;
+    private ExecutorService threadPool;
+    private ConnectionSecurityManager securityManager;
 
     // Port UDP séparé pour les notifications (port TCP + 1 par convention)
     private static final int UDP_PORT = 9091;
@@ -32,6 +36,8 @@ public class Server {
     public Server(int port) {
         this.port = port;
         this.clientConnectes = new ArrayList<>();
+        this.threadPool = Executors.newFixedThreadPool(50); // Limite de 50 threads concurrents
+        this.securityManager = new ConnectionSecurityManager();
     }
 
     // ─── Méthodes principales ─────────────────────────────────────────────────
@@ -41,8 +47,11 @@ public class Server {
      */
     public void demarrer() {
         try {
-            serverSocket = new ServerSocket(port);
+            // Le backlog est mis à 10000 pour simuler la tolérance au flood avant rejet OS
+            // (La vraie protection SYN cookies s'active au niveau de l'OS sous-jacent)
+            serverSocket = new ServerSocket(port, 10000);
             System.out.println("[SERVER] Démarré sur le port " + port);
+            System.out.println("[SURVEILLANCE & LOGS] OS SYN Cookies : Tolérés (gestion au niveau OS).");
             System.out.println("[SERVER] En attente de connexions clients...");
 
             // Lancer le thread UDP pour les notifications en parallèle
@@ -76,6 +85,10 @@ public class Server {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 serverSocket.close();
             }
+            
+            if (threadPool != null && !threadPool.isShutdown()) {
+                threadPool.shutdownNow();
+            }
 
             System.out.println("[SERVER] Arrêté avec succès.");
         } catch (IOException e) {
@@ -89,14 +102,26 @@ public class Server {
     public void accepterConnexion() {
         try {
             Socket socketClient = serverSocket.accept();
-            System.out.println("[SERVER] Nouveau client connecté : "
-                    + socketClient.getInetAddress().getHostAddress());
+            String clientIp = socketClient.getInetAddress().getHostAddress();
+
+            // 1. Vérification de sécurité (Protection DoS / SYN Flood)
+            if (!securityManager.isAllowed(clientIp)) {
+                System.out.println("[SERVER] Connexion rejetée (Bloqué/BLACKLIST) : " + clientIp);
+                socketClient.close(); // Fermeture immédiate de la socket
+                return;
+            }
+
+            System.out.println("[SERVER] Nouveau client connecté : " + clientIp);
+
+            // 1.bis. Réduire le temps d'attente : une connexion non terminée (qui n'envoie pas de données)
+            // est supprimée / jetée après 10 secondes.
+            socketClient.setSoTimeout(10000);
 
             ClientHandler handler = new ClientHandler(socketClient, this);
             clientConnectes.add(handler);
 
-            Thread clientThread = new Thread(handler);
-            clientThread.start();
+            // 2. Utilisation d'un ThreadPool au lieu de `new Thread().start()`
+            threadPool.execute(handler);
 
         } catch (IOException e) {
             if (!serverSocket.isClosed()) {
