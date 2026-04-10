@@ -317,6 +317,16 @@ public class AdminDashboardView extends Application {
     }
 
     private void deconnecter(Stage stage) {
+        try {
+            com.chrionline.client.network.Client c = com.chrionline.client.network.Client.getInstance();
+            if (c != null) {
+                c.connecter();
+                java.util.Map<String, Object> m = new java.util.HashMap<>();
+                m.put("commande", "DECONNEXION");
+                c.envoyerRequete(m);
+                c.lireReponse();
+            }
+        } catch (Exception ignored) { }
         com.chrionline.client.session.SessionManager.getInstance().clear();
         try {
             new com.chrionline.client.view.ConnexionView().start(stage);

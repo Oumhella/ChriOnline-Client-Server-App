@@ -515,6 +515,33 @@ public class UserDAO {
         return emails;
     }
 
+    /**
+     * Email et rôle pour synchroniser le {@link com.chrionline.server.core.ClientHandler} après validation de session.
+     *
+     * @return {@code [email, role]} ou {@code null} si introuvable
+     */
+    public static String[] getEmailAndRoleById(int userId) {
+        String sql = """
+            SELECT u.email,
+                   CASE WHEN a.idAdmin IS NOT NULL THEN 'admin' ELSE 'client' END AS role
+            FROM utilisateur u
+            LEFT JOIN admin a ON a.idAdmin = u.idUtilisateur
+            WHERE u.idUtilisateur = ?
+            """;
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return new String[] { rs.getString("email"), rs.getString("role") };
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[UserDAO] getEmailAndRoleById : " + e.getMessage());
+        }
+        return null;
+    }
+
     private static void rollback(Connection conn) {
         if (conn != null) {
             try { conn.rollback(); } catch (SQLException ignored) {}

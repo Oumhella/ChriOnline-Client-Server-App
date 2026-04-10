@@ -9,6 +9,8 @@ public class SessionManager {
 
     private static SessionManager instance;
     private int userId = -1;
+    /** Identifiant de session serveur (TCP), distinct du userId local. */
+    private String serverSessionId;
     private String nom;
     private String prenom;
     private String email;
@@ -32,17 +34,41 @@ public class SessionManager {
             this.prenom = (String) data.get("prenom");
             this.email = (String) data.get("email");
             this.role = (String) data.get("role");
+            Object sid = data.get("sessionId");
+            if (sid instanceof String) {
+                this.serverSessionId = (String) sid;
+            }
         }
+    }
+
+    public void setServerSessionId(String sessionId) {
+        this.serverSessionId = sessionId;
+    }
+
+    public String getServerSessionId() {
+        return serverSessionId;
     }
 
     public void clear() {
         this.userId = -1;
+        this.serverSessionId = null;
         this.nom = null;
         this.prenom = null;
         this.email = null;
         this.role = null;
         this.notificationHistory.clear();
         this.unreadNotificationsCount = 0;
+    }
+
+    /**
+     * Réaction à {@code ERROR} / {@code SESSION_EXPIRED} renvoyé par le serveur.
+     */
+    public void handleServerResponseIfSessionExpired(java.util.Map<String, Object> rep) {
+        if (rep != null
+                && "ERROR".equals(rep.get("statut"))
+                && "SESSION_EXPIRED".equals(rep.get("message"))) {
+            clear();
+        }
     }
     
     public void addNotification(String msg) {

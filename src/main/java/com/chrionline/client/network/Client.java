@@ -65,8 +65,17 @@ public class Client {
 
     /**
      * Envoie une requête au serveur.
+     * Ajoute automatiquement {@code sessionId} si l'utilisateur possède une session serveur.
      */
     public synchronized void envoyerRequete(Object requete) throws IOException {
+        if (requete instanceof java.util.Map) {
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> m = (java.util.Map<String, Object>) requete;
+            String sid = com.chrionline.client.session.SessionManager.getInstance().getServerSessionId();
+            if (sid != null && !sid.isBlank()) {
+                m.put("sessionId", sid);
+            }
+        }
         if (out != null) {
             out.writeObject(requete);
             out.flush();
@@ -111,7 +120,13 @@ public class Client {
      */
     public synchronized Object lireReponse() throws IOException, ClassNotFoundException {
         if (in != null) {
-            return in.readObject();
+            Object o = in.readObject();
+            if (o instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> m = (java.util.Map<String, Object>) o;
+                com.chrionline.client.session.SessionManager.getInstance().handleServerResponseIfSessionExpired(m);
+            }
+            return o;
         }
         return null;
     }
