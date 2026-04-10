@@ -115,7 +115,7 @@ public class Server {
 
             // 1.bis. Réduire le temps d'attente : une connexion non terminée (qui n'envoie pas de données)
             // est supprimée / jetée après 10 secondes.
-            socketClient.setSoTimeout(10000);
+            socketClient.setSoTimeout(30000);
 
             ClientHandler handler = new ClientHandler(socketClient, this);
             clientConnectes.add(handler);
