@@ -256,6 +256,33 @@ public class ProduitService {
         return res;
     }
 
+    public Map<String, Object> handleApplyDiscountCategorie(Map<String, Object> req) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            int id = Integer.parseInt(req.get("id_categorie").toString());
+            double discount = Double.parseDouble(req.get("discount").toString());
+            boolean success = ProduitDAO.applyDiscount(id, discount);
+            // Also update the category discount percentage directly if success? Or the user can just see it.
+            // Let's also update the category's discount field for future reference.
+            if(success) {
+               Categorie c = null;
+               List<Categorie> cats = ProduitDAO.findAllCategories();
+               for(Categorie iter : cats) {
+                   if(iter.getId() == id) { c = iter; break; }
+               }
+               if(c != null) {
+                   c.setDiscount(discount);
+                   ProduitDAO.updateCategorie(c);
+               }
+            }
+            res.put("statut", success ? "OK" : "ERREUR");
+        } catch (Exception e) {
+            res.put("statut", "ERREUR");
+            res.put("message", e.getMessage());
+        }
+        return res;
+    }
+
     @SuppressWarnings("unchecked")
     private Produit mapToProduit(Map<String, Object> map) {
         Produit p = new Produit();

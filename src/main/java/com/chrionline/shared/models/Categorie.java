@@ -8,6 +8,7 @@ public class Categorie implements Serializable {
     private int idParent;
     private String nom;
     private String description;
+    private double discount;
 
     public int getId() {
         return id;
@@ -39,6 +40,14 @@ public class Categorie implements Serializable {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public double getDiscount() {
+        return discount;
+    }
+
+    public void setDiscount(double discount) {
+        this.discount = discount;
     }
 
     @Override

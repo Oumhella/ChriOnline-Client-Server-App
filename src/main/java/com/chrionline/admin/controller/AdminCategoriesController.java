@@ -66,4 +66,14 @@ public class AdminCategoriesController {
         Map<String, Object> res = (Map<String, Object>) sendRequest(req);
         return res != null && "OK".equals(res.get("statut"));
     }
+
+    public boolean appliquerDiscount(int idCategorie, double pourcentage) {
+        Map<String, Object> req = new HashMap<>();
+        req.put("commande", "APPLY_DISCOUNT_CATEGORIE");
+        req.put("id_categorie", idCategorie);
+        req.put("discount", pourcentage);
+        Map<String, Object> res = (Map<String, Object>) sendRequest(req);
+        return res != null && "OK".equals(res.get("statut"));
+    }
+
 }

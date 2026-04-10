@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import com.chrionline.server.dao.NotificationDAO;
 import com.chrionline.server.dao.UserDAO;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Classe principale du serveur ChriOnline.
@@ -24,6 +26,8 @@ public class Server {
     private int port;
     private ServerSocket serverSocket;
     private List<ClientHandler> clientConnectes;
+    private ExecutorService threadPool;
+    private ConnectionSecurityManager securityManager;
 
     // Port UDP séparé pour les notifications (port TCP + 1 par convention)
     private static final int UDP_PORT = 9091;
@@ -33,6 +37,8 @@ public class Server {
     public Server(int port) {
         this.port = port;
         this.clientConnectes = new ArrayList<>();
+        this.threadPool = Executors.newFixedThreadPool(50); // Limite de 50 threads concurrents
+        this.securityManager = new ConnectionSecurityManager();
     }
 
     // ─── Méthodes principales ─────────────────────────────────────────────────
@@ -64,9 +70,11 @@ public class Server {
             sslContext.init(kmf.getKeyManagers(), null, null);
 
             javax.net.ssl.SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
-            serverSocket = ssf.createServerSocket(port);
+            // Utilisation du backlog de 10000 pour simuler la tolérance au flood avant rejet OS
+            serverSocket = ssf.createServerSocket(port, 10000);
             
             AppLogger.info("[SERVER-SSL] Démarré sur le port " + port + " avec TLS");
+            System.out.println("[SURVEILLANCE & LOGS] OS SYN Cookies : Tolérés (gestion au niveau OS).");
             AppLogger.info("[SERVER] En attente de connexions sécurisées...");
 
             // Lancer le thread UDP pour les notifications en parallèle
@@ -101,6 +109,11 @@ public class Server {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 serverSocket.close();
             }
+
+            if (threadPool != null && !threadPool.isShutdown()) {
+                threadPool.shutdownNow();
+            }
+
             AppLogger.info("[SERVER] Arrêté avec succès.");
         } catch (IOException e) {
             AppLogger.error("[SERVER] Erreur lors de l'arrêt : " + e.getMessage());
@@ -113,14 +126,25 @@ public class Server {
     public void accepterConnexion() {
         try {
             Socket socketClient = serverSocket.accept();
-            AppLogger.info("[SERVER] Nouveau client connecté : "
-                    + socketClient.getInetAddress().getHostAddress());
+            String clientIp = socketClient.getInetAddress().getHostAddress();
+
+            // 1. Vérification de sécurité (Protection DoS / SYN Flood) via ConnectionSecurityManager
+            if (!securityManager.isAllowed(clientIp)) {
+                AppLogger.warn("[SERVER] Connexion rejetée (Bloqué/BLACKLIST) : " + clientIp);
+                socketClient.close();
+                return;
+            }
+
+            AppLogger.info("[SERVER] Nouveau client connecté : " + clientIp);
+
+            // 1.bis. Réduire le temps d'attente (soTimeout) pour libérer les ressources si inactif
+            socketClient.setSoTimeout(10000);
 
             ClientHandler handler = new ClientHandler(socketClient, this);
             clientConnectes.add(handler);
 
-            Thread clientThread = new Thread(handler);
-            clientThread.start();
+            // 2. Utilisation du ThreadPool pour la gestion des threads clients
+            threadPool.execute(handler);
 
         } catch (IOException e) {
             if (!serverSocket.isClosed()) {
