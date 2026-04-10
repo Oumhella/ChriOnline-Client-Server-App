@@ -9,6 +9,7 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import com.chrionline.server.dao.NotificationDAO;
 import com.chrionline.server.dao.UserDAO;
 
@@ -204,6 +205,56 @@ public class Server {
         }
     }
 
+    // ─── Rate Limiting UDP (Protection Anti-Flood) ────────────────────────────
+    private static final int MAX_UDP_PACKETS_PER_SECOND = 20;
+    private static final long UDP_BLOCK_DURATION_MS = 10000; // 10 secondes
+    private final Map<InetAddress, UdpRateData> udpRateLimits = new ConcurrentHashMap<>();
+
+    private static class UdpRateData {
+        long lastResetTime = System.currentTimeMillis();
+        int packetCount = 0;
+        boolean isBlocked = false;
+        long blockUntil = 0;
+    }
+
+    /**
+     * Vérifie si l'adresse IP est soumise à une limitation de taux UDP.
+     */
+    private boolean isUdpRateLimited(InetAddress address) {
+        long now = System.currentTimeMillis();
+        UdpRateData data = udpRateLimits.computeIfAbsent(address, k -> new UdpRateData());
+
+        // Si l'IP est déjà bloquée
+        if (data.isBlocked) {
+            if (now > data.blockUntil) {
+                // Débloquage après la pénalité
+                data.isBlocked = false;
+                data.packetCount = 0;
+                data.lastResetTime = now;
+            } else {
+                return true; // Toujours bloqué
+            }
+        }
+
+        // Remise à zéro chaque seconde
+        if (now - data.lastResetTime > 1000) {
+            data.packetCount = 0;
+            data.lastResetTime = now;
+        }
+
+        data.packetCount++;
+
+        // Bloquer l'IP en cas de flood (Dépassement du nombre max de requêtes)
+        if (data.packetCount > MAX_UDP_PACKETS_PER_SECOND) {
+            System.err.println("[SECURITY] Flood UDP détecté depuis " + address.getHostAddress() + ". IP bloquée pour 10 secondes.");
+            data.isBlocked = true;
+            data.blockUntil = now + UDP_BLOCK_DURATION_MS;
+            return true;
+        }
+
+        return false;
+    }
+
     // ─── Thread UDP (écoute des messages entrants UDP) ─────────────────────────
 
     /**
@@ -218,9 +269,18 @@ public class Server {
             while (true) {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 udpSocket.receive(packet);
+
+                InetAddress clientAddress = packet.getAddress();
+                
+                // Vérifier si l'adresse est limitée en taux (Protection Flood UDP)
+                if (isUdpRateLimited(clientAddress)) {
+                    // Les paquets sont ignorés silencieusement pour économiser des ressources 
+                    continue; 
+                }
+
                 String messageRecu = new String(packet.getData(), 0, packet.getLength());
                 System.out.println("[UDP] Message reçu de "
-                        + packet.getAddress().getHostAddress() + " : " + messageRecu);
+                        + clientAddress.getHostAddress() + " : " + messageRecu);
             }
 
         } catch (IOException e) {
