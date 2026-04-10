@@ -275,6 +275,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /** Paiement : 2FA simulé géré dans {@link com.chrionline.server.service.PanierService#confirmerCommande(Map)} (clé {@code payment2faCode}). */
     private void handleCommandeConfirmer(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleCommandeConfirmer");
         try {

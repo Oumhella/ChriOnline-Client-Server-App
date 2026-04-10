@@ -20,6 +20,8 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
+import java.util.Map;
+
 public class CheckoutView extends Application {
 
     private static final String CREME       = "#FDFBF7";
@@ -44,6 +46,9 @@ public class CheckoutView extends Application {
     private VBox livraisonDetailsBox;
     private ToggleGroup livraisonSousGroup;
     private Label msgLabel;
+    private TextField txtCode2fa;
+    private VBox box2faSection;
+    private boolean enAttente2fa = false;
 
     public CheckoutView(int idUtilisateur, CommandeDTO recap) {
         this.idUtilisateur = idUtilisateur;
@@ -73,9 +78,11 @@ public class CheckoutView extends Application {
         VBox leftCol = buildRecapSection();
         HBox.setHgrow(leftCol, Priority.ALWAYS);
         
-        VBox rightCol = buildPaymentSection();
+        VBox rightCol = new VBox(20);
         rightCol.setMinWidth(380);
-        
+        box2faSection = build2FASection();
+        rightCol.getChildren().addAll(buildPaymentSection(), box2faSection);
+
         splitCols.getChildren().addAll(leftCol, rightCol);
 
         msgLabel = new Label();
@@ -198,6 +205,21 @@ public class CheckoutView extends Application {
         return box;
     }
 
+    private VBox build2FASection() {
+        VBox box = new VBox(10);
+        box.setPadding(new Insets(0));
+        Label l = new Label("Code de confirmation (email)");
+        l.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+        l.setTextFill(Color.web(BRUN));
+        txtCode2fa = new TextField();
+        txtCode2fa.setPromptText("6 chiffres (vérifiez votre boîte Gmail)");
+        txtCode2fa.setMaxWidth(240);
+        box.getChildren().addAll(l, txtCode2fa);
+        box.setVisible(false);
+        box.setManaged(false);
+        return box;
+    }
+
     private HBox buildFooterControls() {
         HBox box = new HBox(20);
         box.setAlignment(Pos.CENTER);
@@ -219,20 +241,55 @@ public class CheckoutView extends Application {
         if ("livraison".equals(methode)) {
             methode = livraisonSousGroup.getSelectedToggle().getUserData().toString();
         }
-        
+
         if ("carte".equals(methode) && (txtNomCarte.getText().isEmpty() || txtNumeroCarte.getText().isEmpty())) {
-            msgLabel.setText("⚠ Veuillez remplir les informations de la carte."); return;
+            msgLabel.setText("⚠ Veuillez remplir les informations de la carte.");
+            return;
         }
+
+        if (enAttente2fa) {
+            String code = txtCode2fa != null ? txtCode2fa.getText().trim() : "";
+            if (code.length() != 6 || !code.chars().allMatch(Character::isDigit)) {
+                msgLabel.setText("⚠ Saisissez le code à 6 chiffres reçu dans votre boîte Gmail (ou votre email).");
+                return;
+            }
+        }
+
         msgLabel.setText("Traitement en cours...");
+        msgLabel.setTextFill(Color.web("#D32F2F"));
         final String methodeFinale = methode;
+        final String code2fa = enAttente2fa ? txtCode2fa.getText().trim() : null;
+
         new Thread(() -> {
-            CommandeDTO res = controller.confirmerCommande(methodeFinale, txtNomCarte.getText(), txtNumeroCarte.getText());
+            Map<String, Object> rep = controller.confirmerCommandeEtape(
+                    methodeFinale, txtNomCarte.getText(), txtNumeroCarte.getText(), code2fa);
             Platform.runLater(() -> {
-                if (res != null) {
-                    try { new ConfirmationCommandeView(idUtilisateur, res).start(stage); } catch (Exception ex) {}
-                } else {
-                    msgLabel.setText("⚠ Erreur lors de la confirmation.");
+                if ("REQUIRES_PAYMENT_2FA".equals(rep.get("statut"))) {
+                    enAttente2fa = true;
+                    box2faSection.setVisible(true);
+                    box2faSection.setManaged(true);
+                    msgLabel.setText((String) rep.getOrDefault("message", "Code requis."));
+                    msgLabel.setTextFill(Color.web(BRUN_MED));
+                    return;
                 }
+                if ("OK".equals(rep.get("statut"))) {
+                    CommandeDTO dto = (CommandeDTO) rep.get("commandeResult");
+                    if (dto != null) {
+                        try {
+                            new ConfirmationCommandeView(idUtilisateur, dto).start(stage);
+                        } catch (Exception ex) {
+                            msgLabel.setText("⚠ Erreur d'affichage.");
+                        }
+                    }
+                    return;
+                }
+                if ("ERROR".equals(rep.get("statut")) && "INVALID_2FA".equals(rep.get("message"))) {
+                    msgLabel.setText("✗ Code invalide ou expiré.");
+                    msgLabel.setTextFill(Color.web("#D32F2F"));
+                    return;
+                }
+                msgLabel.setText("⚠ " + rep.getOrDefault("message", "Erreur lors de la confirmation."));
+                msgLabel.setTextFill(Color.web("#D32F2F"));
             });
         }).start();
     }
