@@ -22,7 +22,7 @@ import java.util.concurrent.Executors;
 
 public class Server {
 
-    // Attributs 
+    // Attributs
     private int port;
     private ServerSocket serverSocket;
     private List<ClientHandler> clientConnectes;
@@ -32,7 +32,7 @@ public class Server {
     // Port UDP séparé pour les notifications (port TCP + 1 par convention)
     private static final int UDP_PORT = 9091;
 
-    //Constructeur 
+    // Constructeur
 
     public Server(int port) {
         this.port = port;
@@ -44,14 +44,16 @@ public class Server {
     // ─── Méthodes principales ─────────────────────────────────────────────────
 
     /**
-     * Démarre le serveur : ouvre le ServerSocket TCP (SSL) et commence à accepter les connexions.
+     * Démarre le serveur : ouvre le ServerSocket TCP (SSL) et commence à accepter
+     * les connexions.
      */
     public void demarrer() {
         try {
             // Chargement de la configuration SSL
             java.util.Properties props = new java.util.Properties();
             try (java.io.InputStream in = getClass().getClassLoader().getResourceAsStream("server.properties")) {
-                if (in != null) props.load(in);
+                if (in != null)
+                    props.load(in);
             }
 
             String ksName = props.getProperty("server.ssl.keystore", "keystore.jks");
@@ -60,7 +62,8 @@ public class Server {
             char[] password = ksPass.toCharArray();
             java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
             try (java.io.InputStream ksIn = getClass().getClassLoader().getResourceAsStream(ksName)) {
-                if (ksIn == null) throw new IOException("Keystore introuvable : " + ksName);
+                if (ksIn == null)
+                    throw new IOException("Keystore introuvable : " + ksName);
                 ks.load(ksIn, password);
             }
 
@@ -70,9 +73,10 @@ public class Server {
             sslContext.init(kmf.getKeyManagers(), null, null);
 
             javax.net.ssl.SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
-            // Utilisation du backlog de 10000 pour simuler la tolérance au flood avant rejet OS
+            // Utilisation du backlog de 10000 pour simuler la tolérance au flood avant
+            // rejet OS
             serverSocket = ssf.createServerSocket(port, 10000);
-            
+
             AppLogger.info("[SERVER-SSL] Démarré sur le port " + port + " avec TLS");
             System.out.println("[SURVEILLANCE & LOGS] OS SYN Cookies : Tolérés (gestion au niveau OS).");
             AppLogger.info("[SERVER] En attente de connexions sécurisées...");
@@ -121,14 +125,16 @@ public class Server {
     }
 
     /**
-     * Accepte une nouvelle connexion client TCP et lui attribue un ClientHandler dans un thread dédié.
+     * Accepte une nouvelle connexion client TCP et lui attribue un ClientHandler
+     * dans un thread dédié.
      */
     public void accepterConnexion() {
         try {
             Socket socketClient = serverSocket.accept();
             String clientIp = socketClient.getInetAddress().getHostAddress();
 
-            // 1. Vérification de sécurité (Protection DoS / SYN Flood) via ConnectionSecurityManager
+            // 1. Vérification de sécurité (Protection DoS / SYN Flood) via
+            // ConnectionSecurityManager
             if (!securityManager.isAllowed(clientIp)) {
                 AppLogger.warn("[SERVER] Connexion rejetée (Bloqué/BLACKLIST) : " + clientIp);
                 socketClient.close();
@@ -137,8 +143,9 @@ public class Server {
 
             AppLogger.info("[SERVER] Nouveau client connecté : " + clientIp);
 
-            // 1.bis. Réduire le temps d'attente (soTimeout) pour libérer les ressources si inactif
-            socketClient.setSoTimeout(10000);
+            // 1.bis. Réduire le temps d'attente (soTimeout) pour libérer les ressources si
+            // inactif
+            socketClient.setSoTimeout(60000);
 
             ClientHandler handler = new ClientHandler(socketClient, this);
             clientConnectes.add(handler);
@@ -177,9 +184,9 @@ public class Server {
      *
      * Diffuse une notification UDP à une adresse/port donnés.
      *
-     * @param message        le message de notification
-     * @param adresseClient  l'adresse IP du client destinataire
-     * @param portClient     le port UDP du client destinataire
+     * @param message       le message de notification
+     * @param adresseClient l'adresse IP du client destinataire
+     * @param portClient    le port UDP du client destinataire
      */
     public void diffuserNotification(String message, InetAddress adresseClient, int portClient) {
         try (DatagramSocket udpSocket = new DatagramSocket()) {
@@ -195,7 +202,8 @@ public class Server {
     }
 
     /**
-     * Envoie une notification UDP à tous les administrateurs connectés et la sauvegarde en BDD.
+     * Envoie une notification UDP à tous les administrateurs connectés et la
+     * sauvegarde en BDD.
      *
      * @param message le message de notification à envoyer aux admins
      * @param type    le type de notification
@@ -211,7 +219,9 @@ public class Server {
     }
 
     /**
-     * Envoie une notification UDP à TOUS les clients connectés et la sauvegarde en BDD pour TOUS les utilisateurs.
+     * Envoie une notification UDP à TOUS les clients connectés et la sauvegarde en
+     * BDD pour TOUS les utilisateurs.
+     * 
      * @param message le message de notification
      * @param type    le type de notification
      */
@@ -220,9 +230,10 @@ public class Server {
         for (ClientHandler handler : clientConnectes) {
             diffuserNotification(message, handler.getSocket().getInetAddress(), handler.getUdpPort());
         }
-        
-        // 2. Sauvegarder en BDD pour TOUS les utilisateurs inscrits (Newsletter/Alerte globale)
-        // Note: On pourrait aussi ne sauvegarder que pour les connectés, 
+
+        // 2. Sauvegarder en BDD pour TOUS les utilisateurs inscrits (Newsletter/Alerte
+        // globale)
+        // Note: On pourrait aussi ne sauvegarder que pour les connectés,
         // mais une newsletter doit être visible par tous à leur prochaine connexion.
         new Thread(() -> {
             List<Map<String, Object>> users = UserDAO.listerClients();
@@ -241,7 +252,8 @@ public class Server {
      * @param type    le type de notification
      */
     public void notifierClient(int userId, String message, String type) {
-        // Sauvegarde en BDD (pour que l'utilisateur la voie même s'il n'est pas connecté à l'instant T)
+        // Sauvegarde en BDD (pour que l'utilisateur la voie même s'il n'est pas
+        // connecté à l'instant T)
         NotificationDAO.save(userId, message, type);
 
         // Notification UDP si connecté

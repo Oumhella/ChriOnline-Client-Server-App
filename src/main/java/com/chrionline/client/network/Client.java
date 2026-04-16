@@ -5,7 +5,8 @@ import java.net.*;
 
 /**
  * Gestionnaire du réseau côté client pour l'application ChriOnline.
- * Implémente le pattern Singleton pour partager la connexion entre les contrôleurs JavaFX.
+ * Implémente le pattern Singleton pour partager la connexion entre les
+ * contrôleurs JavaFX.
  */
 public class Client {
     // Attributs TCP
@@ -49,17 +50,32 @@ public class Client {
     public void connecter() throws IOException {
         if (socket == null || socket.isClosed()) {
             try {
-                // Pour cette démonstration, on fait confiance à tous les certificats (auto-signés)
-                java.util.Properties props = new java.util.Properties();
-                try (java.io.InputStream in = getClass().getClassLoader().getResourceAsStream("server.properties")) {
-                    if (in != null) props.load(in);
-                }
+                // Configuration SSL pour faire confiance aux certificats auto-signés (Trust
+                // All)
+                javax.net.ssl.TrustManager[] trustAllCerts = new javax.net.ssl.TrustManager[] {
+                        new javax.net.ssl.X509TrustManager() {
+                            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                                return null;
+                            }
 
-                javax.net.ssl.SSLSocketFactory ssf = (javax.net.ssl.SSLSocketFactory) javax.net.ssl.SSLSocketFactory.getDefault();
+                            public void checkClientTrusted(java.security.cert.X509Certificate[] certs,
+                                    String authType) {
+                            }
+
+                            public void checkServerTrusted(java.security.cert.X509Certificate[] certs,
+                                    String authType) {
+                            }
+                        }
+                };
+
+                javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLS");
+                sc.init(null, trustAllCerts, new java.security.SecureRandom());
+                javax.net.ssl.SSLSocketFactory ssf = sc.getSocketFactory();
+
                 this.socket = ssf.createSocket(host, port);
-                
+
                 // Forcer le handshake
-                ((javax.net.ssl.SSLSocket)socket).startHandshake();
+                ((javax.net.ssl.SSLSocket) socket).startHandshake();
 
                 this.out = new ObjectOutputStream(socket.getOutputStream());
                 this.out.flush();
@@ -82,6 +98,11 @@ public class Client {
      */
     public synchronized void envoyerRequete(Object requete) throws IOException {
         if (out != null) {
+            // Injection automatique des headers si c'est une Map
+            if (requete instanceof java.util.Map) {
+                injectSecurityHeaders((java.util.Map<String, Object>) requete);
+            }
+
             out.writeObject(requete);
             out.flush();
             out.reset(); // Crucial pour éviter d'envoyer d'anciennes versions d'objets modifiés
@@ -95,18 +116,15 @@ public class Client {
     @SuppressWarnings("unchecked")
     public java.util.Map<String, Object> envoyerRequeteAttendreReponse(java.util.Map<String, Object> requete) {
         try {
-            // Injection automatique des headers de sécurité
-            injectSecurityHeaders(requete);
-            
             envoyerRequete((Object) requete);
             java.util.Map<String, Object> reponse = (java.util.Map<String, Object>) lireReponse();
-            
+
             // Si c'est une connexion réussie, on sauvegarde le JWT
             if (reponse != null && "OK".equals(reponse.get("statut")) && reponse.containsKey("jwt")) {
                 this.jwtToken = (String) reponse.get("jwt");
                 System.out.println("[CLIENT] JWT de session mis à jour.");
             }
-            
+
             return reponse;
         } catch (Exception e) {
             java.util.Map<String, Object> err = new java.util.HashMap<>();
@@ -123,7 +141,7 @@ public class Client {
         // Token pare-feu pour les accès "internes" simulés
         req.put("firewallToken", "CHRI-FW-2026-SECRET-X91");
         // IP revendiquée (pour test IP Spoofing)
-        // req.put("claimedIp", "192.168.1.100"); 
+        // req.put("claimedIp", "192.168.1.100");
     }
 
     /**
@@ -209,8 +227,10 @@ public class Client {
      * Ferme proprement les sockets et les flux.
      */
     public void deconnecter() throws IOException {
-        if (socket != null) socket.close();
-        if (udpSocket != null) udpSocket.close();
+        if (socket != null)
+            socket.close();
+        if (udpSocket != null)
+            udpSocket.close();
         System.out.println("[CLIENT] Déconnecté.");
     }
 }

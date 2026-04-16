@@ -32,10 +32,7 @@ public class SecurityDashboardView {
     private ObservableList<SecurityEvent> eventList;
     private ScheduledExecutorService scheduler;
 
-    public void show() {
-        Stage stage = new Stage();
-        stage.setTitle("ChriOnline - Dashboard Sécurité Admin");
-
+    public javafx.scene.Parent getView() {
         VBox root = new VBox(20);
         root.setPadding(new Insets(25));
         root.setStyle("-fx-background-color: #FAF7F2;");
@@ -67,11 +64,12 @@ public class SecurityDashboardView {
         contextCol.setPrefWidth(300);
 
         table.getColumns().addAll(timeCol, typeCol, ipCol, contextCol);
-        table.setPrefHeight(400);
+        VBox.setVgrow(table, Priority.ALWAYS);
 
         // Bouton de blocage
         Button btnBlock = new Button("Bloquer IP sélectionnée");
-        btnBlock.setStyle("-fx-background-color: #C96B4A; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
+        btnBlock.setStyle(
+                "-fx-background-color: #C96B4A; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
         btnBlock.setOnAction(e -> blockSelectedIP());
 
         HBox actions = new HBox(10, btnBlock);
@@ -79,13 +77,17 @@ public class SecurityDashboardView {
 
         root.getChildren().addAll(title, table, actions);
 
-        Scene scene = new Scene(root, 800, 600);
-        stage.setScene(scene);
-        stage.show();
-
-        // Rafraîchissement automatique (ScheduledService)
+        // Démarrage auto du rafraîchissement
         startRefreshing();
 
+        return root;
+    }
+
+    public void show() {
+        Stage stage = new Stage();
+        stage.setTitle("ChriOnline - Dashboard Sécurité Admin");
+        stage.setScene(new Scene(getView(), 800, 600));
+        stage.show();
         stage.setOnCloseRequest(e -> stopRefreshing());
     }
 
@@ -106,7 +108,7 @@ public class SecurityDashboardView {
     private void refreshEvents() {
         Map<String, Object> req = new java.util.HashMap<>();
         req.put("commande", "ADMIN_GET_SECURITY_EVENTS");
-        
+
         Map<String, Object> res = client.envoyerRequeteAttendreReponse(req);
         if ("OK".equals(res.get("statut"))) {
             List<SecurityEvent> events = (List<SecurityEvent>) res.get("events");

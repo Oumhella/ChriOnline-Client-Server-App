@@ -234,6 +234,9 @@ public class UserDAO {
                         
                         int userId = rs.getInt("idUtilisateur");
                         String role = rs.getString("role");
+                        String nom = rs.getString("nom");
+                        String prenom = rs.getString("prenom");
+                        String emailFound = rs.getString("email");
 
                         // OTP Valide : on nettoie les colonnes OTP
                         nettoyerOTP(conn, userId);
@@ -244,9 +247,9 @@ public class UserDAO {
                         // On construit l'objet de connexion finale
                         Map<String, Object> innerData = new java.util.HashMap<>();
                         innerData.put("userId", userId);
-                        innerData.put("nom", rs.getString("nom"));
-                        innerData.put("prenom", rs.getString("prenom"));
-                        innerData.put("email", rs.getString("email"));
+                        innerData.put("nom", nom);
+                        innerData.put("prenom", prenom);
+                        innerData.put("email", emailFound);
                         innerData.put("role", role);
 
                         return Map.of(

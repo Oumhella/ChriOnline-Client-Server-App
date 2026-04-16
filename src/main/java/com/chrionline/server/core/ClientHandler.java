@@ -4,7 +4,6 @@ import com.chrionline.server.utils.AppLogger;
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.server.security.SecurityLogger;
 import com.chrionline.server.security.SecurityInterceptor;
-import com.chrionline.server.security.JwtService;
 import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.server.service.EmailService;
 import com.chrionline.server.service.PanierService;
@@ -36,13 +35,14 @@ public class ClientHandler implements Runnable {
     private final ProduitService produitService;
     private final PanierService panierService;
     private ObjectOutputStream out;
-    private ObjectInputStream  in;
+    private ObjectInputStream in;
     private int udpPort = 9092; // Port par défaut
 
     // État de la session client
-    private int    userId   = -1;
+    private int userId = -1;
     private String userEmail = null;
-    private String userRole      = null;
+    private String userRole = null;
+
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
         this.server = server;
@@ -59,7 +59,7 @@ public class ClientHandler implements Runnable {
             // Initialisation des flux
             this.out = new ObjectOutputStream(socket.getOutputStream());
             this.out.flush();
-            this.in  = new ObjectInputStream(socket.getInputStream());
+            this.in = new ObjectInputStream(socket.getInputStream());
 
             AppLogger.info("[HANDLER] Client connecté : " + socket.getInetAddress().getHostAddress());
 
@@ -96,13 +96,14 @@ public class ClientHandler implements Runnable {
 
         AppLogger.info("[HANDLER] Reçu : " + commande + " de " + socketIp);
 
-        // --- INTERCEPTEUR DE SÉCURITÉ ---
-        // Vérifie IP Spoofing, Firewall Token, Rate Limiting et JWT
-        String error = SecurityInterceptor.validateRequest(commande, req, socketIp);
-        if (error != null) {
-            envoyerMessage(creerReponse("ERREUR", error));
+        // ─── SÉCURITÉ : Blacklist + Détection IP Spoofing ────────────────────────
+        SecurityInterceptor.ValidationResult validation = SecurityInterceptor.validateRequest(commande, req, socketIp);
+        if (!validation.isOk()) {
+            AppLogger.warn("[SECURITY] Requête rejetée pour IP " + socketIp + " : " + validation.getError());
+            envoyerMessage(creerReponse("ERREUR_SECURITE", validation.getError()));
             return;
         }
+        // ─────────────────────────────────────────────────────────────────────────
 
         // TODO : Plus tard, ces appels seront redirigés vers des Services ou DAOs
         switch (commande) {
@@ -110,52 +111,53 @@ public class ClientHandler implements Runnable {
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
             case "DETAIL_PRODUIT", "GET_PRODUIT_BY_ID" -> handleDetailProduit(req);
-            case "AJOUTER_WISHLIST"  -> handleAjouterWishlist(req);
-            case "SUPPRIMER_WISHLIST"-> handleSupprimerWishlist(req);
-            case "LISTE_WISHLIST"    -> handleListeWishlist(req);
-            case "CONFIRMER_EMAIL"       -> handleConfirmerEmail(req);
+            case "AJOUTER_WISHLIST" -> handleAjouterWishlist(req);
+            case "SUPPRIMER_WISHLIST" -> handleSupprimerWishlist(req);
+            case "LISTE_WISHLIST" -> handleListeWishlist(req);
+            case "CONFIRMER_EMAIL" -> handleConfirmerEmail(req);
             case "OUBLIER_MOT_DE_PASSE" -> handleOublierMotDePasse(req);
-            case "REINITIALISER_MDP"     -> handleReinitialiserMdp(req);
+            case "REINITIALISER_MDP" -> handleReinitialiserMdp(req);
             case "UDP_REGISTER" -> {
                 this.udpPort = (int) req.getOrDefault("port", 9092);
                 System.out.println("[HANDLER] Port UDP enregistré pour client " + userId + " : " + udpPort);
             }
-            case "PANIER_GET"            -> envoyerMessage(panierService.getPanier(req));
-            case "PANIER_AJOUTER"        -> envoyerMessage(panierService.ajouterProduit(req));
-            case "PANIER_MODIFIER_QTE"   -> envoyerMessage(panierService.modifierQuantite(req));
-            case "PANIER_RETIRER"        -> envoyerMessage(panierService.retirerProduit(req));
-            case "PANIER_VIDER"          -> envoyerMessage(panierService.viderPanier(req));
-            case "GET_PROFIL"            -> handleGetProfil(req);
-            case "UPDATE_PROFIL"         -> handleUpdateProfil(req);
-            case "GET_MY_ORDERS"         -> handleGetMyOrders(req);
-            case "SUIVRE_COMMANDE"       -> handleSuivreCommande(req);
+            case "PANIER_GET" -> envoyerMessage(panierService.getPanier(req));
+            case "PANIER_AJOUTER" -> envoyerMessage(panierService.ajouterProduit(req));
+            case "PANIER_MODIFIER_QTE" -> envoyerMessage(panierService.modifierQuantite(req));
+            case "PANIER_RETIRER" -> envoyerMessage(panierService.retirerProduit(req));
+            case "PANIER_VIDER" -> envoyerMessage(panierService.viderPanier(req));
+            case "GET_PROFIL" -> handleGetProfil(req);
+            case "UPDATE_PROFIL" -> handleUpdateProfil(req);
+            case "GET_MY_ORDERS" -> handleGetMyOrders(req);
+            case "SUIVRE_COMMANDE" -> handleSuivreCommande(req);
 
             // Admin Produits
-            case "AJOUTER_PRODUIT"       -> handleAjouterProduit(req);
-            case "MODIFIER_PRODUIT"      -> handleModifierProduit(req);
-            case "SUPPRIMER_PRODUIT"     -> handleSupprimerProduit(req);
-            case "UPLOAD_IMAGE"          -> handleUploadImage(req);
-            case "LISTE_CATEGORIES"      -> handleListeCategories(req);
-            case "LISTE_LABELS"          -> handleListeLabels(req);
-            case "LISTE_LABEL_VALUES"    -> handleListeLabelValues(req);
-            case "AJOUTER_LABEL"         -> handleAjouterLabel(req);
-            case "AJOUTER_LABEL_VALUE"   -> handleAjouterLabelValue(req);
+            case "AJOUTER_PRODUIT" -> handleAjouterProduit(req);
+            case "MODIFIER_PRODUIT" -> handleModifierProduit(req);
+            case "SUPPRIMER_PRODUIT" -> handleSupprimerProduit(req);
+            case "UPLOAD_IMAGE" -> handleUploadImage(req);
+            case "LISTE_CATEGORIES" -> handleListeCategories(req);
+            case "LISTE_LABELS" -> handleListeLabels(req);
+            case "LISTE_LABEL_VALUES" -> handleListeLabelValues(req);
+            case "AJOUTER_LABEL" -> handleAjouterLabel(req);
+            case "AJOUTER_LABEL_VALUE" -> handleAjouterLabelValue(req);
             case "SUPPRIMER_LABEL_VALUE" -> handleSupprimerLabelValue(req);
-            case "AJOUTER_CATEGORIE"     -> handleAjouterCategorie(req);
-            case "MODIFIER_CATEGORIE"    -> handleModifierCategorie(req);
-            case "SUPPRIMER_CATEGORIE"    -> handleSupprimerCategorie(req);
+            case "AJOUTER_CATEGORIE" -> handleAjouterCategorie(req);
+            case "MODIFIER_CATEGORIE" -> handleModifierCategorie(req);
+            case "SUPPRIMER_CATEGORIE" -> handleSupprimerCategorie(req);
             case "APPLY_DISCOUNT_CATEGORIE" -> envoyerMessage(produitService.handleApplyDiscountCategorie(req));
 
-            case "PANIER_VALIDER"        -> handlePanierValider(req);
-            case "COMMANDE_CONFIRMER"    -> handleCommandeConfirmer(req);
+            case "PANIER_VALIDER" -> handlePanierValider(req);
+            case "COMMANDE_CONFIRMER" -> handleCommandeConfirmer(req);
             case "GET_ALL_ORDERS",
-                 "GET_ORDER_DETAILS",
-                 "UPDATE_ORDER_STATUS" -> {
+                    "GET_ORDER_DETAILS",
+                    "UPDATE_ORDER_STATUS" -> {
                 handleAdminCommande(commande, req);
             }
             case "ADMIN_LISTE_USERS" -> {
                 if (!"admin".equals(userRole)) {
-                    SecurityLogger.accesNonAutorise("ADMIN_LISTE_USERS", userId, userRole, socket.getInetAddress().getHostAddress());
+                    SecurityLogger.accesNonAutorise("ADMIN_LISTE_USERS", userId, userRole,
+                            socket.getInetAddress().getHostAddress());
                     envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
                 } else {
                     envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
@@ -163,7 +165,8 @@ public class ClientHandler implements Runnable {
             }
             case "ADMIN_CHANGER_STATUT_USER" -> {
                 if (!"admin".equals(userRole)) {
-                    SecurityLogger.accesNonAutorise("ADMIN_CHANGER_STATUT_USER", userId, userRole, socket.getInetAddress().getHostAddress());
+                    SecurityLogger.accesNonAutorise("ADMIN_CHANGER_STATUT_USER", userId, userRole,
+                            socket.getInetAddress().getHostAddress());
                     envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
                 } else {
                     req.put("adminId", this.userId);
@@ -174,14 +177,14 @@ public class ClientHandler implements Runnable {
 
             case "REGISTER_UDP" -> {
                 this.udpPort = (int) req.getOrDefault("udpPort", 9092);
-                System.out.println("[HANDLER] Port UDP enregistré pour " + (userId != -1 ? userId : "guest") + " : " + udpPort);
+                System.out.println(
+                        "[HANDLER] Port UDP enregistré pour " + (userId != -1 ? userId : "guest") + " : " + udpPort);
             }
 
-            case "VERIFIER_OTP"         -> handleVerifierOTP(req);
-            
+            case "VERIFIER_OTP" -> handleVerifierOTP(req);
+
             // Sécurité Monitoring (Admin)
-            case "ADMIN_GET_SECURITY_EVENTS" -> handleGetSecurityEvents(req);
-            case "ADMIN_BLOCK_IP"            -> handleBlockIP(req);
+            case "ADMIN_BLOCK_IP" -> handleBlockIP(req);
 
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
@@ -202,9 +205,9 @@ public class ClientHandler implements Runnable {
             // Note: On n'établit pas la session (userId, etc.) tant que le 2FA n'est pas OK
             if ("OK".equals(reponse.get("statut"))) {
                 Map<String, Object> data = (Map<String, Object>) reponse.get("data");
-                this.userId    = (int)    data.get("userId");
+                this.userId = (int) data.get("userId");
                 this.userEmail = (String) data.get("email");
-                this.userRole  = (String) data.get("role");
+                this.userRole = (String) data.get("role");
             }
 
             envoyerMessage(reponse);
@@ -218,25 +221,27 @@ public class ClientHandler implements Runnable {
 
     private void handleVerifierOTP(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleVerifierOTP appelée");
+        // Injecter l'IP pour le logging de sécurité
+        req.put("clientIp", socket.getInetAddress().getHostAddress());
         try {
-            Map<String, Object> reponse = authService.verifierOTPConnexion(req);
+            Map<String, Object> reponseMutable = new java.util.HashMap<>(authService.verifierOTPConnexion(req));
 
-            if ("OK".equals(reponse.get("statut"))) {
-                Map<String, Object> data = (Map<String, Object>) reponse.get("data");
+            if ("OK".equals(reponseMutable.get("statut"))) {
+                Map<String, Object> data = (Map<String, Object>) reponseMutable.get("data");
                 this.userId = (int) data.get("userId");
                 this.userEmail = (String) data.get("email");
                 this.userRole = (String) data.get("role");
                 
-                // Générer et attacher le JWT à la réponse de succès
-                String token = JwtService.generateToken(userEmail, userRole, userId);
-                reponse.put("jwt", token);
+                // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité (log simple)
+                SecurityLogger.loginSucces(userEmail, userRole, userId, socket.getInetAddress().getHostAddress());
             }
 
-            envoyerMessage(reponse);
+            envoyerMessage(reponseMutable);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur verification OTP : " + e.getMessage()));
         }
     }
+
     private void handleInscription(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleInscription appelée");
         try {
@@ -255,17 +260,6 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur confirmation : " + e.getMessage()));
         }
-    }
-
-    private void handleGetSecurityEvents(Map<String, Object> req) {
-        if (!"admin".equals(userRole)) {
-             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
-             return;
-        }
-        Map<String, Object> res = new java.util.HashMap<>();
-        res.put("statut", "OK");
-        res.put("events", SecurityLogger.getRecentEvents());
-        envoyerMessage(res);
     }
 
     private void handleBlockIP(Map<String, Object> req) {
@@ -313,7 +307,8 @@ public class ClientHandler implements Runnable {
         try {
             Map<String, Object> reponse = panierService.confirmerCommande(req);
 
-            // Si la commande est validée avec succès, on notifie les administrateurs via UDP
+            // Si la commande est validée avec succès, on notifie les administrateurs via
+            // UDP
             if ("OK".equals(reponse.get("statut"))) {
                 CommandeDTO recap = (CommandeDTO) reponse.get("commandeResult");
                 String ref = recap != null ? recap.getReference() : "Inconnue";
@@ -337,7 +332,8 @@ public class ClientHandler implements Runnable {
                                 String stockP = parts.length > 1 ? parts[1].replace("stock=", "") : "?";
                                 String seuilP = parts.length > 2 ? parts[2].replace("seuil=", "") : "?";
                                 for (String emailAdmin : adminEmails) {
-                                    com.chrionline.server.service.EmailService.envoyerAlerteStock(emailAdmin, nomP, stockP, seuilP);
+                                    com.chrionline.server.service.EmailService.envoyerAlerteStock(emailAdmin, nomP,
+                                            stockP, seuilP);
                                 }
                             } catch (Exception ex) {
                                 System.err.println("[HANDLER] Erreur email alerte stock : " + ex.getMessage());
@@ -374,7 +370,8 @@ public class ClientHandler implements Runnable {
 
     private void handleAjouterWishlist(Map<String, Object> req) {
         try {
-            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleAjouterWishlist(req);
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService()
+                    .handleAjouterWishlist(req);
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
@@ -383,7 +380,8 @@ public class ClientHandler implements Runnable {
 
     private void handleSupprimerWishlist(Map<String, Object> req) {
         try {
-            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService().handleSupprimerWishlist(req);
+            Map<String, Object> reponse = new com.chrionline.server.service.WishlistService()
+                    .handleSupprimerWishlist(req);
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
@@ -532,10 +530,11 @@ public class ClientHandler implements Runnable {
     }
 
     private boolean isAdmin() {
-        if (this.userId <= 0) return false;
+        if (this.userId <= 0)
+            return false;
 
         try (java.sql.Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
-             java.sql.PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM admin WHERE idAdmin = ?")) {
+                java.sql.PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM admin WHERE idAdmin = ?")) {
             ps.setInt(1, this.userId);
             try (java.sql.ResultSet rs = ps.executeQuery()) {
                 return rs.next(); // true si présent dans la table admin
@@ -548,14 +547,16 @@ public class ClientHandler implements Runnable {
 
     public void fermerConnexion() {
         try {
-            if (in != null) in.close();
-            if (out != null) out.close();
-            if (socket != null && !socket.isClosed()) socket.close();
+            if (in != null)
+                in.close();
+            if (out != null)
+                out.close();
+            if (socket != null && !socket.isClosed())
+                socket.close();
         } catch (IOException e) {
             // Ignoré
         }
     }
-
 
     // ─── Gestion des Commandes Admin ─────────────────────────────────────────
 
@@ -569,8 +570,7 @@ public class ClientHandler implements Runnable {
             Connection conn = DatabaseConnection.getInstance().getConnection();
             CommandeService service = new CommandeService(
                     new CommandeDAO(conn),
-                    new LigneCommandeDAO(conn)
-            );
+                    new LigneCommandeDAO(conn));
             CommandeDTO dto = service.getCommandeByReference(reference);
             Map<String, Object> reponse = new HashMap<>();
             reponse.put("statut", "OK");
@@ -591,8 +591,8 @@ public class ClientHandler implements Runnable {
             return;
         }
         switch (commande) {
-            case "GET_ALL_ORDERS"      -> handleGetAllOrders(req);
-            case "GET_ORDER_DETAILS"   -> handleGetOrderDetails(req);
+            case "GET_ALL_ORDERS" -> handleGetAllOrders(req);
+            case "GET_ORDER_DETAILS" -> handleGetOrderDetails(req);
             case "UPDATE_ORDER_STATUS" -> handleUpdateOrderStatus(req);
         }
     }
@@ -603,8 +603,7 @@ public class ClientHandler implements Runnable {
             Connection conn = DatabaseConnection.getInstance().getConnection();
             CommandeService service = new CommandeService(
                     new CommandeDAO(conn),
-                    new LigneCommandeDAO(conn)
-            );
+                    new LigneCommandeDAO(conn));
             List<CommandeDTO> commandes = service.getAllCommandes();
             System.out.println("[HANDLER] commandes trouvées : " + commandes.size());
             Map<String, Object> reponse = new HashMap<>();
@@ -624,8 +623,7 @@ public class ClientHandler implements Runnable {
             Connection conn = DatabaseConnection.getInstance().getConnection();
             CommandeService service = new CommandeService(
                     new CommandeDAO(conn),
-                    new LigneCommandeDAO(conn)
-            );
+                    new LigneCommandeDAO(conn));
             CommandeDTO dto = service.getCommandeById(idCommande);
             Map<String, Object> reponse = new HashMap<>();
             reponse.put("statut", "OK");
@@ -638,7 +636,7 @@ public class ClientHandler implements Runnable {
 
     private void handleUpdateOrderStatus(Map<String, Object> req) {
         try {
-            String idCommande    = (String) req.get("idCommande");
+            String idCommande = (String) req.get("idCommande");
             String nouveauStatut = (String) req.get("statut");
             Connection conn = DatabaseConnection.getInstance().getConnection();
 
@@ -686,7 +684,7 @@ public class ClientHandler implements Runnable {
         new Thread(() -> {
             try {
                 System.out.println("[NEWSLETTER] Démarrage de l'envoi massif...");
-                
+
                 // 1. Emails réels (Mailing list)
                 List<String> emails = UserDAO.getAllEmails();
                 int successCount = 0;
@@ -703,8 +701,9 @@ public class ClientHandler implements Runnable {
                 // 2. Notification UDP (In-app) pour les clients connectés
                 // On limite la taille pour l'UDP (max ~1KB par paquet)
                 String shortCorps = corps.replaceAll("<[^>]*>", ""); // Enlever HTML pour la notif UDP
-                if (shortCorps.length() > 300) shortCorps = shortCorps.substring(0, 300) + "...";
-                
+                if (shortCorps.length() > 300)
+                    shortCorps = shortCorps.substring(0, 300) + "...";
+
                 server.notifierTousLesClients("NEWSLETTER:" + sujet + ":" + shortCorps, "newsletter");
 
             } catch (Exception e) {
@@ -718,11 +717,20 @@ public class ClientHandler implements Runnable {
     }
 
     // Getters/Setters session
-    public int getUserId() { return userId; }
-    public void setUserId(int userId) { this.userId = userId; }
+    public int getUserId() {
+        return userId;
+    }
 
-    public String getRole() { return userRole; }
-    public Socket getSocket() { return socket; }
+    public void setUserId(int userId) {
+        this.userId = userId;
+    }
 
+    public String getRole() {
+        return userRole;
+    }
+
+    public Socket getSocket() {
+        return socket;
+    }
 
 }
