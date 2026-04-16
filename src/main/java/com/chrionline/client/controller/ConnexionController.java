@@ -14,10 +14,11 @@ import java.util.*;
 
 public class ConnexionController {
 
-    private final TextField     emailField;
+    private final TextField emailField;
     private final PasswordField mdpField;
-    private final Label         msgLabel;
-    private final Stage         stage;
+    private final Label msgLabel;
+    private final Stage stage;
+
     private final Button        loginButton;
 
     public ConnexionController(TextField email, PasswordField mdp, Label msg, Stage stage, Button loginBtn) {
@@ -31,7 +32,7 @@ public class ConnexionController {
     @SuppressWarnings("unchecked")
     public void connecter(String captchaToken) {
         String email = emailField.getText().trim();
-        String mdp   = mdpField.getText();
+        String mdp = mdpField.getText();
 
         if (email.isEmpty() || mdp.isEmpty()) {
             erreur("Veuillez remplir tous les champs.");
@@ -62,14 +63,15 @@ public class ConnexionController {
                         Map<String, Object> data = (Map<String, Object>) rep.get("data");
                         String role = data != null ? (String) data.getOrDefault("role", "client") : "client";
 
-                        //  Stockage dans le SessionManager
+                        // Stockage dans le SessionManager
                         com.chrionline.client.session.SessionManager.getInstance().setUser(data);
 
                         // ✅ Enregistrement du port UDP auprès du serveur
                         client.enregistrerUDP();
 
-                        System.out.println("[ConnexionController] userId=" + 
-                                com.chrionline.client.session.SessionManager.getInstance().getUserId() + " role=" + role);
+                        System.out.println("[ConnexionController] userId=" +
+                                com.chrionline.client.session.SessionManager.getInstance().getUserId() + " role="
+                                + role);
 
                         // Enregistrement du port UDP dynamique auprès du serveur
                         try {
@@ -82,7 +84,10 @@ public class ConnexionController {
                         }
 
                         new Thread(() -> {
-                            try { Thread.sleep(800); } catch (InterruptedException ignored) {}
+                            try {
+                                Thread.sleep(800);
+                            } catch (InterruptedException ignored) {
+                            }
                             Platform.runLater(() -> {
                                 try {
                                     if ("admin".equals(role)) {
@@ -118,10 +123,16 @@ public class ConnexionController {
                     } else if ("EN_ATTENTE".equals(rep.get("statut"))) {
                         erreur((String) rep.get("message"));
                         new Thread(() -> {
-                            try { Thread.sleep(1500); } catch (InterruptedException ignored) {}
+                            try {
+                                Thread.sleep(1500);
+                            } catch (InterruptedException ignored) {
+                            }
                             Platform.runLater(() -> {
-                                try { new ConfirmationView().start(stage); }
-                                catch (Exception ex) { ex.printStackTrace(); }
+                                try {
+                                    new ConfirmationView().start(stage);
+                                } catch (Exception ex) {
+                                    ex.printStackTrace();
+                                }
                             });
                         }).start();
                     } else {
@@ -202,7 +213,7 @@ public class ConnexionController {
 
                         // Stockage session
                         com.chrionline.client.session.SessionManager.getInstance().setUser(data);
-                        
+
                         // Enregistrement UDP
                         client.enregistrerUDP();
 

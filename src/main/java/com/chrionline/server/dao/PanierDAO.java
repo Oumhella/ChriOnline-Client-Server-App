@@ -19,8 +19,6 @@ import java.util.List;
  */
 public class PanierDAO {
 
-    // â”€â”€â”€ RÃ©cupÃ©rer ou crÃ©er le panier actif
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Retourne le panier actif de l'utilisateur avec ses lignes.
@@ -68,8 +66,6 @@ public class PanierDAO {
         }
     }
 
-    // â”€â”€â”€ Ajouter un produit
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Ajoute un format produit au panier.
@@ -87,7 +83,7 @@ public class PanierDAO {
 
             Panier panier = getPanierActif(idUtilisateur);
 
-            // VÃ©rifier si la ligne existe dÃ©jÃ 
+            // VÃ©rifier si la ligne existe d
             String sqlCheck = "SELECT quantite FROM ligne_panier WHERE id_panier = ? AND id_product_formats = ?";
             try (PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
                 ps.setInt(1, panier.getIdPanier());
@@ -176,15 +172,11 @@ public class PanierDAO {
         }
     }
 
-    // â”€â”€â”€ Retirer un produit
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public static Panier retirerProduit(int idUtilisateur, int idProductFormats) throws SQLException {
         return modifierQuantite(idUtilisateur, idProductFormats, 0);
     }
 
-    // â”€â”€â”€ Vider le panier
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public static Panier viderPanier(int idUtilisateur) throws SQLException {
         Connection conn = DatabaseConnection.getInstance().getConnection();
