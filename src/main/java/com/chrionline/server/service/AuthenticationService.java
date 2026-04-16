@@ -2,6 +2,7 @@ package com.chrionline.server.service;
 
 import com.chrionline.server.dao.TokenDAO;
 import com.chrionline.server.dao.UserDAO;
+import com.chrionline.shared.utils.PasswordValidator;
 import java.util.Map;
 
 /**
@@ -12,6 +13,19 @@ public class AuthenticationService {
     // ─── Inscription ──────────────────────────────────────────────────────────
 
     public Map<String, Object> register(Map<String, Object> req) {
+        String nominal = (String) req.get("nom");
+        String prenom  = (String) req.get("prenom");
+        String mdp     = (String) req.get("mdp");
+        String dob     = (String) req.get("date_naissance");
+
+        if (!PasswordValidator.estFort(mdp, nominal, prenom, dob)) {
+            com.chrionline.server.utils.AppLogger.warn("[AUTH] Inscription rejetée : mot de passe trop faible pour l'email " + req.get("email"));
+            return Map.of(
+                "statut", "ERREUR",
+                "message", "Mot de passe trop faible. Il ne doit pas contenir votre nom, prénom ou date de naissance, et doit être complexe (8+ chars, majuscule, chiffre, spécial)."
+            );
+        }
+
         // Validation captcha effectuée côté client (checkbox JavaFX)
 
         Map<String, Object> result = UserDAO.inscrire(req);
@@ -46,12 +60,13 @@ public class AuthenticationService {
     public Map<String, Object> verifierOTPConnexion(Map<String, Object> req) {
         String email = (String) req.get("email");
         String otp   = (String) req.get("otp");
-        
+
         if (email == null || otp == null || otp.isBlank()) {
             return Map.of("statut", "ERREUR", "message", "L'email ou le code OTP est manquant.");
         }
-        
-        return UserDAO.verifierOTP(email, otp);
+
+        String clientIp = (String) req.getOrDefault("clientIp", "inconnue");
+        return UserDAO.verifierOTP(email, otp, clientIp);
     }
 
     // ─── Confirmation email ───────────────────────────────────────────────────

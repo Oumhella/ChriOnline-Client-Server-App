@@ -25,9 +25,10 @@ public class AdminUserService {
         Map<String, Object> reponse = new HashMap<>();
         try {
             int idUtilisateur = (int) requete.get("idUtilisateur");
-            String statut = (String) requete.get("statut"); // 'actif' ou 'non actif'
+            String statut     = (String) requete.get("statut");
+            int adminId       = requete.containsKey("adminId") ? (int) requete.get("adminId") : -1;
 
-            Map<String, Object> daoRes = UserDAO.changerStatutCompte(idUtilisateur, statut);
+            Map<String, Object> daoRes = UserDAO.changerStatutCompte(adminId, idUtilisateur, statut);
             return daoRes;
         } catch (Exception e) {
             e.printStackTrace();

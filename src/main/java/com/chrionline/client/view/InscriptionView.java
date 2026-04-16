@@ -42,7 +42,9 @@ public class InscriptionView extends Application {
     private TextField     villeField;
     private TextField     cpField;
     private TextField     paysField;
-    private Label            msgLabel;
+    private Label         msgLabel;
+    private TextField     dateNaissanceField;
+
     private RecaptchaWidget  captchaWidget;
 
     @Override
@@ -224,6 +226,11 @@ public class InscriptionView extends Application {
                 labelField("Téléphone", telField)
         ));
 
+        dateNaissanceField = inputField("ex: 31/03/2005");
+        form.getChildren().add(
+                labelField("Date de naissance", dateNaissanceField)
+        );
+
         // ══ Bloc 2 : Sécurité ═════════════════════════════════
         form.getChildren().add(blocTitre("Mot de passe"));
 
@@ -246,7 +253,10 @@ public class InscriptionView extends Application {
         forceLbl.setTextFill(Color.web(BRUN_LIGHT));
 
         mdpField.textProperty().addListener((obs, old, val) -> {
-            double f = calculerForce(val);
+            String nom = nomField.getText();
+            String prenom = prenomField.getText();
+            String dob = dateNaissanceField.getText();
+            double f = com.chrionline.shared.utils.PasswordValidator.calculerScore(val, nom, prenom, dob);
             forceMdp.setProgress(f);
             if (f < 0.34) {
                 forceLbl.setText("● Sécurité faible");
@@ -333,7 +343,7 @@ public class InscriptionView extends Application {
                 nomField, prenomField, emailField, telField,
                 mdpField, mdpConfField,
                 rueField, villeField, cpField, paysField,
-                msgLabel, stage
+                msgLabel, stage, dateNaissanceField
         );
         btnInscrire.setOnAction(e -> {
             if (!captchaWidget.estValide()) {
@@ -587,14 +597,7 @@ public class InscriptionView extends Application {
     }
 
     private double calculerForce(String mdp) {
-        if (mdp == null || mdp.isEmpty()) return 0;
-        double s = 0;
-        if (mdp.length() >= 6)  s += 0.25;
-        if (mdp.length() >= 10) s += 0.25;
-        if (mdp.matches(".*[A-Z].*")) s += 0.20;
-        if (mdp.matches(".*[0-9].*")) s += 0.15;
-        if (mdp.matches(".*[^a-zA-Z0-9].*")) s += 0.15;
-        return Math.min(s, 1.0);
+        return com.chrionline.shared.utils.PasswordValidator.calculerScore(mdp, nomField.getText(), prenomField.getText(), dateNaissanceField.getText());
     }
 
     public static void main(String[] args) { launch(args); }

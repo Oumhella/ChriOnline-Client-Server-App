@@ -9,7 +9,7 @@ public class ServerApp {
     private static final int PORT = 12345;
 
     public static void main(String[] args) {
-        System.out.println("=== ChriOnline Server — Initialisation ===");
+        System.out.println("=ChriOnline Server — Initialisation ");
         
         // On instancie la classe Server (qui gère ClientHandler, TCP et UDP)
         Server server = new Server(PORT);
