@@ -8,6 +8,7 @@ import com.chrionline.shared.models.LignePanier;
 import com.chrionline.shared.models.Panier;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
@@ -119,10 +120,26 @@ public class PanierService {
         String methodePaiement = (String) req.get("methodePaiement");
         String nomCarte = (String) req.get("nomCarte");
         String numeroCarte = (String) req.get("numeroCarte");
+        String code2fa = (String) req.get("payment2faCode");
 
         if (idUtilisateur == -1 || methodePaiement == null) {
             logger.warn("Tentative de paiement échouée : paramètres manquants pour l'utilisateur ID: {}", idUtilisateur);
             return erreur("Parametres manquants.");
+        }
+
+        // ── 2FA simulé : 1re requête sans code → génération ; 2e requête avec code → validation ──
+        if (code2fa == null || code2fa.isBlank()) {
+            String code = PaymentTwoFactorService.generateAndStore(idUtilisateur);
+            logger.info("[PAYMENT_2FA] Code simulé pour utilisateur {} : {} (valide 5 min)", idUtilisateur, code);
+            Map<String, Object> attente = new HashMap<>();
+            attente.put("statut", "REQUIRES_PAYMENT_2FA");
+            attente.put("message", "Un code à 6 chiffres vous a été envoyé par email. Consultez votre boîte Gmail (ou votre messagerie), puis saisissez-le ci-dessous pour confirmer le paiement.");
+            return attente;
+        }
+
+        if (!PaymentTwoFactorService.verifyAndConsume(idUtilisateur, code2fa)) {
+            logger.warn("[PAYMENT_2FA] Code invalide ou expiré pour utilisateur {}", idUtilisateur);
+            return erreur2faInvalide();
         }
 
         try {
@@ -136,6 +153,13 @@ public class PanierService {
             logger.error("Échec du paiement pour l'utilisateur ID: {}. Erreur: {}", idUtilisateur, e.getMessage(), e);
             return erreur(e.getMessage());
         }
+    }
+
+    private Map<String, Object> erreur2faInvalide() {
+        Map<String, Object> r = new HashMap<>();
+        r.put("statut", "ERROR");
+        r.put("message", "INVALID_2FA");
+        return r;
     }
 
     private PanierDTO toDTO(Panier panier) {

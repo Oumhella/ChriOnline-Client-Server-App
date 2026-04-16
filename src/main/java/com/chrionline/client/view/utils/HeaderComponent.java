@@ -111,6 +111,16 @@ public class HeaderComponent {
         
         btnAuth.setOnAction(e -> {
             if (isLogged) {
+                try {
+                    com.chrionline.client.network.Client c = com.chrionline.client.network.Client.getInstance();
+                    if (c != null) {
+                        c.connecter();
+                        java.util.Map<String, Object> m = new java.util.HashMap<>();
+                        m.put("commande", "DECONNEXION");
+                        c.envoyerRequete(m);
+                        c.lireReponse();
+                    }
+                } catch (Exception ignored) { }
                 SessionManager.getInstance().clear();
             }
             navigate(stage, "Connexion");

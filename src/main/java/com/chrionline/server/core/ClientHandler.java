@@ -29,6 +29,27 @@ import java.util.*;
 @SuppressWarnings("unchecked")
 public class ClientHandler implements Runnable {
 
+    /**
+     * Commandes TCP ne nécessitant pas de session (LOGIN/REGISTER + parcours invité + déconnexion).
+     */
+    private static final Set<String> COMMANDES_PUBLIQUES = Set.of(
+            "CONNEXION",
+            "INSCRIPTION",
+            "CONFIRMER_EMAIL",
+            "OUBLIER_MOT_DE_PASSE",
+            "REINITIALISER_MDP",
+            "VERIFIER_OTP",
+            "LISTE_PRODUITS",
+            "DETAIL_PRODUIT",
+            "GET_PRODUIT_BY_ID",
+            "LISTE_CATEGORIES",
+            "LISTE_LABELS",
+            "LISTE_LABEL_VALUES",
+            "SUIVRE_COMMANDE",
+            "DECONNEXION",
+            "INCONNUE"
+    );
+
     private final Socket socket;
     private final Server server;
     private final AuthenticationService authService;
@@ -41,7 +62,10 @@ public class ClientHandler implements Runnable {
     // État de la session client
     private int userId = -1;
     private String userEmail = null;
-    private String userRole = null;
+    private String userRole      = null;
+
+    // Pour injecter le nouveau sessionId après régénération globale
+    private String nextSessionIdToInject = null;
 
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
@@ -105,7 +129,34 @@ public class ClientHandler implements Runnable {
         }
         // ─────────────────────────────────────────────────────────────────────────
 
-        // TODO : Plus tard, ces appels seront redirigés vers des Services ou DAOs
+        String clientIp = socket.getInetAddress().getHostAddress();
+
+        // 1. Adapter la durée de session (timeout dynamique en ms)
+        long dynamicTimeoutMs = 15L * 60 * 1000; // Défaut : 15 min
+        if (commande.startsWith("PANIER_") || commande.startsWith("COMMANDE_")) {
+            dynamicTimeoutMs = 5L * 60 * 1000; // Transactions critiques : 5 min
+        } else if (commande.startsWith("ADMIN_") || commande.startsWith("AJOUTER_") || commande.startsWith("MODIFIER_") || commande.startsWith("SUPPRIMER_")) {
+            dynamicTimeoutMs = 10L * 60 * 1000; // Opérations admin : 10 min
+        }
+
+        if (!COMMANDES_PUBLIQUES.contains(commande)) {
+            String sessionId = (String) req.get("sessionId");
+            com.chrionline.server.session.Session session =
+                    com.chrionline.server.session.SessionManager.validateSession(sessionId, clientIp, dynamicTimeoutMs);
+            if (session == null) {
+                rejeterSessionInvalide(clientIp, commande, sessionId);
+                return;
+            }
+            appliquerIdentiteDepuisSession(session);
+            injecterUtilisateurDansRequete(req);
+
+            // 2. Régénération automatique et constante ("roulement") de l'ID après chaque transaction valide
+            this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(sessionId, clientIp);
+            req.put("sessionId", this.nextSessionIdToInject);
+        } else {
+            this.nextSessionIdToInject = null;
+        }
+
         switch (commande) {
             case "CONNEXION" -> handleConnexion(req);
             case "INSCRIPTION" -> handleInscription(req);
@@ -185,7 +236,7 @@ public class ClientHandler implements Runnable {
 
             // Sécurité Monitoring (Admin)
             case "ADMIN_BLOCK_IP" -> handleBlockIP(req);
-
+            case "DECONNEXION"          -> handleDeconnexion(req, clientIp);
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -198,16 +249,15 @@ public class ClientHandler implements Runnable {
         // Injecter l'IP client pour que UserDAO puisse la journaliser
         req.put("clientIp", socket.getInetAddress().getHostAddress());
         try {
+            // Injecter l'IP cliente pour la liste noire et le logging
+            req.put("clientIp", socket.getInetAddress().getHostAddress());
             Map<String, Object> reponse = authService.login(req);
 
             System.out.println("[HANDLER] Login statut = " + reponse.get("statut"));
 
             // Note: On n'établit pas la session (userId, etc.) tant que le 2FA n'est pas OK
             if ("OK".equals(reponse.get("statut"))) {
-                Map<String, Object> data = (Map<String, Object>) reponse.get("data");
-                this.userId = (int) data.get("userId");
-                this.userEmail = (String) data.get("email");
-                this.userRole = (String) data.get("role");
+                enrichirReponseConnexionAvecSession(reponse, req);
             }
 
             envoyerMessage(reponse);
@@ -231,7 +281,7 @@ public class ClientHandler implements Runnable {
                 this.userId = (int) data.get("userId");
                 this.userEmail = (String) data.get("email");
                 this.userRole = (String) data.get("role");
-                
+
                 // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité (log simple)
                 SecurityLogger.loginSucces(userEmail, userRole, userId, socket.getInetAddress().getHostAddress());
             }
@@ -302,6 +352,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /** Paiement : 2FA simulé géré dans {@link com.chrionline.server.service.PanierService#confirmerCommande(Map)} (clé {@code payment2faCode}). */
     private void handleCommandeConfirmer(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleCommandeConfirmer");
         try {
@@ -404,7 +455,8 @@ public class ClientHandler implements Runnable {
 
     private void handleUpdateProfil(Map<String, Object> req) {
         req.put("userId", this.userId);
-        envoyerMessage(authService.updateProfil(req));
+        Map<String, Object> reponse = authService.updateProfil(req);
+        envoyerMessage(reponse);
     }
 
     private void handleGetMyOrders(Map<String, Object> req) {
@@ -508,6 +560,19 @@ public class ClientHandler implements Runnable {
 
     public synchronized void envoyerMessage(Object objet) {
         try {
+            // Injection de la nouvelle session si générée
+            if (objet instanceof Map && nextSessionIdToInject != null) {
+                Map<String, Object> map = (Map<String, Object>) objet;
+                try {
+                    map.put("newSessionId", nextSessionIdToInject);
+                } catch (UnsupportedOperationException e) {
+                    Map<String, Object> mutableMap = new HashMap<>(map);
+                    mutableMap.put("newSessionId", nextSessionIdToInject);
+                    objet = mutableMap;
+                }
+                nextSessionIdToInject = null;
+            }
+
             if (out != null) {
                 out.writeObject(objet);
                 out.flush();
@@ -714,6 +779,81 @@ public class ClientHandler implements Runnable {
         Map<String, Object> res = creerReponse("OK", "Envoi en cours...");
         res.put("count", UserDAO.getAllEmails().size());
         envoyerMessage(res);
+    }
+
+    // ─── Sessions TCP (anti détournement) ─────────────────────────────────────
+
+    private void rejeterSessionInvalide(String clientIp, String commande, String sessionId) {
+        com.chrionline.server.session.SessionManager.LastValidationFailure kind =
+                com.chrionline.server.session.SessionManager.getLastValidationFailure();
+        if (kind == com.chrionline.server.session.SessionManager.LastValidationFailure.EXPIRED) {
+            SecurityLogger.logSecurityEvent("SESSION_EXPIRED", "UNKNOWN", clientIp, "commande=" + commande + " sessionId=" + sessionId);
+        } else {
+            SecurityLogger.logSecurityEvent("SESSION_INVALID", "UNKNOWN", clientIp, "commande=" + commande + " sessionId=" + sessionId);
+        }
+        envoyerMessage(creerReponseSessionExpiree());
+    }
+
+    private void appliquerIdentiteDepuisSession(com.chrionline.server.session.Session session) {
+        this.userId = session.getUserId();
+        String[] ctx = UserDAO.getEmailAndRoleById(this.userId);
+        if (ctx != null) {
+            this.userEmail = ctx[0];
+            this.userRole = ctx[1];
+        } else {
+            this.userEmail = null;
+            this.userRole = null;
+        }
+    }
+
+    private void injecterUtilisateurDansRequete(Map<String, Object> req) {
+        req.put("userId", this.userId);
+        req.put("idUtilisateur", this.userId);
+    }
+
+    private Map<String, Object> creerReponseSessionExpiree() {
+        Map<String, Object> r = new HashMap<>();
+        r.put("statut", "ERROR");
+        r.put("message", "SESSION_EXPIRED");
+        return r;
+    }
+
+    /**
+     * Après LOGIN réussi : régénère ou crée un sessionId serveur et l'ajoute à {@code data}.
+     */
+    @SuppressWarnings("unchecked")
+    private void enrichirReponseConnexionAvecSession(Map<String, Object> reponse, Map<String, Object> req) {
+        Map<String, Object> data = (Map<String, Object>) reponse.get("data");
+        if (data == null) return;
+        Object uidObj = data.get("userId");
+        if (!(uidObj instanceof Integer) && !(uidObj instanceof Long)) return;
+        int uid = uidObj instanceof Integer ? (Integer) uidObj : ((Long) uidObj).intValue();
+
+        String ip = socket.getInetAddress().getHostAddress();
+        String oldSid = (String) req.get("sessionId");
+        String newSid = com.chrionline.server.session.SessionManager.regenerateSession(oldSid, ip);
+        if (newSid == null) {
+            newSid = com.chrionline.server.session.SessionManager.createSession(uid, ip);
+        }
+        data.put("sessionId", newSid);
+
+        this.userId = uid;
+        this.userEmail = (String) data.get("email");
+        this.userRole = (String) data.get("role");
+
+        SecurityLogger.logSecurityEvent("SESSION_CREATED", this.userEmail != null ? this.userEmail : "UNKNOWN", ip, "sessionId=" + newSid);
+    }
+
+    private void handleDeconnexion(Map<String, Object> req, String clientIp) {
+        String sid = (String) req.get("sessionId");
+        if (sid != null && !sid.isBlank()) {
+            com.chrionline.server.session.SessionManager.invalidateSession(sid);
+            SecurityLogger.logSecurityEvent("LOGOUT", this.userEmail != null ? this.userEmail : "UNKNOWN", clientIp, "sessionId=" + sid);
+        }
+        this.userId = -1;
+        this.userEmail = null;
+        this.userRole = null;
+        envoyerMessage(Map.of("statut", "OK", "message", "Déconnexion effectuée."));
     }
 
     // Getters/Setters session

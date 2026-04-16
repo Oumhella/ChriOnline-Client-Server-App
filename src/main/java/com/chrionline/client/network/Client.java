@@ -95,14 +95,20 @@ public class Client {
 
     /**
      * Envoie une requête au serveur.
+     * Ajoute automatiquement {@code sessionId} si l'utilisateur possède une session serveur.
      */
     public synchronized void envoyerRequete(Object requete) throws IOException {
-        if (out != null) {
-            // Injection automatique des headers si c'est une Map
-            if (requete instanceof java.util.Map) {
-                injectSecurityHeaders((java.util.Map<String, Object>) requete);
+        if (requete instanceof java.util.Map) {
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> m = new java.util.HashMap<>((java.util.Map<String, Object>) requete);
+            String sid = com.chrionline.client.session.SessionManager.getInstance().getServerSessionId();
+            if (sid != null && !sid.isBlank()) {
+                m.put("sessionId", sid);
             }
-
+            injectSecurityHeaders(m);
+            requete = m;
+        }
+        if (out != null) {
             out.writeObject(requete);
             out.flush();
             out.reset(); // Crucial pour éviter d'envoyer d'anciennes versions d'objets modifiés
@@ -164,7 +170,18 @@ public class Client {
      */
     public synchronized Object lireReponse() throws IOException, ClassNotFoundException {
         if (in != null) {
-            return in.readObject();
+            Object o = in.readObject();
+            if (o instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> m = (java.util.Map<String, Object>) o;
+                com.chrionline.client.session.SessionManager sm =
+                        com.chrionline.client.session.SessionManager.getInstance();
+                // Vérif session expirée
+                sm.handleServerResponseIfSessionExpired(m);
+                // Rotation automatique du sessionId après action critique (paiement, profil)
+                sm.updateSessionIdIfProvided(m);
+            }
+            return o;
         }
         return null;
     }

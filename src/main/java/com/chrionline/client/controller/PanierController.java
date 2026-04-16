@@ -107,31 +107,52 @@ public class PanierController {
         }
     }
 
-    public CommandeDTO confirmerCommande(String methodePaiement, String nomCarte, String numeroCarte) {
+    /**
+     * Confirmation de commande / paiement avec 2FA simulé côté serveur.
+     * <ul>
+     *   <li>1er appel avec {@code payment2faCode == null} : le serveur génère un code (réponse {@code REQUIRES_PAYMENT_2FA}).</li>
+     *   <li>2e appel avec le code saisi : finalise la commande si le code est valide.</li>
+     * </ul>
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> confirmerCommandeEtape(String methodePaiement, String nomCarte, String numeroCarte,
+                                                      String payment2faCode) {
         try {
             Map<String, Object> req = new HashMap<>();
             req.put("commande", "COMMANDE_CONFIRMER");
             req.put("idUtilisateur", idUtilisateur);
             req.put("methodePaiement", methodePaiement);
-            req.put("nomCarte", nomCarte);
-            req.put("numeroCarte", numeroCarte);
+            req.put("nomCarte", nomCarte != null ? nomCarte : "");
+            req.put("numeroCarte", numeroCarte != null ? numeroCarte : "");
+            if (payment2faCode != null && !payment2faCode.isBlank()) {
+                req.put("payment2faCode", payment2faCode.trim());
+            }
 
             client.connecter();
             client.envoyerRequete(req);
 
-            @SuppressWarnings("unchecked")
             Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
-
-            if ("OK".equals(rep.get("statut"))) {
-                return (CommandeDTO) rep.get("commandeResult");
-            } else {
-                System.err.println("[PanierController] Erreur confirmation : " + rep.get("message"));
-                return null;
-            }
+            return rep != null ? rep : Map.of("statut", "ERREUR", "message", "Réponse serveur vide.");
         } catch (Exception e) {
             System.err.println("[PanierController] Erreur réseau : " + e.getMessage());
-            return null;
+            Map<String, Object> err = new HashMap<>();
+            err.put("statut", "ERREUR");
+            err.put("message", e.getMessage());
+            return err;
         }
+    }
+
+    /**
+     * @deprecated Préférer {@link #confirmerCommandeEtape(String, String, String, String)} (flux 2 étapes).
+     */
+    @Deprecated
+    public CommandeDTO confirmerCommande(String methodePaiement, String nomCarte, String numeroCarte) {
+        Map<String, Object> rep = confirmerCommandeEtape(methodePaiement, nomCarte, numeroCarte, null);
+        if ("OK".equals(rep.get("statut"))) {
+            return (CommandeDTO) rep.get("commandeResult");
+        }
+        System.err.println("[PanierController] Erreur confirmation : " + rep.get("message"));
+        return null;
     }
 
     // ─── Helper réseau ────────────────────────────────────────────────────

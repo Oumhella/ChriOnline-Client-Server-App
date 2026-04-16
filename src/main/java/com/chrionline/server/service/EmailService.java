@@ -200,6 +200,25 @@ public class EmailService {
         envoyer(destinataire, sujet, corps);
     }
 
+    /**
+     * Envoie le code à 6 chiffres pour la confirmation de paiement (mise en page alignée sur {@link #envoyerOTP2FA}).
+     */
+    public static void envoyerCodePaiement2FA(String destinataire, String codeOTP) throws MessagingException {
+        String sujet = "Code de confirmation de paiement — ChriOnline";
+        String corps = """
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
+              <h2 style="color:#1a1a2e">Confirmation de paiement</h2>
+              <p>Votre code de confirmation de paiement est :</p>
+              <div style="font-size:36px;font-weight:bold;letter-spacing:10px;
+                          background:#f4f4f4;padding:20px;text-align:center;
+                          border-radius:8px;color:#2c3e50;">%s</div>
+              <p style="color:#e74c3c;font-weight:bold;margin-top:20px;">Indication de sécurité : ce code expire dans 5 minutes.</p>
+              <p style="color:#888;font-size:12px">Si vous n'êtes pas à l'origine de cette commande, ignorez cet email et vérifiez la sécurité de votre compte.</p>
+            </div>
+            """.formatted(codeOTP);
+        envoyer(destinataire, sujet, corps);
+    }
+
     // ─── Méthode publique d'envoi ─────────────────────────────────────────────
     
     /**
