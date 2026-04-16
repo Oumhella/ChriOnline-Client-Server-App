@@ -61,7 +61,22 @@ public class DatabaseConnection {
 
 
     public Connection getConnection() {
-        return connection;
+        // Retourner un proxy pour empêcher les blocs 'try (Connection c = ...)' de fermer le singleton !
+        return (Connection) java.lang.reflect.Proxy.newProxyInstance(
+            Connection.class.getClassLoader(),
+            new Class<?>[] { Connection.class },
+            (proxy, method, args) -> {
+                if ("close".equals(method.getName())) {
+                    // On ignore complétement l'appel .close() pour protéger le Singleton !
+                    return null;
+                }
+                try {
+                    return method.invoke(connection, args);
+                } catch (java.lang.reflect.InvocationTargetException e) {
+                    throw e.getTargetException(); // Nécessaire pour ne pas masquer les vraies SQLException
+                }
+            }
+        );
     }
 
 

@@ -124,7 +124,12 @@ public class Client {
             if (o instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
                 java.util.Map<String, Object> m = (java.util.Map<String, Object>) o;
-                com.chrionline.client.session.SessionManager.getInstance().handleServerResponseIfSessionExpired(m);
+                com.chrionline.client.session.SessionManager sm =
+                        com.chrionline.client.session.SessionManager.getInstance();
+                // Vérif session expirée
+                sm.handleServerResponseIfSessionExpired(m);
+                // Rotation automatique du sessionId après action critique (paiement, profil)
+                sm.updateSessionIdIfProvided(m);
             }
             return o;
         }

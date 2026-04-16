@@ -96,13 +96,25 @@ public class UserDAO {
      * Retourne REQUIRES_2FA pour déclencher l'authentification à deux facteurs.
      */
     public static Map<String, Object> connexion(Map<String, Object> data) {
-        String email = (String) data.get("email");
-        String mdp   = (String) data.get("mdp");
+        String email    = (String) data.get("email");
+        String mdp      = (String) data.get("mdp");
+        String clientIp = (String) data.getOrDefault("clientIp", "unknown");
+
+        // ── 0. Vérification liste noire IP ────────────────────────────────────
+        if (SecurityBlacklistDAO.isIpBlacklisted(clientIp)) {
+            long remaining = SecurityBlacklistDAO.getRemainingSeconds(clientIp);
+            Map<String, Object> res = new java.util.HashMap<>();
+            res.put("statut", "ERREUR_BLOQUE");
+            res.put("message", "Votre adresse IP est temporairement suspendue suite à trop de tentatives.");
+            res.put("delaySeconds", remaining);
+            res.put("showPasswordRecovery", true);
+            return res;
+        }
 
         // Requête unifiée pour récupérer l'utilisateur, l'état de son compte, et son rôle
         String sql = """
-            SELECT u.*, 
-                   c.statut_compte, 
+            SELECT u.*,
+                   c.statut_compte,
                    CASE WHEN a.idAdmin IS NOT NULL THEN 'admin' ELSE 'client' END as role
             FROM utilisateur u
             LEFT JOIN client c ON u.idUtilisateur = c.idUtilisateur
@@ -112,7 +124,7 @@ public class UserDAO {
 
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-             
+
             ps.setString(1, email);
             ResultSet rs = ps.executeQuery();
 
@@ -120,74 +132,89 @@ public class UserDAO {
                 return Map.of("statut", "ERREUR", "message", "Email ou mot de passe incorrect.");
             }
 
-            int idUtilisateur = rs.getInt("idUtilisateur");
-            boolean accountLocked = rs.getBoolean("account_locked");
-            Timestamp lockTime = rs.getTimestamp("lock_time");
-            int failedAttempts = rs.getInt("failed_attempts");
-            String role = rs.getString("role");
-            String statutCompte = rs.getString("statut_compte");
+            int       idUtilisateur = rs.getInt("idUtilisateur");
+            boolean   accountLocked = rs.getBoolean("account_locked");
+            Timestamp lockTime      = rs.getTimestamp("lock_time");
+            int       failedAttempts= rs.getInt("failed_attempts");
+            String    role          = rs.getString("role");
+            String    statutCompte  = rs.getString("statut_compte");
 
-            // 1. Vérifier si le compte est bloqué temporairement
+            // ── 1. Compte temporairement verrouillé ? ─────────────────────────
             if (accountLocked && lockTime != null) {
-                int dureeMinutes = calculerDureeBlocage(failedAttempts);
-                long tempsEcouleMillis = System.currentTimeMillis() - lockTime.getTime();
-                long tempsRestantSec = (long)(dureeMinutes * 60) - (tempsEcouleMillis / 1000);
+                int  dureeMinutes    = calculerDureeBlocage(failedAttempts);
+                long tempsEcoule     = System.currentTimeMillis() - lockTime.getTime();
+                long tempsRestantSec = (long)(dureeMinutes * 60) - (tempsEcoule / 1000);
 
                 if (tempsRestantSec > 0) {
                     Map<String, Object> res = new java.util.HashMap<>();
                     res.put("statut", "ERREUR_BLOQUE");
                     res.put("message", "Compte temporairement suspendu.");
                     res.put("delaySeconds", tempsRestantSec);
+                    // Afficher la récupération de mdp dès 6 tentatives
+                    if (failedAttempts >= 6) res.put("showPasswordRecovery", true);
                     return res;
-                } else {
-                    // Délai expiré : on peut autoriser une tentative
-                    // Note : on ne réinitialise pas failed_attempts ici, 
-                    // pour que la PROCHAINE erreur passe au palier supérieur.
                 }
+                // Délai expiré → on autorise une tentative (palier conservé)
             }
 
-            // 2. Vérifier si le compte est bloqué par l'admin ou non actif (pour les clients)
+            // ── 2. Bloques admin / compte non actif ───────────────────────────
             if ("client".equals(role)) {
                 if ("bloque".equals(statutCompte)) {
-                    return Map.of("statut", "ERREUR", "message", "Votre compte a été bloqué par un administrateur.");
+                    return Map.of("statut", "ERREUR", "message",
+                            "Votre compte a été bloqué par un administrateur.");
                 } else if ("non actif".equals(statutCompte)) {
-                    return Map.of("statut", "EN_ATTENTE", "message", "Confirmez votre email avant de vous connecter.");
+                    return Map.of("statut", "EN_ATTENTE", "message",
+                            "Confirmez votre email avant de vous connecter.");
                 }
             }
 
-            // 3. Vérifier le mot de passe
+            // ── 3. Vérification du mot de passe ──────────────────────────────
             if (!BCrypt.checkpw(mdp, rs.getString("password"))) {
                 failedAttempts++;
-                // Blocage tous les 3 essais (3, 6, 9, 12...)
+
                 if (failedAttempts % 3 == 0) {
+                    // Palier atteint → verrouillage compte
                     bloquerCompte(conn, idUtilisateur, failedAttempts);
                     int dureeMinutes = calculerDureeBlocage(failedAttempts);
+
+                    // À partir de 6 échecs : ajouter l'IP en liste noire
+                    boolean ajouterBlacklist = failedAttempts >= 6 && !"unknown".equals(clientIp);
+                    if (ajouterBlacklist) {
+                        SecurityBlacklistDAO.addIp(clientIp, email,
+                                failedAttempts + " échecs de connexion", dureeMinutes);
+                    }
+
                     Map<String, Object> res = new java.util.HashMap<>();
                     res.put("statut", "ERREUR_BLOQUE");
                     res.put("message", "Compte bloqué suite à " + failedAttempts + " échecs.");
-                    res.put("delaySeconds", (long)dureeMinutes * 60);
+                    res.put("delaySeconds", (long) dureeMinutes * 60);
+                    if (failedAttempts >= 6) res.put("showPasswordRecovery", true);
                     return res;
+
                 } else {
                     incrementerTentatives(conn, idUtilisateur, failedAttempts);
-                    return Map.of("statut", "ERREUR", "message", "Mot de passe incorrect. Tentatives restantes : " + (3 - (failedAttempts % 3)));
+                    int restantes = 3 - (failedAttempts % 3);
+                    return Map.of("statut", "ERREUR",
+                            "message", "Mot de passe incorrect. Tentatives restantes : " + restantes);
                 }
             }
 
-            // 4. Succès d'identification : Réinitialisation des échecs
+            // ── 4. Succès : réinitialisation + OTP ───────────────────────────
             reinitialiserTentatives(conn, idUtilisateur);
+            SecurityBlacklistDAO.unlockIp(clientIp); // débloquer l'IP si nécessaire
 
-            // 5. Génération et sauvegarde du code OTP (6 chiffres)
             String otpCode = genererOTP();
             sauvegarderOTP(conn, idUtilisateur, otpCode);
 
-            // 6. Envoi de l'OTP par email
             try {
                 com.chrionline.server.service.EmailService.envoyerOTP2FA(email, otpCode);
             } catch (Exception e) {
-                return Map.of("statut", "ERREUR", "message", "Erreur lors de l'envoi de l'email OTP. Veuillez réessayer.");
+                return Map.of("statut", "ERREUR",
+                        "message", "Erreur lors de l'envoi de l'email OTP. Veuillez réessayer.");
             }
 
-            return Map.of("statut", "REQUIRES_2FA", "message", "Un code à 6 chiffres vous a été envoyé par email.");
+            return Map.of("statut", "REQUIRES_2FA",
+                    "message", "Un code à 6 chiffres vous a été envoyé par email.");
 
         } catch (Exception e) {
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
@@ -323,12 +350,17 @@ public class UserDAO {
 
     public static Map<String, Object> majMotDePasse(int idUtilisateur, String nouveauMdp) {
         String hash = BCrypt.hashpw(nouveauMdp, BCrypt.gensalt());
-        String sql  = "UPDATE utilisateur SET password = ? WHERE idUtilisateur = ?";
+        // Réinitialiser le mdp et déverrouiller le compte
+        String sql  = "UPDATE utilisateur SET password = ?, failed_attempts = 0, account_locked = false, lock_time = NULL WHERE idUtilisateur = ?";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, hash);
             ps.setInt(2, idUtilisateur);
             ps.executeUpdate();
+            
+            // Débloquer l'IP concernée en liste noire
+            SecurityBlacklistDAO.unlockIpByUserId(idUtilisateur);
+            
             return Map.of("statut", "OK", "message", "Mot de passe réinitialisé avec succès !");
         } catch (Exception e) {
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());

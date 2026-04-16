@@ -61,6 +61,10 @@ public class ClientHandler implements Runnable {
     private int    userId   = -1;
     private String userEmail = null;
     private String userRole      = null;
+    
+    // Pour injecter le nouveau sessionId après régénération globale
+    private String nextSessionIdToInject = null;
+
     public ClientHandler(Socket socket, Server server) {
         this.socket = socket;
         this.server = server;
@@ -114,16 +118,31 @@ public class ClientHandler implements Runnable {
         System.out.println("[HANDLER] Reçu : " + commande);
 
         String clientIp = socket.getInetAddress().getHostAddress();
+        
+        // 1. Adapter la durée de session (timeout dynamique en ms)
+        long dynamicTimeoutMs = 15L * 60 * 1000; // Défaut : 15 min
+        if (commande.startsWith("PANIER_") || commande.startsWith("COMMANDE_")) {
+            dynamicTimeoutMs = 5L * 60 * 1000; // Transactions critiques : 5 min
+        } else if (commande.startsWith("ADMIN_") || commande.startsWith("AJOUTER_") || commande.startsWith("MODIFIER_") || commande.startsWith("SUPPRIMER_")) {
+            dynamicTimeoutMs = 10L * 60 * 1000; // Opérations admin : 10 min
+        }
+
         if (!COMMANDES_PUBLIQUES.contains(commande)) {
             String sessionId = (String) req.get("sessionId");
             com.chrionline.server.session.Session session =
-                    com.chrionline.server.session.SessionManager.validateSession(sessionId);
+                    com.chrionline.server.session.SessionManager.validateSession(sessionId, clientIp, dynamicTimeoutMs);
             if (session == null) {
                 rejeterSessionInvalide(clientIp, commande, sessionId);
                 return;
             }
             appliquerIdentiteDepuisSession(session);
             injecterUtilisateurDansRequete(req);
+
+            // 2. Régénération automatique et constante ("roulement") de l'ID après chaque transaction valide
+            this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(sessionId, clientIp);
+            req.put("sessionId", this.nextSessionIdToInject);
+        } else {
+            this.nextSessionIdToInject = null;
         }
 
         switch (commande) {
@@ -195,6 +214,8 @@ public class ClientHandler implements Runnable {
     private void handleConnexion(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleConnexion appelée");
         try {
+            // Injecter l'IP cliente pour la liste noire et le logging
+            req.put("clientIp", socket.getInetAddress().getHostAddress());
             Map<String, Object> reponse = authService.login(req);
 
             System.out.println("[HANDLER] Login statut = " + reponse.get("statut"));
@@ -281,7 +302,7 @@ public class ClientHandler implements Runnable {
         try {
             Map<String, Object> reponse = panierService.confirmerCommande(req);
 
-            // Si la commande est validée avec succès, on notifie les administrateurs via UDP
+            // Si la commande est validée avec succès
             if ("OK".equals(reponse.get("statut"))) {
                 CommandeDTO recap = (CommandeDTO) reponse.get("commandeResult");
                 String ref = recap != null ? recap.getReference() : "Inconnue";
@@ -374,7 +395,8 @@ public class ClientHandler implements Runnable {
 
     private void handleUpdateProfil(Map<String, Object> req) {
         req.put("userId", this.userId);
-        envoyerMessage(authService.updateProfil(req));
+        Map<String, Object> reponse = authService.updateProfil(req);
+        envoyerMessage(reponse);
     }
 
     private void handleGetMyOrders(Map<String, Object> req) {
@@ -478,6 +500,19 @@ public class ClientHandler implements Runnable {
 
     public synchronized void envoyerMessage(Object objet) {
         try {
+            // Injection de la nouvelle session si générée
+            if (objet instanceof Map && nextSessionIdToInject != null) {
+                Map<String, Object> map = (Map<String, Object>) objet;
+                try {
+                    map.put("newSessionId", nextSessionIdToInject);
+                } catch (UnsupportedOperationException e) {
+                    Map<String, Object> mutableMap = new HashMap<>(map);
+                    mutableMap.put("newSessionId", nextSessionIdToInject);
+                    objet = mutableMap;
+                }
+                nextSessionIdToInject = null;
+            }
+
             if (out != null) {
                 out.writeObject(objet);
                 out.flush();
@@ -725,10 +760,11 @@ public class ClientHandler implements Runnable {
         if (!(uidObj instanceof Integer) && !(uidObj instanceof Long)) return;
         int uid = uidObj instanceof Integer ? (Integer) uidObj : ((Long) uidObj).intValue();
 
+        String ip = socket.getInetAddress().getHostAddress();
         String oldSid = (String) req.get("sessionId");
-        String newSid = com.chrionline.server.session.SessionManager.regenerateSession(oldSid);
+        String newSid = com.chrionline.server.session.SessionManager.regenerateSession(oldSid, ip);
         if (newSid == null) {
-            newSid = com.chrionline.server.session.SessionManager.createSession(uid);
+            newSid = com.chrionline.server.session.SessionManager.createSession(uid, ip);
         }
         data.put("sessionId", newSid);
 
@@ -736,7 +772,6 @@ public class ClientHandler implements Runnable {
         this.userEmail = (String) data.get("email");
         this.userRole = (String) data.get("role");
 
-        String ip = socket.getInetAddress().getHostAddress();
         SecurityLogger.logLoginSuccess(ip, newSid);
     }
 

@@ -70,6 +70,20 @@ public class SessionManager {
             clear();
         }
     }
+
+    /**
+     * Met à jour le sessionId si le serveur en fournit un nouveau après une action critique
+     * (paiement confirmé, modification de profil).
+     * Appelé automatiquement par {@link com.chrionline.client.network.Client#lireReponse()}.
+     */
+    public void updateSessionIdIfProvided(java.util.Map<String, Object> rep) {
+        if (rep == null) return;
+        Object newSid = rep.get("newSessionId");
+        if (newSid instanceof String && !((String) newSid).isBlank()) {
+            this.serverSessionId = (String) newSid;
+            System.out.println("[Client-SessionManager] SessionId régénéré automatiquement.");
+        }
+    }
     
     public void addNotification(String msg) {
         this.notificationHistory.add(0, msg);

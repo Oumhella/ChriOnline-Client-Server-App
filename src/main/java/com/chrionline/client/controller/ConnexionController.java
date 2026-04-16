@@ -112,8 +112,9 @@ public class ConnexionController {
                             });
                         }).start();
                     } else if ("ERREUR_BLOQUE".equals(rep.get("statut"))) {
-                        long secondes = (long) rep.get("delaySeconds");
-                        lancerCompteAReboursBlocage(secondes);
+                        long    secondes     = ((Number) rep.get("delaySeconds")).longValue();
+                        boolean showRecovery = Boolean.TRUE.equals(rep.get("showPasswordRecovery"));
+                        lancerCompteAReboursBlocage(secondes, showRecovery);
                     } else if ("EN_ATTENTE".equals(rep.get("statut"))) {
                         erreur((String) rep.get("message"));
                         new Thread(() -> {
@@ -134,10 +135,10 @@ public class ConnexionController {
         }).start();
     }
 
-    private void lancerCompteAReboursBlocage(long totalSec) {
+    private void lancerCompteAReboursBlocage(long totalSec, boolean showPasswordRecovery) {
         loginButton.setDisable(true);
         final long[] remaining = {totalSec};
-        
+
         Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
             remaining[0]--;
             if (remaining[0] <= 0) {
@@ -148,13 +149,20 @@ public class ConnexionController {
                 long h = remaining[0] / 3600;
                 long m = (remaining[0] % 3600) / 60;
                 long s = remaining[0] % 60;
-                
-                String timeStr = (h > 0) ? String.format("%02dh %02dm %02ds", h, m, s) : String.format("%02dm %02ds", m, s);
+
+                String timeStr = (h > 0)
+                        ? String.format("%02dh %02dm %02ds", h, m, s)
+                        : String.format("%02dm %02ds", m, s);
                 loginButton.setText("Suspendu (" + timeStr + ")");
-                erreur("Trop de tentatives. Accès suspendu.");
+
+                if (showPasswordRecovery) {
+                    erreur("Trop de tentatives. Accès suspendu.\nMot de passe oublié ? Utilisez \"Mot de passe oublié\".");
+                } else {
+                    erreur("Trop de tentatives. Accès suspendu.");
+                }
             }
         }));
-        timeline.setCycleCount((int)totalSec);
+        timeline.setCycleCount((int) totalSec);
         timeline.play();
     }
 
