@@ -48,6 +48,8 @@ public class ClientHandler implements Runnable {
             "LISTE_LABEL_VALUES",
             "SUIVRE_COMMANDE",
             "DECONNEXION",
+            "UDP_REGISTER",
+            "REGISTER_UDP",
             "INCONNUE"
     );
 
@@ -64,13 +66,6 @@ public class ClientHandler implements Runnable {
     private int userId = -1;
     private String userEmail = null;
     private String userRole      = null;
-
-    // ─── Commandes publiques (pas besoin d'authentification) ──────────────────
-    private static final Set<String> PUBLIC_COMMANDS = Set.of(
-        "CONNEXION", "INSCRIPTION", "CONFIRMER_EMAIL",
-        "OUBLIER_MOT_DE_PASSE", "REINITIALISER_MDP", "VERIFIER_OTP",
-        "LISTE_PRODUITS", "DETAIL_PRODUIT", "GET_PRODUIT_BY_ID"
-    );
 
     // ─── Commandes réservées aux administrateurs ─────────────────────────────
     private static final Set<String> ADMIN_COMMANDS = Set.of(
@@ -304,13 +299,18 @@ public class ClientHandler implements Runnable {
             Map<String, Object> reponseMutable = new java.util.HashMap<>(authService.verifierOTPConnexion(req));
 
             if ("OK".equals(reponseMutable.get("statut"))) {
-                Map<String, Object> data = (Map<String, Object>) reponseMutable.get("data");
-                this.userId = (int) data.get("userId");
-                this.userEmail = (String) data.get("email");
-                this.userRole = (String) data.get("role");
+                // Initialize session upon successful 2FA
+                enrichirReponseConnexionAvecSession(reponseMutable, req);
 
-                // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité (log simple)
-                SecurityLogger.loginSucces(userEmail, userRole, userId, socket.getInetAddress().getHostAddress());
+                Map<String, Object> data = (Map<String, Object>) reponseMutable.get("data");
+                if (data != null && data.containsKey("userId")) {
+                    this.userId = (int) data.get("userId");
+                    this.userEmail = (String) data.get("email");
+                    this.userRole = (String) data.get("role");
+
+                    // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité (log simple)
+                    SecurityLogger.loginSucces(userEmail, userRole, userId, socket.getInetAddress().getHostAddress());
+                }
             }
 
             envoyerMessage(reponseMutable);
