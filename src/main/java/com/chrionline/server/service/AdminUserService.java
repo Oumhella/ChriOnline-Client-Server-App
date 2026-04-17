@@ -25,7 +25,8 @@ public class AdminUserService {
         Map<String, Object> reponse = new HashMap<>();
         try {
             int idUtilisateur = (int) requete.get("idUtilisateur");
-            String statut = (String) requete.get("statut");
+            String statut     = (String) requete.get("statut");
+            int adminId       = requete.containsKey("adminId") ? (int) requete.get("adminId") : -1;
 
             // ─── Validation du statut contre la liste blanche ────────────
             if (!InputValidator.isValidAccountStatut(statut)) {
@@ -36,7 +37,7 @@ public class AdminUserService {
                 return reponse;
             }
 
-            Map<String, Object> daoRes = UserDAO.changerStatutCompte(idUtilisateur, statut);
+            Map<String, Object> daoRes = UserDAO.changerStatutCompte(adminId, idUtilisateur, statut);
 
             // ─── Email de notification si le compte est débloqué ──────────
             if ("OK".equals(daoRes.get("statut")) && "actif".equalsIgnoreCase(statut)) {

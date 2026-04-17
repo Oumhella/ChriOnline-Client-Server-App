@@ -5,7 +5,8 @@ import java.net.*;
 
 /**
  * Gestionnaire du réseau côté client pour l'application ChriOnline.
- * Implémente le pattern Singleton pour partager la connexion entre les contrôleurs JavaFX.
+ * Implémente le pattern Singleton pour partager la connexion entre les
+ * contrôleurs JavaFX.
  */
 public class Client {
     // Attributs TCP
@@ -15,6 +16,7 @@ public class Client {
     private Socket socket;
     private ObjectOutputStream out;
     private ObjectInputStream in;
+    private String jwtToken; // Stockage du token de session
 
     // Attributs UDP pour les notifications
     private DatagramSocket udpSocket;
@@ -43,30 +45,69 @@ public class Client {
     }
 
     /**
-     * Établit la connexion TCP avec le serveur et lance l'écouteur de notifications UDP.
+     * Établit la connexion TCP sécurisée (SSL/TLS) avec le serveur.
      */
     public void connecter() throws IOException {
         if (socket == null || socket.isClosed()) {
-            // Connexion TCP principale
-            this.socket = new Socket(host, port);
+            try {
+                // Configuration SSL pour faire confiance aux certificats auto-signés (Trust
+                // All)
+                javax.net.ssl.TrustManager[] trustAllCerts = new javax.net.ssl.TrustManager[] {
+                        new javax.net.ssl.X509TrustManager() {
+                            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                                return null;
+                            }
 
-            this.out = new ObjectOutputStream(socket.getOutputStream());
-            this.out.flush();
-            this.in = new ObjectInputStream(socket.getInputStream());
+                            public void checkClientTrusted(java.security.cert.X509Certificate[] certs,
+                                    String authType) {
+                            }
 
-            System.out.println("[CLIENT] Connexion TCP établie sur le port " + port);
+                            public void checkServerTrusted(java.security.cert.X509Certificate[] certs,
+                                    String authType) {
+                            }
+                        }
+                };
 
-            // Démarrage de l'écouteur UDP
-            Thread udpThread = new Thread(this::ecouterNotificationsUDP);
-            udpThread.setDaemon(true);
-            udpThread.start();
+                javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLS");
+                sc.init(null, trustAllCerts, new java.security.SecureRandom());
+                javax.net.ssl.SSLSocketFactory ssf = sc.getSocketFactory();
+
+                this.socket = ssf.createSocket(host, port);
+
+                // Forcer le handshake
+                ((javax.net.ssl.SSLSocket) socket).startHandshake();
+
+                this.out = new ObjectOutputStream(socket.getOutputStream());
+                this.out.flush();
+                this.in = new ObjectInputStream(socket.getInputStream());
+
+                System.out.println("[CLIENT-SSL] Connexion sécurisée établie.");
+
+                // Démarrage de l'écouteur UDP
+                Thread udpThread = new Thread(this::ecouterNotificationsUDP);
+                udpThread.setDaemon(true);
+                udpThread.start();
+            } catch (Exception e) {
+                throw new IOException("Erreur SSL : " + e.getMessage(), e);
+            }
         }
     }
 
     /**
      * Envoie une requête au serveur.
+     * Ajoute automatiquement {@code sessionId} si l'utilisateur possède une session serveur.
      */
     public synchronized void envoyerRequete(Object requete) throws IOException {
+        if (requete instanceof java.util.Map) {
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> m = new java.util.HashMap<>((java.util.Map<String, Object>) requete);
+            String sid = com.chrionline.client.session.SessionManager.getInstance().getServerSessionId();
+            if (sid != null && !sid.isBlank()) {
+                m.put("sessionId", sid);
+            }
+            injectSecurityHeaders(m);
+            requete = m;
+        }
         if (out != null) {
             out.writeObject(requete);
             out.flush();
@@ -82,13 +123,31 @@ public class Client {
     public java.util.Map<String, Object> envoyerRequeteAttendreReponse(java.util.Map<String, Object> requete) {
         try {
             envoyerRequete((Object) requete);
-            return (java.util.Map<String, Object>) lireReponse();
+            java.util.Map<String, Object> reponse = (java.util.Map<String, Object>) lireReponse();
+
+            // Si c'est une connexion réussie, on sauvegarde le JWT
+            if (reponse != null && "OK".equals(reponse.get("statut")) && reponse.containsKey("jwt")) {
+                this.jwtToken = (String) reponse.get("jwt");
+                System.out.println("[CLIENT] JWT de session mis à jour.");
+            }
+
+            return reponse;
         } catch (Exception e) {
             java.util.Map<String, Object> err = new java.util.HashMap<>();
             err.put("statut", "ERREUR");
             err.put("message", "Erreur réseau : " + e.getMessage());
             return err;
         }
+    }
+
+    private void injectSecurityHeaders(java.util.Map<String, Object> req) {
+        if (jwtToken != null) {
+            req.put("jwt", jwtToken);
+        }
+        // Token pare-feu pour les accès "internes" simulés
+        req.put("firewallToken", "CHRI-FW-2026-SECRET-X91");
+        // IP revendiquée (pour test IP Spoofing)
+        // req.put("claimedIp", "192.168.1.100");
     }
 
     /**
@@ -111,7 +170,18 @@ public class Client {
      */
     public synchronized Object lireReponse() throws IOException, ClassNotFoundException {
         if (in != null) {
-            return in.readObject();
+            Object o = in.readObject();
+            if (o instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> m = (java.util.Map<String, Object>) o;
+                com.chrionline.client.session.SessionManager sm =
+                        com.chrionline.client.session.SessionManager.getInstance();
+                // Vérif session expirée
+                sm.handleServerResponseIfSessionExpired(m);
+                // Rotation automatique du sessionId après action critique (paiement, profil)
+                sm.updateSessionIdIfProvided(m);
+            }
+            return o;
         }
         return null;
     }
@@ -174,8 +244,10 @@ public class Client {
      * Ferme proprement les sockets et les flux.
      */
     public void deconnecter() throws IOException {
-        if (socket != null) socket.close();
-        if (udpSocket != null) udpSocket.close();
+        if (socket != null)
+            socket.close();
+        if (udpSocket != null)
+            udpSocket.close();
         System.out.println("[CLIENT] Déconnecté.");
     }
 }

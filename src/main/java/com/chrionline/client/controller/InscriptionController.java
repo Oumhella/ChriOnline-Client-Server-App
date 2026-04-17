@@ -5,6 +5,7 @@ import com.chrionline.client.view.ConfirmationView;
 import javafx.application.Platform;
 import javafx.scene.control.*;
 import javafx.stage.Stage;
+import com.chrionline.shared.utils.PasswordValidator;
 import java.util.*;
 
 public class InscriptionController {
@@ -21,12 +22,13 @@ public class InscriptionController {
     private final TextField     paysField;
     private final Label         msgLabel;
     private final Stage         stage;
+    private final TextField     dateNaissanceField;
 
     public InscriptionController(
             TextField nom, TextField prenom, TextField email, TextField tel,
             PasswordField mdp, PasswordField mdpConf,
             TextField rue, TextField ville, TextField cp, TextField pays,
-            Label msg, Stage stage
+            Label msg, Stage stage, TextField dateNaissance
     ) {
         this.nomField     = nom;
         this.prenomField  = prenom;
@@ -40,9 +42,11 @@ public class InscriptionController {
         this.paysField    = pays;
         this.msgLabel     = msg;
         this.stage        = stage;
+        this.dateNaissanceField = dateNaissance;
     }
 
     public void inscrire(String captchaToken) {
+        System.out.println("[DEBUG] Tentative d'inscription avec validation de mot de passe fort...");
 
         String nom    = nomField.getText().trim();
         String prenom = prenomField.getText().trim();
@@ -54,6 +58,7 @@ public class InscriptionController {
         String ville  = villeField.getText().trim();
         String cp     = cpField.getText().trim();
         String pays   = paysField.getText().trim();
+        String dob    = dateNaissanceField.getText().trim();
 
         // ── Validation ────────────────────────────────────────
         if (nom.isEmpty() || prenom.isEmpty() || email.isEmpty() || mdp.isEmpty()) {
@@ -68,8 +73,10 @@ public class InscriptionController {
             erreur("Les mots de passe ne correspondent pas.");
             return;
         }
-        if (mdp.length() < 6) {
-            erreur("Mot de passe trop court (minimum 6 caractères).");
+
+        // ── Vérification Force du Mot de Passe ────────────────
+        if (!com.chrionline.shared.utils.PasswordValidator.estFort(mdp, nom, prenom, dob)) {
+            erreur("Mot de passe trop faible. Il ne doit pas contenir votre nom, prénom ou date de naissance, et doit être complexe (8+ chars, majuscule, chiffre, spécial).");
             return;
         }
 
@@ -82,6 +89,7 @@ public class InscriptionController {
         req.put("prenom",      prenom);
         req.put("email",       email);
         req.put("mdp",         mdp);
+        req.put("date_naissance", dob);
         req.put("recaptchaToken", captchaToken);
 
         // Table client

@@ -1,5 +1,6 @@
 package com.chrionline.server.core;
 
+import com.chrionline.server.utils.AppLogger;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -12,6 +13,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import com.chrionline.server.dao.NotificationDAO;
 import com.chrionline.server.dao.UserDAO;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Classe principale du serveur ChriOnline.
@@ -20,31 +23,64 @@ import com.chrionline.server.dao.UserDAO;
 
 public class Server {
 
-    // Attributs 
+    // Attributs
     private int port;
     private ServerSocket serverSocket;
     private List<ClientHandler> clientConnectes;
+    private ExecutorService threadPool;
+    private ConnectionSecurityManager securityManager;
 
     // Port UDP séparé pour les notifications (port TCP + 1 par convention)
     private static final int UDP_PORT = 9091;
 
-    //Constructeur 
+    // Constructeur
 
     public Server(int port) {
         this.port = port;
         this.clientConnectes = new ArrayList<>();
+        this.threadPool = Executors.newFixedThreadPool(50); // Limite de 50 threads concurrents
+        this.securityManager = new ConnectionSecurityManager();
     }
 
     // ─── Méthodes principales ─────────────────────────────────────────────────
 
     /**
-     * Démarre le serveur : ouvre le ServerSocket TCP et commence à accepter les connexions.
+     * Démarre le serveur : ouvre le ServerSocket TCP (SSL) et commence à accepter
+     * les connexions.
      */
     public void demarrer() {
         try {
-            serverSocket = new ServerSocket(port);
-            System.out.println("[SERVER] Démarré sur le port " + port);
-            System.out.println("[SERVER] En attente de connexions clients...");
+            // Chargement de la configuration SSL
+            java.util.Properties props = new java.util.Properties();
+            try (java.io.InputStream in = getClass().getClassLoader().getResourceAsStream("server.properties")) {
+                if (in != null)
+                    props.load(in);
+            }
+
+            String ksName = props.getProperty("server.ssl.keystore", "keystore.jks");
+            String ksPass = props.getProperty("server.ssl.password", "password123");
+
+            char[] password = ksPass.toCharArray();
+            java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
+            try (java.io.InputStream ksIn = getClass().getClassLoader().getResourceAsStream(ksName)) {
+                if (ksIn == null)
+                    throw new IOException("Keystore introuvable : " + ksName);
+                ks.load(ksIn, password);
+            }
+
+            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance("SunX509");
+            kmf.init(ks, password);
+            javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+            sslContext.init(kmf.getKeyManagers(), null, null);
+
+            javax.net.ssl.SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
+            // Utilisation du backlog de 10000 pour simuler la tolérance au flood avant
+            // rejet OS
+            serverSocket = ssf.createServerSocket(port, 10000);
+
+            AppLogger.info("[SERVER-SSL] Démarré sur le port " + port + " avec TLS");
+            System.out.println("[SURVEILLANCE & LOGS] OS SYN Cookies : Tolérés (gestion au niveau OS).");
+            AppLogger.info("[SERVER] En attente de connexions sécurisées...");
 
             // Lancer le thread UDP pour les notifications en parallèle
             Thread udpThread = new Thread(this::ecouterUDP);
@@ -56,8 +92,9 @@ public class Server {
                 accepterConnexion();
             }
 
-        } catch (IOException e) {
-            System.err.println("[SERVER] Erreur au démarrage : " + e.getMessage());
+        } catch (Exception e) {
+            AppLogger.error("[SERVER] Erreur au démarrage SSL : " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -66,7 +103,7 @@ public class Server {
      */
     public void arreter() {
         try {
-            System.out.println("[SERVER] Arrêt en cours...");
+            AppLogger.info("[SERVER] Arrêt en cours...");
 
             // Déconnecter tous les clients
             for (ClientHandler handler : clientConnectes) {
@@ -78,30 +115,48 @@ public class Server {
                 serverSocket.close();
             }
 
-            System.out.println("[SERVER] Arrêté avec succès.");
+            if (threadPool != null && !threadPool.isShutdown()) {
+                threadPool.shutdownNow();
+            }
+
+            AppLogger.info("[SERVER] Arrêté avec succès.");
         } catch (IOException e) {
-            System.err.println("[SERVER] Erreur lors de l'arrêt : " + e.getMessage());
+            AppLogger.error("[SERVER] Erreur lors de l'arrêt : " + e.getMessage());
         }
     }
 
     /**
-     * Accepte une nouvelle connexion client TCP et lui attribue un ClientHandler dans un thread dédié.
+     * Accepte une nouvelle connexion client TCP et lui attribue un ClientHandler
+     * dans un thread dédié.
      */
     public void accepterConnexion() {
         try {
             Socket socketClient = serverSocket.accept();
-            System.out.println("[SERVER] Nouveau client connecté : "
-                    + socketClient.getInetAddress().getHostAddress());
+            String clientIp = socketClient.getInetAddress().getHostAddress();
+
+            // 1. Vérification de sécurité (Protection DoS / SYN Flood) via
+            // ConnectionSecurityManager
+            if (!securityManager.isAllowed(clientIp)) {
+                AppLogger.warn("[SERVER] Connexion rejetée (Bloqué/BLACKLIST) : " + clientIp);
+                socketClient.close();
+                return;
+            }
+
+            AppLogger.info("[SERVER] Nouveau client connecté : " + clientIp);
+
+            // 1.bis. Réduire le temps d'attente (soTimeout) pour libérer les ressources si
+            // inactif
+            socketClient.setSoTimeout(60000);
 
             ClientHandler handler = new ClientHandler(socketClient, this);
             clientConnectes.add(handler);
 
-            Thread clientThread = new Thread(handler);
-            clientThread.start();
+            // 2. Utilisation du ThreadPool pour la gestion des threads clients
+            threadPool.execute(handler);
 
         } catch (IOException e) {
             if (!serverSocket.isClosed()) {
-                System.err.println("[SERVER] Erreur lors de l'acceptation d'une connexion : " + e.getMessage());
+                AppLogger.error("[SERVER] Erreur lors de l'acceptation d'une connexion : " + e.getMessage());
             }
         }
     }
@@ -123,32 +178,33 @@ public class Server {
      */
     public void gererDeconnexion(ClientHandler handler) {
         clientConnectes.remove(handler);
-        System.out.println("[SERVER] Client déconnecté. Clients actifs : " + clientConnectes.size());
+        AppLogger.info("[SERVER] Client déconnecté. Clients actifs : " + clientConnectes.size());
     }
 
     /**
      *
      * Diffuse une notification UDP à une adresse/port donnés.
      *
-     * @param message        le message de notification
-     * @param adresseClient  l'adresse IP du client destinataire
-     * @param portClient     le port UDP du client destinataire
+     * @param message       le message de notification
+     * @param adresseClient l'adresse IP du client destinataire
+     * @param portClient    le port UDP du client destinataire
      */
     public void diffuserNotification(String message, InetAddress adresseClient, int portClient) {
         try (DatagramSocket udpSocket = new DatagramSocket()) {
             byte[] data = message.getBytes();
             DatagramPacket packet = new DatagramPacket(data, data.length, adresseClient, portClient);
             udpSocket.send(packet);
-            System.out.println("[UDP] Notification envoyée à "
+            AppLogger.info("[UDP] Notification envoyée à "
                     + adresseClient.getHostAddress() + ":" + portClient + " → " + message);
         } catch (IOException e) {
-            System.err.println("[UDP] Erreur d'envoi de notification : " + e.getMessage());
+            AppLogger.error("[UDP] Erreur d'envoi de notification : " + e.getMessage());
         }
 
     }
 
     /**
-     * Envoie une notification UDP à tous les administrateurs connectés et la sauvegarde en BDD.
+     * Envoie une notification UDP à tous les administrateurs connectés et la
+     * sauvegarde en BDD.
      *
      * @param message le message de notification à envoyer aux admins
      * @param type    le type de notification
@@ -164,7 +220,9 @@ public class Server {
     }
 
     /**
-     * Envoie une notification UDP à TOUS les clients connectés et la sauvegarde en BDD pour TOUS les utilisateurs.
+     * Envoie une notification UDP à TOUS les clients connectés et la sauvegarde en
+     * BDD pour TOUS les utilisateurs.
+     * 
      * @param message le message de notification
      * @param type    le type de notification
      */
@@ -173,9 +231,10 @@ public class Server {
         for (ClientHandler handler : clientConnectes) {
             diffuserNotification(message, handler.getSocket().getInetAddress(), handler.getUdpPort());
         }
-        
-        // 2. Sauvegarder en BDD pour TOUS les utilisateurs inscrits (Newsletter/Alerte globale)
-        // Note: On pourrait aussi ne sauvegarder que pour les connectés, 
+
+        // 2. Sauvegarder en BDD pour TOUS les utilisateurs inscrits (Newsletter/Alerte
+        // globale)
+        // Note: On pourrait aussi ne sauvegarder que pour les connectés,
         // mais une newsletter doit être visible par tous à leur prochaine connexion.
         new Thread(() -> {
             List<Map<String, Object>> users = UserDAO.listerClients();
@@ -194,7 +253,8 @@ public class Server {
      * @param type    le type de notification
      */
     public void notifierClient(int userId, String message, String type) {
-        // Sauvegarde en BDD (pour que l'utilisateur la voie même s'il n'est pas connecté à l'instant T)
+        // Sauvegarde en BDD (pour que l'utilisateur la voie même s'il n'est pas
+        // connecté à l'instant T)
         NotificationDAO.save(userId, message, type);
 
         // Notification UDP si connecté
@@ -263,7 +323,7 @@ public class Server {
      */
     private void ecouterUDP() {
         try (DatagramSocket udpSocket = new DatagramSocket(UDP_PORT)) {
-            System.out.println("[UDP] En écoute sur le port " + UDP_PORT);
+            AppLogger.info("[UDP] En écoute sur le port " + UDP_PORT);
             byte[] buffer = new byte[1024];
 
             while (true) {
@@ -279,12 +339,12 @@ public class Server {
                 }
 
                 String messageRecu = new String(packet.getData(), 0, packet.getLength());
-                System.out.println("[UDP] Message reçu de "
+                AppLogger.info("[UDP] Message reçu de "
                         + clientAddress.getHostAddress() + " : " + messageRecu);
             }
 
         } catch (IOException e) {
-            System.err.println("[UDP] Erreur socket UDP : " + e.getMessage());
+            AppLogger.error("[UDP] Erreur socket UDP : " + e.getMessage());
         }
     }
 

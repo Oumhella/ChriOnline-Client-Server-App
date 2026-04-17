@@ -1,21 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="WARN">
+
     <Appenders>
-        <!-- Appender pour la console -->
+
+        <!-- Console : logs généraux affichés dans le terminal -->
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} [%t] %-5level %logger{36} - %msg%n"/>
         </Console>
-        
-        <!-- Appender pour un fichier de log (optionnel, dé-commentez si besoin) -->
-        <!-- Appender pour un fichier de log -->
-        <File name="FileLogger" fileName="logs/app.log" bufferedIO="true">
+
+        <!-- Fichier général de l'application -->
+        <File name="AppFile" fileName="logs/app.log" bufferedIO="true">
             <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} [%t] %-5level %logger{36} - %msg%n"/>
         </File>
+
     </Appenders>
+
     <Loggers>
-        <Root level="info">
+
+        <!-- Logger racine : console + fichier app.log -->
+        <Root level="INFO">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="FileLogger"/>
+            <AppenderRef ref="AppFile"/>
         </Root>
+
     </Loggers>
+
 </Configuration>

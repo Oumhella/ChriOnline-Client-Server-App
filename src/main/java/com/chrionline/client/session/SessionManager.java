@@ -9,6 +9,8 @@ public class SessionManager {
 
     private static SessionManager instance;
     private int userId = -1;
+    /** Identifiant de session serveur (TCP), distinct du userId local. */
+    private String serverSessionId;
     private String nom;
     private String prenom;
     private String email;
@@ -32,17 +34,55 @@ public class SessionManager {
             this.prenom = (String) data.get("prenom");
             this.email = (String) data.get("email");
             this.role = (String) data.get("role");
+            Object sid = data.get("sessionId");
+            if (sid instanceof String) {
+                this.serverSessionId = (String) sid;
+            }
         }
+    }
+
+    public void setServerSessionId(String sessionId) {
+        this.serverSessionId = sessionId;
+    }
+
+    public String getServerSessionId() {
+        return serverSessionId;
     }
 
     public void clear() {
         this.userId = -1;
+        this.serverSessionId = null;
         this.nom = null;
         this.prenom = null;
         this.email = null;
         this.role = null;
         this.notificationHistory.clear();
         this.unreadNotificationsCount = 0;
+    }
+
+    /**
+     * Réaction à {@code ERROR} / {@code SESSION_EXPIRED} renvoyé par le serveur.
+     */
+    public void handleServerResponseIfSessionExpired(java.util.Map<String, Object> rep) {
+        if (rep != null
+                && "ERROR".equals(rep.get("statut"))
+                && "SESSION_EXPIRED".equals(rep.get("message"))) {
+            clear();
+        }
+    }
+
+    /**
+     * Met à jour le sessionId si le serveur en fournit un nouveau après une action critique
+     * (paiement confirmé, modification de profil).
+     * Appelé automatiquement par {@link com.chrionline.client.network.Client#lireReponse()}.
+     */
+    public void updateSessionIdIfProvided(java.util.Map<String, Object> rep) {
+        if (rep == null) return;
+        Object newSid = rep.get("newSessionId");
+        if (newSid instanceof String && !((String) newSid).isBlank()) {
+            this.serverSessionId = (String) newSid;
+            System.out.println("[Client-SessionManager] SessionId régénéré automatiquement.");
+        }
     }
     
     public void addNotification(String msg) {
