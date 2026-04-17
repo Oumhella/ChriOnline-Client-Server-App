@@ -400,6 +400,22 @@ public class UserDAO {
         }
     }
 
+    /**
+     * Retrouve l'email d'un utilisateur à partir de son ID.
+     * @return l'email ou null si non trouvé
+     */
+    public static String findEmailById(int idUtilisateur) {
+        String sql = "SELECT email FROM utilisateur WHERE idUtilisateur = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idUtilisateur);
+            ResultSet rs = ps.executeQuery();
+            return rs.next() ? rs.getString("email") : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static Map<String, Object> getInfosProfil(int userId) {
         String sql = """
             SELECT u.nom, u.prenom, u.email, c.telephone, a.rue, a.ville, a.code_postal, a.pays
@@ -569,8 +585,8 @@ public class UserDAO {
             ORDER BY u.idUtilisateur DESC
         """;
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 Map<String, Object> cli = new java.util.HashMap<>();
                 cli.put("idUtilisateur", rs.getInt("idUtilisateur"));
@@ -613,8 +629,8 @@ public class UserDAO {
         java.util.List<String> emails = new java.util.ArrayList<>();
         String sql = "SELECT email FROM utilisateur";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 emails.add(rs.getString("email"));
             }
@@ -632,8 +648,8 @@ public class UserDAO {
             JOIN admin a ON a.idAdmin = u.idUtilisateur
         """;
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 emails.add(rs.getString("email"));
             }

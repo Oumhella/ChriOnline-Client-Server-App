@@ -6,6 +6,7 @@ import com.chrionline.server.security.SecurityLogger;
 import com.chrionline.server.security.SecurityInterceptor;
 import com.chrionline.server.service.AuthenticationService;
 import com.chrionline.server.service.EmailService;
+import com.chrionline.server.service.InputValidator;
 import com.chrionline.server.service.PanierService;
 import com.chrionline.server.service.ProduitService;
 import com.chrionline.shared.models.User;
@@ -48,6 +49,8 @@ public class ClientHandler implements Runnable {
             "LISTE_LABEL_VALUES",
             "SUIVRE_COMMANDE",
             "DECONNEXION",
+            "UDP_REGISTER",
+            "REGISTER_UDP",
             "INCONNUE"
     );
 
@@ -64,6 +67,17 @@ public class ClientHandler implements Runnable {
     private int userId = -1;
     private String userEmail = null;
     private String userRole      = null;
+
+    // ─── Commandes réservées aux administrateurs ─────────────────────────────
+    private static final Set<String> ADMIN_COMMANDS = Set.of(
+        "AJOUTER_PRODUIT", "MODIFIER_PRODUIT", "SUPPRIMER_PRODUIT",
+        "UPLOAD_IMAGE",
+        "AJOUTER_LABEL", "AJOUTER_LABEL_VALUE", "SUPPRIMER_LABEL_VALUE",
+        "AJOUTER_CATEGORIE", "MODIFIER_CATEGORIE", "SUPPRIMER_CATEGORIE",
+        "ADMIN_LISTE_USERS", "ADMIN_CHANGER_STATUT_USER",
+        "ENVOYER_NEWSLETTER",
+        "GET_ALL_ORDERS", "UPDATE_ORDER_STATUS"
+    );
 
     // Pour injecter le nouveau sessionId après régénération globale
     private String nextSessionIdToInject = null;
@@ -156,6 +170,14 @@ public class ClientHandler implements Runnable {
             req.put("sessionId", this.nextSessionIdToInject);
         } else {
             this.nextSessionIdToInject = null;
+        }
+
+        // ─── Contrôle d'accès : Autorisation Admin (Command Injection Prevention) ──
+        if (ADMIN_COMMANDS.contains(commande) && !"admin".equals(userRole)) {
+            System.out.println("[SECURITY] Commande admin '" + commande + "' rejetée : rôle='"
+                    + userRole + "' userId=" + userId + " (" + clientIp + ")");
+            envoyerMessage(creerReponse("ERREUR", "Accès refusé. Droits administrateur requis."));
+            return;
         }
 
         switch (commande) {
@@ -279,13 +301,18 @@ public class ClientHandler implements Runnable {
             Map<String, Object> reponseMutable = new java.util.HashMap<>(authService.verifierOTPConnexion(req));
 
             if ("OK".equals(reponseMutable.get("statut"))) {
-                Map<String, Object> data = (Map<String, Object>) reponseMutable.get("data");
-                this.userId = (int) data.get("userId");
-                this.userEmail = (String) data.get("email");
-                this.userRole = (String) data.get("role");
+                // Initialize session upon successful 2FA
+                enrichirReponseConnexionAvecSession(reponseMutable, req);
 
-                // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité (log simple)
-                SecurityLogger.loginSucces(userEmail, userRole, userId, socket.getInetAddress().getHostAddress());
+                Map<String, Object> data = (Map<String, Object>) reponseMutable.get("data");
+                if (data != null && data.containsKey("userId")) {
+                    this.userId = (int) data.get("userId");
+                    this.userEmail = (String) data.get("email");
+                    this.userRole = (String) data.get("role");
+
+                    // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité (log simple)
+                    SecurityLogger.loginSucces(userEmail, userRole, userId, socket.getInetAddress().getHostAddress());
+                }
             }
 
             envoyerMessage(reponseMutable);

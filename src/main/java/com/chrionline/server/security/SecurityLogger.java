@@ -143,9 +143,13 @@ public final class SecurityLogger {
 
     private static void ensureTableExists() {
         String sql = "CREATE TABLE IF NOT EXISTS security_blacklist (" +
-                "ip VARCHAR(45) PRIMARY KEY, " +
-                "reason VARCHAR(255), " +
-                "banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)";
+                "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                "ip_address VARCHAR(45) NOT NULL, " +
+                "email VARCHAR(255), " +
+                "raison VARCHAR(255), " +
+                "date_ajout TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+                "expire_le TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+                "actif BOOLEAN NOT NULL DEFAULT TRUE)";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
                 Statement stmt = conn.createStatement()) {
             stmt.execute(sql);
@@ -155,12 +159,12 @@ public final class SecurityLogger {
     }
 
     private static void loadBlacklistFromDB() {
-        String sql = "SELECT ip FROM security_blacklist";
+        String sql = "SELECT ip_address FROM security_blacklist WHERE actif = TRUE";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
                 Statement stmt = conn.createStatement();
                 ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
-                blacklistedIPs.add(rs.getString("ip"));
+                blacklistedIPs.add(rs.getString("ip_address"));
             }
             LOG.info("[SECURITY] {} IPs chargées depuis la blacklist persistante.", blacklistedIPs.size());
         } catch (SQLException e) {
@@ -169,7 +173,7 @@ public final class SecurityLogger {
     }
 
     private static void persistBan(String ip, String reason) {
-        String sql = "INSERT IGNORE INTO security_blacklist (ip, reason) VALUES (?, ?)";
+        String sql = "INSERT INTO security_blacklist (ip_address, raison, expire_le, actif) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 3650 DAY), TRUE)";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, ip);
