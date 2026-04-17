@@ -4,6 +4,7 @@ import com.chrionline.server.dao.TokenDAO;
 import com.chrionline.server.dao.UserDAO;
 import com.chrionline.shared.utils.PasswordValidator;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * Service gérant l'authentification, l'inscription et la récupération de compte.
@@ -13,13 +14,17 @@ public class AuthenticationService {
     // ─── Inscription ──────────────────────────────────────────────────────────
 
     public Map<String, Object> register(Map<String, Object> req) {
-        String nominal = (String) req.get("nom");
-        String prenom  = (String) req.get("prenom");
-        String mdp     = (String) req.get("mdp");
-        String dob     = (String) req.get("date_naissance");
+        // ─── Validation serveur des entrées (ne pas se fier au client) ────
+        String email = (String) req.get("email");
+        String nom = (String) req.get("nom");
+        String prenom = (String) req.get("prenom");
+        String mdp = (String) req.get("mdp");
+        String telephone = (String) req.getOrDefault("telephone", "");
+        String dob = (String) req.get("date_naissance");
 
-        if (!PasswordValidator.estFort(mdp, nominal, prenom, dob)) {
-            com.chrionline.server.utils.AppLogger.warn("[AUTH] Inscription rejetée : mot de passe trop faible pour l'email " + req.get("email"));
+        // Vérification de la force du mot de passe (from main)
+        if (!PasswordValidator.estFort(mdp, nom, prenom, dob)) {
+            com.chrionline.server.utils.AppLogger.warn("[AUTH] Inscription rejetée : mot de passe trop faible pour l'email " + email);
             return Map.of(
                 "statut", "ERREUR",
                 "message", "Mot de passe trop faible. Il ne doit pas contenir votre nom, prénom ou date de naissance, et doit être complexe (8+ chars, majuscule, chiffre, spécial)."
@@ -28,11 +33,32 @@ public class AuthenticationService {
 
         // Validation captcha effectuée côté client (checkbox JavaFX)
 
-        Map<String, Object> result = UserDAO.inscrire(req);
+        if (!InputValidator.isValidEmail(email)) {
+            return Map.of("statut", "ERREUR", "message", "Format d'email invalide.");
+        }
+        if (!InputValidator.isValidName(nom)) {
+            return Map.of("statut", "ERREUR", "message", "Nom invalide (lettres, espaces et tirets uniquement, max 50 caractères).");
+        }
+        if (!InputValidator.isValidName(prenom)) {
+            return Map.of("statut", "ERREUR", "message", "Prénom invalide (lettres, espaces et tirets uniquement, max 50 caractères).");
+        }
+        if (!InputValidator.isValidPassword(mdp)) {
+            return Map.of("statut", "ERREUR", "message", "Le mot de passe doit contenir au moins 6 caractères.");
+        }
+        if (!InputValidator.isValidPhone(telephone)) {
+            return Map.of("statut", "ERREUR", "message", "Numéro de téléphone invalide.");
+        }
+
+        // Assainir les champs texte avant insertion
+        Map<String, Object> sanitizedReq = new HashMap<>(req);
+        sanitizedReq.put("nom", InputValidator.sanitizeString(nom, 50));
+        sanitizedReq.put("prenom", InputValidator.sanitizeString(prenom, 50));
+        sanitizedReq.put("email", email.trim());
+
+        Map<String, Object> result = UserDAO.inscrire(sanitizedReq);
         if (!"OK".equals(result.get("statut"))) return result;
 
         int idUtilisateur = (int) result.get("idUtilisateur");
-        String email      = (String) req.get("email");
 
         try {
             String token = TokenDAO.genererToken(idUtilisateur, "confirmation");
@@ -53,7 +79,17 @@ public class AuthenticationService {
     // ─── Connexion ────────────────────────────────────────────────────────────
 
     public Map<String, Object> login(Map<String, Object> req) {
-        // Validation captcha effectuée côté client (checkbox JavaFX)
+        // ─── Validation serveur des entrées ──────────────────────────────
+        String email = (String) req.get("email");
+        String mdp = (String) req.get("mdp");
+
+        if (!InputValidator.isValidEmail(email)) {
+            return Map.of("statut", "ERREUR", "message", "Format d'email invalide.");
+        }
+        if (mdp == null || mdp.isEmpty()) {
+            return Map.of("statut", "ERREUR", "message", "Le mot de passe est requis.");
+        }
+
         return UserDAO.connexion(req);
     }
 

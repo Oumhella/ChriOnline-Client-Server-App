@@ -28,7 +28,32 @@ public class AdminUserService {
             String statut     = (String) requete.get("statut");
             int adminId       = requete.containsKey("adminId") ? (int) requete.get("adminId") : -1;
 
+            // ─── Validation du statut contre la liste blanche ────────────
+            if (!InputValidator.isValidAccountStatut(statut)) {
+                reponse.put("statut", "ERREUR");
+                reponse.put("message", "Statut invalide : '" + statut + "'. Valeurs autorisées : actif, bloque.");
+                System.out.println("[SECURITY] Tentative de changement de statut invalide : '" + statut 
+                        + "' pour utilisateur " + idUtilisateur);
+                return reponse;
+            }
+
             Map<String, Object> daoRes = UserDAO.changerStatutCompte(adminId, idUtilisateur, statut);
+
+            // ─── Email de notification si le compte est débloqué ──────────
+            if ("OK".equals(daoRes.get("statut")) && "actif".equalsIgnoreCase(statut)) {
+                new Thread(() -> {
+                    try {
+                        String email = UserDAO.findEmailById(idUtilisateur);
+                        if (email != null) {
+                            EmailService.envoyerDeblocageCompte(email);
+                            System.out.println("[ADMIN] Email de déblocage envoyé à " + email);
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("[ADMIN] Échec envoi email déblocage : " + ex.getMessage());
+                    }
+                }).start();
+            }
+
             return daoRes;
         } catch (Exception e) {
             e.printStackTrace();
