@@ -126,9 +126,16 @@ public class ConnexionView extends Application {
     }
 
     private VBox buildRight(Stage stage) {
-        VBox right = new VBox(25);
-        right.setPadding(new Insets(50, 60, 50, 60));
+        VBox right = new VBox(20);
+        right.setPadding(new Insets(40, 60, 40, 60));
         right.setAlignment(Pos.CENTER_LEFT);
+
+        Button btnRetour = new Button("← Retour Accueil");
+        btnRetour.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BRUN_LIGHT + "; -fx-cursor: hand; -fx-font-family: 'Georgia'; -fx-font-weight: bold; -fx-padding: 0 0 10 0;");
+        btnRetour.setOnAction(e -> {
+            try { new HomeView().start(stage); }
+            catch (Exception ex) { ex.printStackTrace(); }
+        });
 
         Text title = new Text("Se connecter");
         title.setFont(Font.font("Georgia", FontWeight.BOLD, 28));
@@ -232,7 +239,7 @@ public class ConnexionView extends Application {
             catch (Exception ex) { ex.printStackTrace(); }
         });
 
-        right.getChildren().addAll(title, emailBox, mdpBox, linkOublie, captchaWidget, msgLabel, btnLogin, footer);
+        right.getChildren().addAll(btnRetour, title, emailBox, mdpBox, linkOublie, captchaWidget, msgLabel, btnLogin, footer);
         return right;
     }
 

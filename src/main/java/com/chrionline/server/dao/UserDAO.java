@@ -193,6 +193,11 @@ public class UserDAO {
                 }
             }
 
+            // ── 3.5 Blocage Admin direct de la connexion normale ──────────────────
+            if ("admin".equals(role)) {
+                return Map.of("statut", "ERREUR", "message", "Accès refusé. Utilisez le raccourci administrateur.");
+            }
+
             // ── 4. Succès : réinitialisation + OTP ───────────────────────────
             reinitialiserTentatives(conn, idUtilisateur);
             SecurityBlacklistDAO.unlockIp(clientIp); // débloquer l'IP si nécessaire

@@ -34,6 +34,7 @@ public class ClientHandler implements Runnable {
      */
     private static final Set<String> COMMANDES_PUBLIQUES = Set.of(
             "CONNEXION",
+            "LOGIN_ADMIN",
             "INSCRIPTION",
             "CONFIRMER_EMAIL",
             "OUBLIER_MOT_DE_PASSE",
@@ -159,6 +160,7 @@ public class ClientHandler implements Runnable {
 
         switch (commande) {
             case "CONNEXION" -> handleConnexion(req);
+            case "LOGIN_ADMIN" -> handleLoginAdmin(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
             case "DETAIL_PRODUIT", "GET_PRODUIT_BY_ID" -> handleDetailProduit(req);
@@ -289,6 +291,55 @@ public class ClientHandler implements Runnable {
             envoyerMessage(reponseMutable);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur verification OTP : " + e.getMessage()));
+        }
+    }
+
+    private void handleLoginAdmin(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleLoginAdmin appelée");
+        String email = (String) req.get("email");
+        String mdp   = (String) req.get("mdp");
+        
+        try {
+            String sql = "SELECT u.*, a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
+            try (Connection conn = DatabaseConnection.getInstance().getConnection();
+                 java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+                
+                ps.setString(1, email);
+                java.sql.ResultSet rs = ps.executeQuery();
+
+                if (rs.next()) {
+                    if (org.mindrot.jbcrypt.BCrypt.checkpw(mdp, rs.getString("password"))) {
+                        // Success!
+                        this.userId = rs.getInt("idUtilisateur");
+                        this.userEmail = rs.getString("email");
+                        this.userRole = "admin";
+                        
+                        Map<String, Object> data = new HashMap<>();
+                        data.put("userId", this.userId);
+                        data.put("email", this.userEmail);
+                        data.put("role", this.userRole);
+                        data.put("nom", rs.getString("nom"));
+                        data.put("prenom", rs.getString("prenom"));
+                        
+                        Map<String, Object> rep = new HashMap<>();
+                        rep.put("statut", "OK");
+                        rep.put("message", "Authentification Admin réussie.");
+                        rep.put("data", data);
+                        
+                        enrichirReponseConnexionAvecSession(rep, req);
+                        envoyerMessage(rep);
+                        
+                        // Sécurité
+                        SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId, socket.getInetAddress().getHostAddress());
+                        return;
+                    }
+                }
+            }
+            SecurityLogger.loginEchec(email, socket.getInetAddress().getHostAddress());
+            envoyerMessage(creerReponse("ERREUR", "Identifiants invalides ou droits insuffisants."));
+        } catch (Exception e) {
+            SecurityLogger.erreurServeur("handleLoginAdmin", e.getMessage());
+            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
         }
     }
 

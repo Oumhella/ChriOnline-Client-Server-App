@@ -144,8 +144,8 @@ public class Server {
             AppLogger.info("[SERVER] Nouveau client connecté : " + clientIp);
 
             // 1.bis. Réduire le temps d'attente (soTimeout) pour libérer les ressources si
-            // inactif
-            socketClient.setSoTimeout(60000);
+            // inactif - AUGMENTE A 5 MINUTES (300000ms) POUR LA PAGE DE CONNEXION
+            socketClient.setSoTimeout(300000);
 
             ClientHandler handler = new ClientHandler(socketClient, this);
             clientConnectes.add(handler);

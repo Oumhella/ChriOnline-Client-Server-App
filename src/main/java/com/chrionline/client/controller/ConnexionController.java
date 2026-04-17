@@ -63,6 +63,12 @@ public class ConnexionController {
                         Map<String, Object> data = (Map<String, Object>) rep.get("data");
                         String role = data != null ? (String) data.getOrDefault("role", "client") : "client";
 
+                        // Blocage admin sur la vue client standard
+                        if ("admin".equals(role)) {
+                            erreur("Accès refusé. Utilisez le raccourci administrateur (CTRL+SHIFT+A).");
+                            return;
+                        }
+
                         // Stockage dans le SessionManager
                         com.chrionline.client.session.SessionManager.getInstance().setUser(data);
 
@@ -210,6 +216,13 @@ public class ConnexionController {
 
                         Map<String, Object> data = (Map<String, Object>) rep.get("data");
                         String role = data != null ? (String) data.getOrDefault("role", "client") : "client";
+
+                        // Blocage admin sur la vue client standard
+                        if ("admin".equals(role)) {
+                            msgOtp.setStyle("-fx-text-fill: #C96B4A;");
+                            msgOtp.setText("✗ Accès refusé. Utilisez le raccourci admin.");
+                            return;
+                        }
 
                         // Stockage session
                         com.chrionline.client.session.SessionManager.getInstance().setUser(data);
