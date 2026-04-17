@@ -196,6 +196,13 @@ public class InscriptionView extends Application {
         form.setPadding(new Insets(32, 48, 32, 48));
         form.setAlignment(Pos.TOP_LEFT);
 
+        Button btnRetour = new Button("← Retour Accueil");
+        btnRetour.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BRUN_LIGHT + "; -fx-cursor: hand; -fx-font-family: 'Georgia'; -fx-font-weight: bold; -fx-padding: 0 0 10 0;");
+        btnRetour.setOnAction(e -> {
+            try { new HomeView().start(stage); }
+            catch (Exception ex) { ex.printStackTrace(); }
+        });
+
         // En-tête sobre
         Text titreForm = new Text("Créer votre compte");
         titreForm.setFont(Font.font("Georgia", FontWeight.BOLD, 24));
@@ -205,7 +212,7 @@ public class InscriptionView extends Application {
         sousTitre.setFont(Font.font("Georgia", FontPosture.ITALIC, 12));
         sousTitre.setFill(Color.web(BRUN_LIGHT));
 
-        VBox header = new VBox(6, titreForm, sousTitre);
+        VBox header = new VBox(6, btnRetour, titreForm, sousTitre);
         header.setPadding(new Insets(0, 0, 12, 0));
         form.getChildren().add(header);
 
