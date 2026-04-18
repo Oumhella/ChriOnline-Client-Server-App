@@ -8,6 +8,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.StackPane;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.paint.Color;
@@ -33,33 +35,55 @@ public class AdminLoginFrame extends Stage {
     private static final int PORT = 12345;
     private static final String HOST = "127.0.0.1";
 
+    private static final String CREME        = "#FAF7F2";
+    private static final String CREME_CARD   = "#FFFEFB";
+    private static final String CREME_INPUT  = "#F5EFE8";
+    private static final String TERRACOTTA   = "#C96B4A";
+    private static final String TERRA_HOVER  = "#A0522D";
+    private static final String BRUN         = "#3E2C1E";
+    private static final String BORDER       = "#E8E0D5";
+
     public AdminLoginFrame() {
         setTitle("Accès Admin RESTREINT");
         
-        VBox root = new VBox(20);
-        root.setPadding(new Insets(30));
-        root.setAlignment(Pos.CENTER);
-        root.setStyle("-fx-background-color: #3E2C1E;"); // Couleur BRUN de la charte
+        StackPane root = new StackPane();
+        root.setStyle("-fx-background-color: " + CREME + ";");
+
+        VBox card = new VBox(20);
+        card.setMaxWidth(350);
+        card.setMaxHeight(350);
+        card.setPadding(new Insets(40));
+        card.setAlignment(Pos.CENTER);
+        card.setStyle("-fx-background-color: " + CREME_CARD + "; -fx-background-radius: 12;");
+        
+        DropShadow shadow = new DropShadow();
+        shadow.setColor(Color.web(BRUN, 0.1));
+        shadow.setRadius(20);
+        shadow.setOffsetY(5);
+        card.setEffect(shadow);
 
         Label lblTitle = new Label("Secure Admin Login");
-        lblTitle.setFont(Font.font("Georgia", FontWeight.BOLD, 20));
-        lblTitle.setTextFill(Color.web("#FDFBF7"));
+        lblTitle.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
+        lblTitle.setTextFill(Color.web(BRUN));
 
         Label lblStatus = new Label();
         lblStatus.setFont(Font.font("Georgia", 13));
-        lblStatus.setTextFill(Color.web("#C96B4A"));
+        lblStatus.setTextFill(Color.web(TERRACOTTA));
 
         TextField txtUsername = new TextField();
         txtUsername.setPromptText("Identifiant Administrateur");
-        txtUsername.setStyle("-fx-background-color: #F5EFE8; -fx-padding: 10px; -fx-font-family: 'Georgia';");
+        txtUsername.setStyle("-fx-background-color: " + CREME_INPUT + "; -fx-border-color: " + BORDER + "; -fx-border-radius: 6; -fx-background-radius: 6; -fx-padding: 12px; -fx-font-family: 'Georgia';");
 
         PasswordField txtPassword = new PasswordField();
         txtPassword.setPromptText("Clé / Mot de passe");
-        txtPassword.setStyle("-fx-background-color: #F5EFE8; -fx-padding: 10px; -fx-font-family: 'Georgia';");
+        txtPassword.setStyle("-fx-background-color: " + CREME_INPUT + "; -fx-border-color: " + BORDER + "; -fx-border-radius: 6; -fx-background-radius: 6; -fx-padding: 12px; -fx-font-family: 'Georgia';");
 
         Button btnLogin = new Button("Authentification");
-        btnLogin.setStyle("-fx-background-color: #C96B4A; -fx-text-fill: white; -fx-padding: 10px 20px; -fx-font-family: 'Georgia'; -fx-font-weight: bold;");
+        btnLogin.setMaxWidth(Double.MAX_VALUE);
+        btnLogin.setStyle("-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; -fx-padding: 12px; -fx-background-radius: 6; -fx-font-family: 'Georgia'; -fx-font-weight: bold;");
         btnLogin.setCursor(javafx.scene.Cursor.HAND);
+        btnLogin.setOnMouseEntered(e -> btnLogin.setStyle("-fx-background-color: " + TERRA_HOVER + "; -fx-text-fill: white; -fx-padding: 12px; -fx-background-radius: 6; -fx-font-family: 'Georgia'; -fx-font-weight: bold;"));
+        btnLogin.setOnMouseExited(e -> btnLogin.setStyle("-fx-background-color: " + TERRACOTTA + "; -fx-text-fill: white; -fx-padding: 12px; -fx-background-radius: 6; -fx-font-family: 'Georgia'; -fx-font-weight: bold;"));
         
         btnLogin.setOnAction(e -> {
             lblStatus.setText("Vérification en cours...");
@@ -78,9 +102,10 @@ public class AdminLoginFrame extends Stage {
             }
         });
 
-        root.getChildren().addAll(lblTitle, txtUsername, txtPassword, btnLogin, lblStatus);
+        card.getChildren().addAll(lblTitle, txtUsername, txtPassword, btnLogin, lblStatus);
+        root.getChildren().add(card);
 
-        Scene scene = new Scene(root, 400, 350);
+        Scene scene = new Scene(root, 450, 450);
         setScene(scene);
     }
 
