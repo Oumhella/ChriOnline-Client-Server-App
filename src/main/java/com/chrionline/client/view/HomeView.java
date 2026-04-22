@@ -78,11 +78,24 @@ public class HomeView extends Application {
         
         layout.getChildren().add(scroll);
 
-        if (stage.getScene() == null) {
-            stage.setScene(new Scene(layout, 1100, 800));
+        Scene scene = stage.getScene();
+        if (scene == null) {
+            scene = new Scene(layout, 1100, 800);
+            stage.setScene(scene);
         } else {
-            stage.getScene().setRoot(layout);
+            scene.setRoot(layout);
         }
+
+        scene.setOnKeyPressed(e -> {
+            if (e.isControlDown() && e.isShiftDown() && e.getCode() == javafx.scene.input.KeyCode.A) {
+                try {
+                    new com.chrionline.admin.view.AdminLoginFrame().show();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
         if (!stage.isShowing()) stage.show();
         
         loadFeaturedProducts();

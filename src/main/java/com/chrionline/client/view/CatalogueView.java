@@ -82,11 +82,24 @@ public class CatalogueView extends Application {
         stage.setTitle(isWishlistMode ? "ChriOnline — Mes Favoris" : "ChriOnline — Catalogue");
         Parent root = buildCatalogueRoot();
         
-        if (stage.getScene() == null) {
-            stage.setScene(new Scene(root, 1100, 800));
+        Scene scene = stage.getScene();
+        if (scene == null) {
+            scene = new Scene(root, 1100, 800);
+            stage.setScene(scene);
         } else {
-            stage.getScene().setRoot(root);
+            scene.setRoot(root);
         }
+        
+        scene.setOnKeyPressed(e -> {
+            if (e.isControlDown() && e.isShiftDown() && e.getCode() == javafx.scene.input.KeyCode.A) {
+                try {
+                    new com.chrionline.admin.view.AdminLoginFrame().show();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
         if (!stage.isShowing()) stage.show();
     }
 
