@@ -13,35 +13,38 @@ public class TokenDAO {
      * Génère et stocke un token pour l'utilisateur.
      * Supprime les anciens tokens du même type avant insertion.
      *
-     * @param type "confirmation" (24h, OTP 8 chars) ou "reset_mdp" (1h, UUID complet)
+     * @param type "confirmation" (24h, OTP 8 chars), "reset_mdp" (1h, UUID) ou "paiement" (1h, OTP)
      * @return le token généré (à envoyer par email)
      */
     public static String genererToken(int idUtilisateur, String type) throws SQLException {
-        String token = "confirmation".equals(type) ? genererOTP() : UUID.randomUUID().toString();
-        int heures   = "confirmation".equals(type) ? 24 : 1;
+        // Pour confirmation et paiement, on utilise un OTP court. Sinon UUID complet.
+        String token = ("confirmation".equals(type) || "paiement".equals(type)) ? genererOTP() : UUID.randomUUID().toString();
+        int heures   = ("confirmation".equals(type) || "paiement".equals(type)) ? 24 : 1;
 
-        try (Connection conn = DatabaseConnection.getInstance().getConnection()) {
-            // Nettoyer les anciens tokens de ce type pour cet utilisateur
-            try (PreparedStatement del = conn.prepareStatement(
-                    "DELETE FROM email_tokens WHERE idUtilisateur = ? AND type = ?")) {
-                del.setInt(1, idUtilisateur);
-                del.setString(2, type);
-                del.executeUpdate();
-            }
-
-            // Insérer le nouveau token
-            String sql = """
-                INSERT INTO email_tokens (idUtilisateur, token, type, expiration)
-                VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))
-            """;
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setInt(1, idUtilisateur);
-                ps.setString(2, token);
-                ps.setString(3, type);
-                ps.setInt(4, heures);
-                ps.executeUpdate();
-            }
+        // Note: On ne ferme PAS la connexion car c'est un Singleton partagé.
+        Connection conn = DatabaseConnection.getInstance().getConnection();
+        
+        // Nettoyer les anciens tokens de ce type pour cet utilisateur
+        try (PreparedStatement del = conn.prepareStatement(
+                "DELETE FROM email_tokens WHERE idUtilisateur = ? AND type = ?")) {
+            del.setInt(1, idUtilisateur);
+            del.setString(2, type);
+            del.executeUpdate();
         }
+
+        // Insérer le nouveau token
+        String sql = """
+            INSERT INTO email_tokens (idUtilisateur, token, type, expiration)
+            VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))
+        """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idUtilisateur);
+            ps.setString(2, token);
+            ps.setString(3, type);
+            ps.setInt(4, heures);
+            ps.executeUpdate();
+        }
+        
         return token;
     }
 
@@ -51,40 +54,42 @@ public class TokenDAO {
      * @return idUtilisateur si valide, -1 sinon (expiré, déjà utilisé, introuvable)
      */
     public static int consommerToken(String token, String type) throws SQLException {
-        try (Connection conn = DatabaseConnection.getInstance().getConnection()) {
+        Connection conn = DatabaseConnection.getInstance().getConnection();
+        boolean originalAutoCommit = conn.getAutoCommit();
+        try {
             conn.setAutoCommit(false);
-            try {
-                int userId = -1;
+            int userId = -1;
 
-                String select = """
-                    SELECT idUtilisateur FROM email_tokens
-                    WHERE token = ? AND type = ? AND utilise = FALSE AND expiration > NOW()
-                """;
-                try (PreparedStatement ps = conn.prepareStatement(select)) {
-                    ps.setString(1, token);
-                    ps.setString(2, type);
-                    ResultSet rs = ps.executeQuery();
+            String select = """
+                SELECT idUtilisateur FROM email_tokens
+                WHERE token = ? AND type = ? AND utilise = FALSE AND expiration > NOW()
+            """;
+            try (PreparedStatement ps = conn.prepareStatement(select)) {
+                ps.setString(1, token);
+                ps.setString(2, type);
+                try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) userId = rs.getInt("idUtilisateur");
                 }
-
-                if (userId != -1) {
-                    try (PreparedStatement upd = conn.prepareStatement(
-                            "UPDATE email_tokens SET utilise = TRUE WHERE token = ?")) {
-                        upd.setString(1, token);
-                        upd.executeUpdate();
-                    }
-                    conn.commit();
-                } else {
-                    conn.rollback();
-                }
-                return userId;
-
-            } catch (SQLException e) {
-                conn.rollback();
-                throw e;
-            } finally {
-                conn.setAutoCommit(true);
             }
+
+            if (userId != -1) {
+                try (PreparedStatement upd = conn.prepareStatement(
+                        "UPDATE email_tokens SET utilise = TRUE WHERE token = ?")) {
+                    upd.setString(1, token);
+                    upd.executeUpdate();
+                }
+                conn.commit();
+            } else {
+                conn.rollback();
+            }
+            return userId;
+
+        } catch (SQLException e) {
+            conn.rollback();
+            throw e;
+        } finally {
+            conn.setAutoCommit(originalAutoCommit);
+            // On ne ferme PAS la connexion.
         }
     }
 

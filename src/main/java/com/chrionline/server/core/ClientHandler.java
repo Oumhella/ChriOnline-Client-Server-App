@@ -134,6 +134,7 @@ public class ClientHandler implements Runnable {
             case "APPLY_DISCOUNT_CATEGORIE" -> envoyerMessage(produitService.handleApplyDiscountCategorie(req));
 
             case "PANIER_VALIDER"        -> handlePanierValider(req);
+            case "COMMANDE_DEMANDER_OTP" -> handleDemanderOTPPayment(req);
             case "COMMANDE_CONFIRMER"    -> handleCommandeConfirmer(req);
             case "GET_ALL_ORDERS",
                  "GET_ORDER_DETAILS",
@@ -244,6 +245,15 @@ public class ClientHandler implements Runnable {
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur réseau : " + e.getMessage()));
+        }
+    }
+
+    private void handleDemanderOTPPayment(Map<String, Object> req) {
+        System.out.println("[HANDLER] >>> handleDemanderOTPPayment");
+        try {
+            envoyerMessage(panierService.demanderOTPPayment(req));
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur lors de la demande OTP : " + e.getMessage()));
         }
     }
 

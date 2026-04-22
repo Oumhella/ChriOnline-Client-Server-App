@@ -107,7 +107,38 @@ public class PanierController {
         }
     }
 
-    public CommandeDTO confirmerCommande(String methodePaiement, String nomCarte, String numeroCarte) {
+    /**
+     * Demande au serveur d'envoyer un OTP de paiement par email.
+     * @return true si l'envoi a réussi, false sinon.
+     */
+    public boolean demanderOTPPayment() {
+        try {
+            Map<String, Object> req = new HashMap<>();
+            req.put("commande",      "COMMANDE_DEMANDER_OTP");
+            req.put("idUtilisateur", idUtilisateur);
+
+            client.connecter();
+            client.envoyerRequete(req);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> rep = (Map<String, Object>) client.lireReponse();
+            
+            if ("OK".equals(rep.get("statut"))) {
+                return true;
+            } else {
+                System.err.println("[PanierController] Erreur demande OTP : " + rep.get("message"));
+                return false;
+            }
+        } catch (Exception e) {
+            System.err.println("[PanierController] Erreur réseau (OTP) : " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Confirme la commande avec le code de sécurité.
+     */
+    public CommandeDTO confirmerCommande(String methodePaiement, String nomCarte, String numeroCarte, String otpCode) {
         try {
             Map<String, Object> req = new HashMap<>();
             req.put("commande", "COMMANDE_CONFIRMER");
@@ -115,6 +146,7 @@ public class PanierController {
             req.put("methodePaiement", methodePaiement);
             req.put("nomCarte", nomCarte);
             req.put("numeroCarte", numeroCarte);
+            req.put("otpCode", otpCode);
 
             client.connecter();
             client.envoyerRequete(req);
@@ -125,11 +157,12 @@ public class PanierController {
             if ("OK".equals(rep.get("statut"))) {
                 return (CommandeDTO) rep.get("commandeResult");
             } else {
-                System.err.println("[PanierController] Erreur confirmation : " + rep.get("message"));
-                return null;
+                // On peut remonter le message d'erreur spécifique (ex: "Code invalide")
+                throw new Exception((String) rep.getOrDefault("message", "Erreur inconnue"));
             }
         } catch (Exception e) {
-            System.err.println("[PanierController] Erreur réseau : " + e.getMessage());
+            System.err.println("[PanierController] Erreur confirmation : " + e.getMessage());
+            // On peut logger plus loin si besoin
             return null;
         }
     }

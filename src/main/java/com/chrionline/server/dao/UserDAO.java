@@ -5,6 +5,7 @@ import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.*;
 import java.util.Map;
+import java.util.HashMap;
 import java.security.SecureRandom;
 
 /**
@@ -72,7 +73,7 @@ public class UserDAO {
             }
 
             conn.commit();
-            Map<String, Object> succes = new java.util.HashMap<>();
+            Map<String, Object> succes = new HashMap<>();
             succes.put("statut", "OK");
             succes.put("message", "Inscription réussie !");
             succes.put("idUtilisateur", idUtilisateur);
@@ -88,6 +89,7 @@ public class UserDAO {
             if (conn != null) {
                 try { conn.setAutoCommit(true); } catch (SQLException ignored) {}
             }
+            // Note: On ne ferme PAS la connexion car c'est un Singleton partagé.
         }
     }
 
@@ -99,7 +101,6 @@ public class UserDAO {
         String email = (String) data.get("email");
         String mdp   = (String) data.get("mdp");
 
-        // Requête unifiée pour récupérer l'utilisateur, l'état de son compte, et son rôle
         String sql = """
             SELECT u.*, 
                    c.statut_compte, 
@@ -110,85 +111,74 @@ public class UserDAO {
             WHERE u.email = ?
         """;
 
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-             
-            ps.setString(1, email);
-            ResultSet rs = ps.executeQuery();
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                 
+                ps.setString(1, email);
+                ResultSet rs = ps.executeQuery();
 
-            if (!rs.next()) {
-                return Map.of("statut", "ERREUR", "message", "Email ou mot de passe incorrect.");
-            }
-
-            int idUtilisateur = rs.getInt("idUtilisateur");
-            boolean accountLocked = rs.getBoolean("account_locked");
-            Timestamp lockTime = rs.getTimestamp("lock_time");
-            int failedAttempts = rs.getInt("failed_attempts");
-            String role = rs.getString("role");
-            String statutCompte = rs.getString("statut_compte");
-
-            // 1. Vérifier si le compte est bloqué temporairement
-            if (accountLocked && lockTime != null) {
-                int dureeMinutes = calculerDureeBlocage(failedAttempts);
-                long tempsEcouleMillis = System.currentTimeMillis() - lockTime.getTime();
-                long tempsRestantSec = (long)(dureeMinutes * 60) - (tempsEcouleMillis / 1000);
-
-                if (tempsRestantSec > 0) {
-                    Map<String, Object> res = new java.util.HashMap<>();
-                    res.put("statut", "ERREUR_BLOQUE");
-                    res.put("message", "Compte temporairement suspendu.");
-                    res.put("delaySeconds", tempsRestantSec);
-                    return res;
-                } else {
-                    // Délai expiré : on peut autoriser une tentative
-                    // Note : on ne réinitialise pas failed_attempts ici, 
-                    // pour que la PROCHAINE erreur passe au palier supérieur.
+                if (!rs.next()) {
+                    return Map.of("statut", "ERREUR", "message", "Email ou mot de passe incorrect.");
                 }
-            }
 
-            // 2. Vérifier si le compte est bloqué par l'admin ou non actif (pour les clients)
-            if ("client".equals(role)) {
-                if ("bloque".equals(statutCompte)) {
-                    return Map.of("statut", "ERREUR", "message", "Votre compte a été bloqué par un administrateur.");
-                } else if ("non actif".equals(statutCompte)) {
-                    return Map.of("statut", "EN_ATTENTE", "message", "Confirmez votre email avant de vous connecter.");
-                }
-            }
+                int idUtilisateur = rs.getInt("idUtilisateur");
+                boolean accountLocked = rs.getBoolean("account_locked");
+                Timestamp lockTime = rs.getTimestamp("lock_time");
+                int failedAttempts = rs.getInt("failed_attempts");
+                String role = rs.getString("role");
+                String statutCompte = rs.getString("statut_compte");
 
-            // 3. Vérifier le mot de passe
-            if (!BCrypt.checkpw(mdp, rs.getString("password"))) {
-                failedAttempts++;
-                // Blocage tous les 3 essais (3, 6, 9, 12...)
-                if (failedAttempts % 3 == 0) {
-                    bloquerCompte(conn, idUtilisateur, failedAttempts);
+                if (accountLocked && lockTime != null) {
                     int dureeMinutes = calculerDureeBlocage(failedAttempts);
-                    Map<String, Object> res = new java.util.HashMap<>();
-                    res.put("statut", "ERREUR_BLOQUE");
-                    res.put("message", "Compte bloqué suite à " + failedAttempts + " échecs.");
-                    res.put("delaySeconds", (long)dureeMinutes * 60);
-                    return res;
-                } else {
-                    incrementerTentatives(conn, idUtilisateur, failedAttempts);
-                    return Map.of("statut", "ERREUR", "message", "Mot de passe incorrect. Tentatives restantes : " + (3 - (failedAttempts % 3)));
+                    long tempsEcouleMillis = System.currentTimeMillis() - lockTime.getTime();
+                    long tempsRestantSec = (long)(dureeMinutes * 60) - (tempsEcouleMillis / 1000);
+
+                    if (tempsRestantSec > 0) {
+                        Map<String, Object> res = new HashMap<>();
+                        res.put("statut", "ERREUR_BLOQUE");
+                        res.put("message", "Compte temporairement suspendu.");
+                        res.put("delaySeconds", tempsRestantSec);
+                        return res;
+                    }
                 }
+
+                if ("client".equals(role)) {
+                    if ("bloque".equals(statutCompte)) {
+                        return Map.of("statut", "ERREUR", "message", "Votre compte a été bloqué par un administrateur.");
+                    } else if ("non actif".equals(statutCompte)) {
+                        return Map.of("statut", "EN_ATTENTE", "message", "Confirmez votre email avant de vous connecter.");
+                    }
+                }
+
+                if (!BCrypt.checkpw(mdp, rs.getString("password"))) {
+                    failedAttempts++;
+                    if (failedAttempts % 3 == 0) {
+                        bloquerCompte(conn, idUtilisateur, failedAttempts);
+                        int dureeMinutes = calculerDureeBlocage(failedAttempts);
+                        Map<String, Object> res = new HashMap<>();
+                        res.put("statut", "ERREUR_BLOQUE");
+                        res.put("message", "Compte bloqué suite à " + failedAttempts + " échecs.");
+                        res.put("delaySeconds", (long)dureeMinutes * 60);
+                        return res;
+                    } else {
+                        incrementerTentatives(conn, idUtilisateur, failedAttempts);
+                        return Map.of("statut", "ERREUR", "message", "Mot de passe incorrect. Tentatives restantes : " + (3 - (failedAttempts % 3)));
+                    }
+                }
+
+                reinitialiserTentatives(conn, idUtilisateur);
+                String otpCode = genererOTP();
+                sauvegarderOTP(conn, idUtilisateur, otpCode);
+
+                try {
+                    com.chrionline.server.service.EmailService.envoyerOTP2FA(email, otpCode);
+                } catch (Exception e) {
+                    return Map.of("statut", "ERREUR", "message", "Erreur lors de l'envoi de l'email OTP. Veuillez réessayer.");
+                }
+
+                return Map.of("statut", "REQUIRES_2FA", "message", "Un code à 6 chiffres vous a été envoyé par email.");
             }
-
-            // 4. Succès d'identification : Réinitialisation des échecs
-            reinitialiserTentatives(conn, idUtilisateur);
-
-            // 5. Génération et sauvegarde du code OTP (6 chiffres)
-            String otpCode = genererOTP();
-            sauvegarderOTP(conn, idUtilisateur, otpCode);
-
-            // 6. Envoi de l'OTP par email
-            try {
-                com.chrionline.server.service.EmailService.envoyerOTP2FA(email, otpCode);
-            } catch (Exception e) {
-                return Map.of("statut", "ERREUR", "message", "Erreur lors de l'envoi de l'email OTP. Veuillez réessayer.");
-            }
-
-            return Map.of("statut", "REQUIRES_2FA", "message", "Un code à 6 chiffres vous a été envoyé par email.");
-
         } catch (Exception e) {
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
         }
@@ -206,55 +196,47 @@ public class UserDAO {
             WHERE u.email = ?
         """;
 
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            
-            ps.setString(1, email);
-            ResultSet rs = ps.executeQuery();
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, email);
+                ResultSet rs = ps.executeQuery();
 
-            if (rs.next()) {
-                String dbOtpCode = rs.getString("otp_code");
-                Timestamp otpExpiry = rs.getTimestamp("otp_expiry");
+                if (rs.next()) {
+                    String dbOtpCode = rs.getString("otp_code");
+                    Timestamp otpExpiry = rs.getTimestamp("otp_expiry");
 
-                // Vérifier si le code correspond et n'est pas expiré
-                if (dbOtpCode != null && dbOtpCode.equals(otpCodeSaisi)) {
-                    if (otpExpiry != null && otpExpiry.getTime() > System.currentTimeMillis()) {
-                        
-                        // OTP Valide : on nettoie les colonnes OTP pour des raisons de sécurité
-                        nettoyerOTP(conn, rs.getInt("idUtilisateur"));
+                    if (dbOtpCode != null && dbOtpCode.equals(otpCodeSaisi)) {
+                        if (otpExpiry != null && otpExpiry.getTime() > System.currentTimeMillis()) {
+                            nettoyerOTP(conn, rs.getInt("idUtilisateur"));
 
-                        // On construit l'objet de connexion finale
-                        Map<String, Object> innerData = new java.util.HashMap<>();
-                        innerData.put("userId", rs.getInt("idUtilisateur"));
-                        innerData.put("nom", rs.getString("nom"));
-                        innerData.put("prenom", rs.getString("prenom"));
-                        innerData.put("email", rs.getString("email"));
-                        innerData.put("role", rs.getString("role"));
+                            Map<String, Object> innerData = new HashMap<>();
+                            innerData.put("userId", rs.getInt("idUtilisateur"));
+                            innerData.put("nom", rs.getString("nom"));
+                            innerData.put("prenom", rs.getString("prenom"));
+                            innerData.put("email", rs.getString("email"));
+                            innerData.put("role", rs.getString("role"));
 
-                        return Map.of(
-                            "statut", "OK", 
-                            "message", "Authentification validée !", 
-                            "data", innerData
-                        );
-                    } else {
-                        return Map.of("statut", "ERREUR", "message", "Le code OTP a expiré (limite de 5 minutes).");
+                            return Map.of("statut", "OK", "message", "Authentification validée !", "data", innerData);
+                        } else {
+                            return Map.of("statut", "ERREUR", "message", "Le code OTP a expiré.");
+                        }
                     }
                 }
+                return Map.of("statut", "ERREUR", "message", "Code OTP invalide.");
             }
-            return Map.of("statut", "ERREUR", "message", "Code OTP invalide.");
-
         } catch (Exception e) {
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
         }
     }
 
-    private static String genererOTP() {
+    public static String genererOTP() {
         SecureRandom random = new SecureRandom();
-        int otp = 100000 + random.nextInt(900000); // Génère entre 100000 et 999999
+        int otp = 100000 + random.nextInt(900000);
         return String.valueOf(otp);
     }
 
-    private static void sauvegarderOTP(Connection conn, int idUtilisateur, String otp) throws Exception {
+    public static void sauvegarderOTP(Connection conn, int idUtilisateur, String otp) throws Exception {
         Timestamp expiry = new Timestamp(System.currentTimeMillis() + (5 * 60 * 1000));
         String sql = "UPDATE utilisateur SET otp_code = ?, otp_expiry = ? WHERE idUtilisateur = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -265,7 +247,7 @@ public class UserDAO {
         }
     }
 
-    private static void nettoyerOTP(Connection conn, int idUtilisateur) throws Exception {
+    public static void nettoyerOTP(Connection conn, int idUtilisateur) throws Exception {
         String sql = "UPDATE utilisateur SET otp_code = NULL, otp_expiry = NULL WHERE idUtilisateur = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idUtilisateur);
@@ -274,10 +256,10 @@ public class UserDAO {
     }
 
     private static int calculerDureeBlocage(int failedAttempts) {
-        if (failedAttempts >= 12) return 1440; // 24 heures
-        if (failedAttempts >= 9)  return 60;   // 1 heure
-        if (failedAttempts >= 6)  return 15;   // 15 minutes
-        if (failedAttempts >= 3)  return 1;    // 1 minute
+        if (failedAttempts >= 12) return 1440;
+        if (failedAttempts >= 9)  return 60;
+        if (failedAttempts >= 6)  return 15;
+        if (failedAttempts >= 3)  return 1;
         return 0;
     }
 
@@ -311,11 +293,13 @@ public class UserDAO {
 
     public static Map<String, Object> activerCompte(int idUtilisateur) {
         String sql = "UPDATE client SET statut_compte = 'actif' WHERE idUtilisateur = ?";
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, idUtilisateur);
-            ps.executeUpdate();
-            return Map.of("statut", "OK", "message", "Compte confirmé ! Vous pouvez vous connecter.");
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, idUtilisateur);
+                ps.executeUpdate();
+                return Map.of("statut", "OK", "message", "Compte confirmé !");
+            }
         } catch (Exception e) {
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
         }
@@ -324,12 +308,14 @@ public class UserDAO {
     public static Map<String, Object> majMotDePasse(int idUtilisateur, String nouveauMdp) {
         String hash = BCrypt.hashpw(nouveauMdp, BCrypt.gensalt());
         String sql  = "UPDATE utilisateur SET password = ? WHERE idUtilisateur = ?";
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, hash);
-            ps.setInt(2, idUtilisateur);
-            ps.executeUpdate();
-            return Map.of("statut", "OK", "message", "Mot de passe réinitialisé avec succès !");
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, hash);
+                ps.setInt(2, idUtilisateur);
+                ps.executeUpdate();
+                return Map.of("statut", "OK", "message", "Mot de passe réinitialisé !");
+            }
         } catch (Exception e) {
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
         }
@@ -337,11 +323,13 @@ public class UserDAO {
 
     public static int findIdByEmail(String email) {
         String sql = "SELECT idUtilisateur FROM utilisateur WHERE email = ?";
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, email);
-            ResultSet rs = ps.executeQuery();
-            return rs.next() ? rs.getInt("idUtilisateur") : -1;
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, email);
+                ResultSet rs = ps.executeQuery();
+                return rs.next() ? rs.getInt("idUtilisateur") : -1;
+            }
         } catch (Exception e) {
             return -1;
         }
@@ -355,23 +343,25 @@ public class UserDAO {
             LEFT JOIN adresse a ON u.idUtilisateur = a.idUtilisateur AND a.type_adresse = 'livraison'
             WHERE u.idUtilisateur = ?
         """;
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, userId);
-            ResultSet rs = ps.executeQuery();
-            if (rs.next()) {
-                Map<String, Object> data = new java.util.HashMap<>();
-                data.put("nom", rs.getString("nom"));
-                data.put("prenom", rs.getString("prenom"));
-                data.put("email", rs.getString("email"));
-                data.put("telephone", rs.getString("telephone"));
-                data.put("rue", rs.getString("rue"));
-                data.put("ville", rs.getString("ville"));
-                data.put("code_postal", rs.getString("code_postal"));
-                data.put("pays", rs.getString("pays"));
-                return Map.of("statut", "OK", "data", data);
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, userId);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    Map<String, Object> data = new HashMap<>();
+                    data.put("nom", rs.getString("nom"));
+                    data.put("prenom", rs.getString("prenom"));
+                    data.put("email", rs.getString("email"));
+                    data.put("telephone", rs.getString("telephone"));
+                    data.put("rue", rs.getString("rue"));
+                    data.put("ville", rs.getString("ville"));
+                    data.put("code_postal", rs.getString("code_postal"));
+                    data.put("pays", rs.getString("pays"));
+                    return Map.of("statut", "OK", "data", data);
+                }
+                return Map.of("statut", "ERREUR", "message", "Utilisateur non trouvé.");
             }
-            return Map.of("statut", "ERREUR", "message", "Utilisateur non trouvé.");
         } catch (Exception e) {
             return Map.of("statut", "ERREUR", "message", "Erreur : " + e.getMessage());
         }
@@ -383,7 +373,6 @@ public class UserDAO {
             conn = DatabaseConnection.getInstance().getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Utilisateur
             String sqlU = "UPDATE utilisateur SET nom = ?, prenom = ?, email = ? WHERE idUtilisateur = ?";
             try (PreparedStatement ps = conn.prepareStatement(sqlU)) {
                 ps.setString(1, (String) data.get("nom"));
@@ -393,7 +382,6 @@ public class UserDAO {
                 ps.executeUpdate();
             }
 
-            // 2. Client (téléphone)
             String sqlC = "UPDATE client SET telephone = ? WHERE idUtilisateur = ?";
             try (PreparedStatement ps = conn.prepareStatement(sqlC)) {
                 String tel = (String) data.getOrDefault("telephone", "");
@@ -402,7 +390,6 @@ public class UserDAO {
                 ps.executeUpdate();
             }
 
-            // 3. Adresse (UPSERT / simple update si existe)
             String sqlA = "UPDATE adresse SET rue = ?, ville = ?, code_postal = ?, pays = ? WHERE idUtilisateur = ? AND type_adresse = 'livraison'";
             try (PreparedStatement ps = conn.prepareStatement(sqlA)) {
                 ps.setString(1, (String) data.get("rue"));
@@ -412,7 +399,6 @@ public class UserDAO {
                 ps.setInt(5, userId);
                 int rows = ps.executeUpdate();
                 
-                // Si pas d'adresse, on l'insère
                 if (rows == 0 && data.get("rue") != null && !((String)data.get("rue")).isBlank()) {
                     String sqlIns = "INSERT INTO adresse (idUtilisateur, type_adresse, rue, ville, code_postal, pays) VALUES (?, 'livraison', ?, ?, ?, ?)";
                     try (PreparedStatement psi = conn.prepareStatement(sqlIns)) {
@@ -427,7 +413,7 @@ public class UserDAO {
             }
 
             conn.commit();
-            return Map.of("statut", "OK", "message", "Profil mis à jour avec succès !");
+            return Map.of("statut", "OK", "message", "Profil mis à jour !");
         } catch (Exception e) {
             rollback(conn);
             return Map.of("statut", "ERREUR", "message", "Échec mise à jour : " + e.getMessage());
@@ -440,23 +426,20 @@ public class UserDAO {
 
     public static java.util.List<Map<String, Object>> listerClients() {
         java.util.List<Map<String, Object>> clients = new java.util.ArrayList<>();
-        String sql = """
-            SELECT u.idUtilisateur, u.nom, u.prenom, u.email, c.statut_compte 
-            FROM utilisateur u 
-            JOIN client c ON u.idUtilisateur = c.idUtilisateur
-            ORDER BY u.idUtilisateur DESC
-        """;
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                Map<String, Object> cli = new java.util.HashMap<>();
-                cli.put("idUtilisateur", rs.getInt("idUtilisateur"));
-                cli.put("nom", rs.getString("nom"));
-                cli.put("prenom", rs.getString("prenom"));
-                cli.put("email", rs.getString("email"));
-                cli.put("statut_compte", rs.getString("statut_compte"));
-                clients.add(cli);
+        String sql = "SELECT u.idUtilisateur, u.nom, u.prenom, u.email, c.statut_compte FROM utilisateur u JOIN client c ON u.idUtilisateur = c.idUtilisateur ORDER BY u.idUtilisateur DESC";
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(sql)) {
+                while (rs.next()) {
+                    Map<String, Object> cli = new HashMap<>();
+                    cli.put("idUtilisateur", rs.getInt("idUtilisateur"));
+                    cli.put("nom", rs.getString("nom"));
+                    cli.put("prenom", rs.getString("prenom"));
+                    cli.put("email", rs.getString("email"));
+                    cli.put("statut_compte", rs.getString("statut_compte"));
+                    clients.add(cli);
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -466,15 +449,13 @@ public class UserDAO {
 
     public static Map<String, Object> changerStatutCompte(int idUtilisateur, String nouveauStatut) {
         String sql = "UPDATE client SET statut_compte = ? WHERE idUtilisateur = ?";
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, nouveauStatut); // 'actif' ou 'non actif'
-            ps.setInt(2, idUtilisateur);
-            int rows = ps.executeUpdate();
-            if (rows > 0) {
-                return Map.of("statut", "OK", "message", "Statut mis à jour avec succès.");
-            } else {
-                return Map.of("statut", "ERREUR", "message", "Client introuvable.");
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, nouveauStatut);
+                ps.setInt(2, idUtilisateur);
+                ps.executeUpdate();
+                return Map.of("statut", "OK", "message", "Statut mis à jour.");
             }
         } catch (Exception e) {
             return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
@@ -484,11 +465,11 @@ public class UserDAO {
     public static java.util.List<String> getAllEmails() {
         java.util.List<String> emails = new java.util.ArrayList<>();
         String sql = "SELECT email FROM utilisateur";
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                emails.add(rs.getString("email"));
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(sql)) {
+                while (rs.next()) emails.add(rs.getString("email"));
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -498,16 +479,12 @@ public class UserDAO {
 
     public static java.util.List<String> getAllAdminEmails() {
         java.util.List<String> emails = new java.util.ArrayList<>();
-        String sql = """
-            SELECT u.email 
-            FROM utilisateur u 
-            JOIN admin a ON a.idAdmin = u.idUtilisateur
-        """;
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                emails.add(rs.getString("email"));
+        String sql = "SELECT u.email FROM utilisateur u JOIN admin a ON a.idAdmin = u.idUtilisateur";
+        try {
+            Connection conn = DatabaseConnection.getInstance().getConnection();
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(sql)) {
+                while (rs.next()) emails.add(rs.getString("email"));
             }
         } catch (Exception e) {
             e.printStackTrace();

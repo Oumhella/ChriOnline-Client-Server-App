@@ -137,6 +137,28 @@ public class EmailService {
         envoyer(destinataire, sujet, corps);
     }
 
+    /**
+     * Envoie le code OTP pour la validation d'une transaction (paiement).
+     */
+    public static void envoyerOTPTransaction(String destinataire, String codeOTP, double montant) throws MessagingException {
+        String sujet = "Validation de votre paiement — ChriOnline";
+        String corps = """
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;border:1px solid #eee;padding:20px;border-radius:10px">
+              <h2 style="color:#C96B4A;text-align:center">Validation de Paiement</h2>
+              <p>Une tentative de paiement de <strong>%.2f MAD</strong> a été initiée sur votre compte.</p>
+              <p>Pour confirmer cette transaction, veuillez utiliser le code de sécurité suivant :</p>
+              <div style="font-size:36px;font-weight:bold;letter-spacing:10px;
+                          background:#FDFBF7;padding:20px;text-align:center;
+                          border:2px dashed #C96B4A;border-radius:8px;color:#3E2C1E;margin:20px 0;">%s</div>
+              <p style="color:#e74c3c;font-weight:bold;">Ce code expire dans 5 minutes.</p>
+              <p style="color:#888;font-size:12px;margin-top:20px;border-top:1px solid #eee;padding-top:10px">
+                 Si vous n'êtes pas à l'origine de cette transaction, <strong>ignorez cet email</strong> et votre compte ne sera pas débité.
+              </p>
+            </div>
+            """.formatted(montant, codeOTP);
+        envoyer(destinataire, sujet, corps);
+    }
+
     // ─── Méthode publique d'envoi ─────────────────────────────────────────────
     
     /**

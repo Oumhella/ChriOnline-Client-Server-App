@@ -19,6 +19,8 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
+import java.util.Optional;
+
 
 public class CheckoutView extends Application {
 
@@ -223,15 +225,48 @@ public class CheckoutView extends Application {
         if ("carte".equals(methode) && (txtNomCarte.getText().isEmpty() || txtNumeroCarte.getText().isEmpty())) {
             msgLabel.setText("⚠ Veuillez remplir les informations de la carte."); return;
         }
-        msgLabel.setText("Traitement en cours...");
+
+        msgLabel.setText("Demande de code de sécurité...");
         final String methodeFinale = methode;
+
         new Thread(() -> {
-            CommandeDTO res = controller.confirmerCommande(methodeFinale, txtNomCarte.getText(), txtNumeroCarte.getText());
+            // 1. Demander l'envoi de l'OTP
+            boolean otpEnvoye = controller.demanderOTPPayment();
+
             Platform.runLater(() -> {
-                if (res != null) {
-                    try { new ConfirmationCommandeView(idUtilisateur, res).start(stage); } catch (Exception ex) {}
+                if (!otpEnvoye) {
+                    msgLabel.setText("⚠ Impossible d'envoyer le code de sécurité. Réessayez.");
+                    return;
+                }
+
+                // 2. Afficher la boîte de dialogue pour saisir le code
+                TextInputDialog dialog = new TextInputDialog();
+                dialog.setTitle("Sécurité - Validation du Paiement");
+                dialog.setHeaderText("Un code de sécurité vous a été envoyé par email.");
+                dialog.setContentText("Veuillez saisir le code à 6 chiffres :");
+
+                // Personnalisation basique du style pour coller à l'esthétique
+                dialog.getDialogPane().setStyle("-fx-background-color: " + CREME + ";");
+                
+                Optional<String> result = dialog.showAndWait();
+                
+                if (result.isPresent()) {
+                    String otpCode = result.get();
+                    msgLabel.setText("Validation de la commande...");
+
+                    // 3. Envoyer la confirmation finale avec l'OTP
+                    new Thread(() -> {
+                        CommandeDTO res = controller.confirmerCommande(methodeFinale, txtNomCarte.getText(), txtNumeroCarte.getText(), otpCode);
+                        Platform.runLater(() -> {
+                            if (res != null) {
+                                try { new ConfirmationCommandeView(idUtilisateur, res).start(stage); } catch (Exception ex) {}
+                            } else {
+                                msgLabel.setText("⚠ Échec : Code invalide ou erreur réseau.");
+                            }
+                        });
+                    }).start();
                 } else {
-                    msgLabel.setText("⚠ Erreur lors de la confirmation.");
+                    msgLabel.setText("⚠ Paiement annulé par l'utilisateur.");
                 }
             });
         }).start();
