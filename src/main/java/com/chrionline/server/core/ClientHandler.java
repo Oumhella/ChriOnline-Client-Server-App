@@ -404,7 +404,7 @@ public class ClientHandler implements Runnable {
             this.timestamp = System.currentTimeMillis();
         }
         boolean isExpired() {
-            return (System.currentTimeMillis() - timestamp) > 120_000; // 120 secondes (2 minutes)
+            return (System.currentTimeMillis() - timestamp) > 30_000; // 30 secondes
         }
     }
 
@@ -509,10 +509,10 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        // 2. Vérification de l'expiration du challenge (120s)
+        // 2. Vérification de l'expiration du challenge (30s)
         if (challengeData.isExpired()) {
             pendingChallenges.remove(email);
-            envoyerMessage(creerReponse("ERREUR", "Le challenge a expiré (limite de 2 minutes). Veuillez en redemander un."));
+            envoyerMessage(creerReponse("ERREUR", "Le challenge a expiré (limite de 30 secondes). Veuillez en redemander un."));
             return;
         }
         
