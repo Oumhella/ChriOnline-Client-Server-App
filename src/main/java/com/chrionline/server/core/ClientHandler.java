@@ -36,6 +36,9 @@ public class ClientHandler implements Runnable {
     private static final Set<String> COMMANDES_PUBLIQUES = Set.of(
             "CONNEXION",
             "LOGIN_ADMIN",
+            "ADMIN_INIT_SECURITY",
+            "ADMIN_GET_CHALLENGE",
+            "ADMIN_LOGIN_CHALLENGE",
             "INSCRIPTION",
             "CONFIRMER_EMAIL",
             "OUBLIER_MOT_DE_PASSE",
@@ -183,6 +186,9 @@ public class ClientHandler implements Runnable {
         switch (commande) {
             case "CONNEXION" -> handleConnexion(req);
             case "LOGIN_ADMIN" -> handleLoginAdmin(req);
+            case "ADMIN_GET_CHALLENGE" -> handleAdminGetChallenge(req);
+            case "ADMIN_LOGIN_CHALLENGE" -> handleAdminLoginChallenge(req);
+            case "ADMIN_INIT_SECURITY" -> handleAdminInitSecurity(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
             case "DETAIL_PRODUIT", "GET_PRODUIT_BY_ID" -> handleDetailProduit(req);
@@ -387,6 +393,148 @@ public class ClientHandler implements Runnable {
             envoyerMessage(reponse);
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur confirmation : " + e.getMessage()));
+        }
+    }
+
+    private static final Map<String, String> pendingChallenges = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void handleAdminInitSecurity(Map<String, Object> req) {
+        String email  = (String) req.get("email");
+        String mdp    = (String) req.get("mdp");
+        String pubKey = (String) req.get("publicKey");
+
+        try {
+            // 1. Vérifier que l'email appartient à un administrateur
+            String sql = "SELECT a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
+            try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
+                 java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, email);
+                java.sql.ResultSet rs = ps.executeQuery();
+                if (!rs.next()) {
+                    envoyerMessage(creerReponse("ERREUR", "Cet email n'est pas un compte administrateur."));
+                    SecurityLogger.loginEchec(email, socket.getInetAddress().getHostAddress());
+                    return;
+                }
+            }
+
+            // 2. Mettre à jour le mot de passe (BCrypt) ET stocker la clé publique
+            //    Le même mot de passe en clair protège le keystore local ET sert de hash en BDD
+            if (com.chrionline.server.dao.UserDAO.initAdminSecurity(email, mdp, pubKey)) {
+                envoyerMessage(creerReponse("OK", "Sécurité Admin initialisée avec succès."));
+                SecurityLogger.logSecurityEvent("ADMIN_INIT_SECURITY", email,
+                        socket.getInetAddress().getHostAddress(), "SUCCESS");
+            } else {
+                envoyerMessage(creerReponse("ERREUR", "Échec de la mise à jour en base de données."));
+            }
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
+        }
+    }
+
+    private void handleAdminGetChallenge(Map<String, Object> req) {
+        String email = (String) req.get("email");
+        if (email == null || email.isBlank()) {
+            envoyerMessage(creerReponse("ERREUR", "Email requis."));
+            return;
+        }
+
+        // Vérifier que l'email appartient à un admin
+        try {
+            String sqlCheck = "SELECT a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
+            try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
+                 java.sql.PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
+                ps.setString(1, email);
+                if (!ps.executeQuery().next()) {
+                    envoyerMessage(creerReponse("ERREUR", "Cet email n'est pas un compte administrateur."));
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
+            return;
+        }
+
+        // Vérifier si la clé publique est déjà enregistrée
+        String pubKey = com.chrionline.server.dao.UserDAO.getPublicKey(email);
+        if (pubKey == null || pubKey.isBlank()) {
+            envoyerMessage(creerReponse("ERREUR_NO_KEY", "Sécurité RSA non initialisée pour cet admin."));
+            return;
+        }
+        
+        String challenge = com.chrionline.securite.ChallengeGenerator.generateChallenge();
+        pendingChallenges.put(email, challenge);
+        
+        Map<String, Object> resp = creerReponse("OK", "Challenge généré");
+        resp.put("challenge", challenge);
+        envoyerMessage(resp);
+    }
+
+    private void handleAdminLoginChallenge(Map<String, Object> req) {
+        String email = (String) req.get("email");
+        String signatureBase64 = (String) req.get("signature");
+        
+        String challenge = pendingChallenges.get(email);
+        if (challenge == null) {
+            envoyerMessage(creerReponse("ERREUR", "Aucun challenge en cours pour cet email."));
+            return;
+        }
+        
+        try {
+            // 1. Récupérer la clé publique
+            String pubKeyBase64 = com.chrionline.server.dao.UserDAO.getPublicKey(email);
+            if (pubKeyBase64 == null) {
+                envoyerMessage(creerReponse("ERREUR_NO_KEY", "Sécurité RSA non initialisée pour cet admin."));
+                return;
+            }
+            
+            // 2. Décoder la clé publique et la signature
+            byte[] pubKeyBytes = java.util.Base64.getDecoder().decode(pubKeyBase64);
+            byte[] sigBytes = java.util.Base64.getDecoder().decode(signatureBase64);
+            
+            java.security.spec.X509EncodedKeySpec spec = new java.security.spec.X509EncodedKeySpec(pubKeyBytes);
+            java.security.KeyFactory kf = java.security.KeyFactory.getInstance("RSA");
+            java.security.PublicKey publicKey = kf.generatePublic(spec);
+            
+            // 3. Vérifier la signature
+            if (com.chrionline.securite.Verifier.verify(challenge, sigBytes, publicKey)) {
+                // Succès !
+                pendingChallenges.remove(email);
+                
+                // Finaliser la session (comme handleLoginAdmin)
+                String sql = "SELECT u.*, a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
+                try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
+                     java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, email);
+                    java.sql.ResultSet rs = ps.executeQuery();
+                    if (rs.next()) {
+                        this.userId = rs.getInt("idUtilisateur");
+                        this.userEmail = rs.getString("email");
+                        this.userRole = "admin";
+                        
+                        Map<String, Object> data = new HashMap<>();
+                        data.put("userId", this.userId);
+                        data.put("email", this.userEmail);
+                        data.put("role", this.userRole);
+                        data.put("nom", rs.getString("nom"));
+                        data.put("prenom", rs.getString("prenom"));
+                        
+                        Map<String, Object> rep = new HashMap<>();
+                        rep.put("statut", "OK");
+                        rep.put("message", "Authentification RSA réussie.");
+                        rep.put("data", data);
+                        
+                        enrichirReponseConnexionAvecSession(rep, req);
+                        envoyerMessage(rep);
+                        
+                        SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId, socket.getInetAddress().getHostAddress());
+                    }
+                }
+            } else {
+                envoyerMessage(creerReponse("ERREUR", "Signature invalide."));
+                SecurityLogger.loginEchec(email, socket.getInetAddress().getHostAddress());
+            }
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur lors de la vérification : " + e.getMessage()));
         }
     }
 

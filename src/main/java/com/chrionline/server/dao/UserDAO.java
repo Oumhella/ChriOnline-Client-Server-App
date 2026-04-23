@@ -686,6 +686,44 @@ public class UserDAO {
         return null;
     }
 
+    /**
+     * Initialise la sécurité RSA pour un administrateur.
+     * Met à jour son mot de passe et stocke sa clé publique.
+     */
+    public static boolean initAdminSecurity(String email, String plainPassword, String publicKeyBase64) {
+        String sql = "UPDATE utilisateur SET password = ?, public_key = ? WHERE email = ?";
+        String hash = BCrypt.hashpw(plainPassword, BCrypt.gensalt());
+        
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, hash);
+            ps.setString(2, publicKeyBase64);
+            ps.setString(3, email);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.err.println("[UserDAO] initAdminSecurity error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Récupère la clé publique d'un utilisateur.
+     */
+    public static String getPublicKey(String email) {
+        String sql = "SELECT public_key FROM utilisateur WHERE email = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getString("public_key");
+            }
+        } catch (Exception e) {
+            System.err.println("[UserDAO] getPublicKey error: " + e.getMessage());
+        }
+        return null;
+    }
+
     private static void rollback(Connection conn) {
         if (conn != null) {
             try { conn.rollback(); } catch (SQLException ignored) {}

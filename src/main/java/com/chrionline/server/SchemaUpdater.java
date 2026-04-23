@@ -10,7 +10,15 @@ public class SchemaUpdater {
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              Statement stmt = conn.createStatement()) {
 
-            // 1. Mise à jour de la table categorie (ajout de la colonne discount)
+            // 1. Mise à jour de la table utilisateur (ajout de la colonne public_key)
+            try {
+                stmt.execute("ALTER TABLE utilisateur ADD COLUMN public_key TEXT");
+                System.out.println("Colonne 'public_key' ajoutée à la table 'utilisateur'.");
+            } catch (Exception e) {
+                System.out.println("La colonne 'public_key' existe peut-être déjà ou erreur: " + e.getMessage());
+            }
+
+            // 2. Mise à jour de la table categorie (ajout de la colonne discount)
             try {
                 stmt.execute("ALTER TABLE categorie ADD COLUMN discount DOUBLE DEFAULT 0");
                 System.out.println("Colonne 'discount' ajoutée à la table 'categorie'.");
