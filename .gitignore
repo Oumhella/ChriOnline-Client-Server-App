@@ -50,3 +50,9 @@ Thumbs.db
 *~
 # Application Config
 src/main/resources/email.properties
+
+# Security Keys (LOCAL ONLY)
+admin.jks
+*.jks
+*.p12
+*.key
