@@ -13,96 +13,246 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.Signature;
+import java.io.File;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.chrionline.securite.KeyStoreManager;
+import com.chrionline.securite.Signer;
+
 /**
- * Fenêtre de connexion Administrateur cachée déclenchée par un raccourci clavier.
+ * Fenêtre de connexion Administrateur cachée (Ctrl+Shift+A).
+ *
+ * Flux :
+ * 1. L'admin entre email + mot de passe → "Se connecter"
+ * 2. Le serveur vérifie si l'admin a une clé publique en BDD :
+ *    - ERREUR_NO_KEY → Premier lancement : on affiche "Confirmer mot de passe",
+ *      on génère les clés RSA, on crée admin.jks, on enregistre la clé publique
+ *      ET on met à jour le mot de passe en BDD (même mot de passe pour les deux).
+ *    - OK + challenge → On signe avec la clé privée locale → session admin.
  */
 public class AdminLoginFrame extends Stage {
-    private static final int PORT = 12345;
-    private static final String HOST = "127.0.0.1";
+
+    private static final String KEYSTORE_FILE = "admin.jks";
+    private static final String KEY_ALIAS = "adminKey";
+
+    private TextField txtEmail;
+    private PasswordField txtPassword;
+    private PasswordField txtConfirmPassword;
+    private Label lblTitle;
+    private Label lblStatus;
+    private Button btnAction;
+    private VBox root;
+
+    /** true lorsque le serveur a répondu ERREUR_NO_KEY et qu'on attend la confirmation du mdp */
+    private boolean pendingInit = false;
 
     public AdminLoginFrame() {
-        setTitle("Accès Admin RESTREINT");
-        
-        VBox root = new VBox(20);
+        setTitle("Accès Admin SÉCURISÉ");
+
+        root = new VBox(20);
         root.setPadding(new Insets(30));
         root.setAlignment(Pos.CENTER);
-        root.setStyle("-fx-background-color: #3E2C1E;"); // Couleur BRUN de la charte
+        root.setStyle("-fx-background-color: #1a1a1a;");
 
-        Label lblTitle = new Label("Secure Admin Login");
-        lblTitle.setFont(Font.font("Georgia", FontWeight.BOLD, 20));
-        lblTitle.setTextFill(Color.web("#FDFBF7"));
+        lblTitle = new Label("Connexion Admin RSA");
+        lblTitle.setFont(Font.font("System", FontWeight.BOLD, 22));
+        lblTitle.setTextFill(Color.WHITE);
 
-        Label lblStatus = new Label();
-        lblStatus.setFont(Font.font("Georgia", 13));
-        lblStatus.setTextFill(Color.web("#C96B4A"));
+        lblStatus = new Label();
+        lblStatus.setTextFill(Color.ORANGE);
+        lblStatus.setWrapText(true);
 
-        TextField txtUsername = new TextField();
-        txtUsername.setPromptText("Identifiant Administrateur");
-        txtUsername.setStyle("-fx-background-color: #F5EFE8; -fx-padding: 10px; -fx-font-family: 'Georgia';");
+        txtEmail = new TextField();
+        txtEmail.setPromptText("Email Administrateur");
+        txtEmail.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-padding: 10;");
 
-        PasswordField txtPassword = new PasswordField();
-        txtPassword.setPromptText("Clé / Mot de passe");
-        txtPassword.setStyle("-fx-background-color: #F5EFE8; -fx-padding: 10px; -fx-font-family: 'Georgia';");
+        txtPassword = new PasswordField();
+        txtPassword.setPromptText("Mot de passe");
+        txtPassword.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-padding: 10;");
 
-        Button btnLogin = new Button("Authentification");
-        btnLogin.setStyle("-fx-background-color: #C96B4A; -fx-text-fill: white; -fx-padding: 10px 20px; -fx-font-family: 'Georgia'; -fx-font-weight: bold;");
-        btnLogin.setCursor(javafx.scene.Cursor.HAND);
-        
-        btnLogin.setOnAction(e -> {
-            lblStatus.setText("Vérification en cours...");
-            try {
-                if (authentifierAdmin(txtUsername.getText(), txtPassword.getText())) {
-                    lblStatus.setText("Authentification réussie !");
-                    AdminDashboardView dashboard = new AdminDashboardView();
-                    dashboard.start(new Stage());
-                    this.close();
-                } else {
-                    lblStatus.setText("Échec: identifiants invalides ou droits insuffisants.");
-                }
-            } catch (Exception ex) {
-                lblStatus.setText("Erreur système : " + ex.getMessage());
-                ex.printStackTrace();
-            }
-        });
+        // Champ de confirmation (caché au départ, affiché uniquement au premier lancement)
+        txtConfirmPassword = new PasswordField();
+        txtConfirmPassword.setPromptText("Confirmer le mot de passe");
+        txtConfirmPassword.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-padding: 10;");
 
-        root.getChildren().addAll(lblTitle, txtUsername, txtPassword, btnLogin, lblStatus);
+        btnAction = new Button("Se connecter");
+        btnAction.setStyle("-fx-background-color: #C96B4A; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20;");
+        btnAction.setCursor(javafx.scene.Cursor.HAND);
+        btnAction.setOnAction(e -> handleAction());
 
-        Scene scene = new Scene(root, 400, 350);
-        setScene(scene);
+        // Au départ : pas de champ de confirmation
+        root.getChildren().addAll(lblTitle, txtEmail, txtPassword, btnAction, lblStatus);
+        setScene(new Scene(root, 450, 400));
     }
 
-    private boolean authentifierAdmin(String username, String pass) {
-        Map<String, Object> reqAuth = new HashMap<>();
-        reqAuth.put("commande", "LOGIN_ADMIN");
-        reqAuth.put("email", username);
-        reqAuth.put("mdp", pass);
+    private void handleAction() {
+        String email = txtEmail.getText().trim();
+        String pass  = txtPassword.getText();
+
+        if (email.isEmpty() || pass.isEmpty()) {
+            lblStatus.setText("Veuillez remplir tous les champs.");
+            return;
+        }
 
         try {
-            com.chrionline.client.network.Client client = com.chrionline.client.network.Client.getInstance("localhost", 12345);
-            try { client.connecter(); } catch(Exception ignored) {}
-            
-            Map<String, Object> finalRep = client.envoyerRequeteAttendreReponse(reqAuth);
-            if (finalRep != null && "OK".equals(finalRep.get("statut"))) {
-                Map<String, Object> data = (Map<String, Object>) finalRep.get("data");
-                com.chrionline.client.session.SessionManager.getInstance().setUser(data);
-                return true;
+            if (pendingInit) {
+                // ── Mode Initialisation (2ème clic) ──
+                String confirm = txtConfirmPassword.getText();
+                if (!pass.equals(confirm)) {
+                    lblStatus.setText("Les mots de passe ne correspondent pas.");
+                    return;
+                }
+                runInitialSetup(email, pass);
+            } else {
+                // ── Mode normal (1er clic) : demander un challenge ──
+                checkAccountAndProceed(email, pass);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception ex) {
+            lblStatus.setText("Erreur : " + ex.getMessage());
+            ex.printStackTrace();
         }
-        return false;
+    }
+
+    /**
+     * Demande un challenge au serveur. Si ERREUR_NO_KEY, passe en mode initialisation.
+     */
+    private void checkAccountAndProceed(String email, String pass) throws Exception {
+        com.chrionline.client.network.Client client =
+                com.chrionline.client.network.Client.getInstance("localhost", 12345);
+        client.connecter();
+
+        lblStatus.setText("Vérification du compte...");
+        Map<String, Object> reqChallenge = new HashMap<>();
+        reqChallenge.put("commande", "ADMIN_GET_CHALLENGE");
+        reqChallenge.put("email", email);
+
+        Map<String, Object> resChallenge = client.envoyerRequeteAttendreReponse(reqChallenge);
+        String statut = (String) resChallenge.get("statut");
+
+        if ("ERREUR_NO_KEY".equals(statut)) {
+            // ── Premier lancement pour ce compte : afficher le champ de confirmation ──
+            switchToInitMode();
+
+        } else if ("OK".equals(statut)) {
+            // ── Compte déjà initialisé : signer le challenge ──
+            String challenge = (String) resChallenge.get("challenge");
+            runChallengeLogin(client, email, pass, challenge);
+
+        } else {
+            lblStatus.setText("Erreur : " + resChallenge.get("message"));
+        }
+    }
+
+    /**
+     * Affiche le formulaire d'initialisation (ajoute le champ de confirmation).
+     */
+    private void switchToInitMode() {
+        pendingInit = true;
+        lblTitle.setText("Initialisation Sécurité Admin");
+        lblStatus.setText("Premier lancement détecté !\nChoisissez un mot de passe qui protégera votre coffre-fort de clés.");
+        btnAction.setText("Générer les clés et Initialiser");
+
+        // Ajouter le champ de confirmation AVANT le bouton
+        if (!root.getChildren().contains(txtConfirmPassword)) {
+            int btnIndex = root.getChildren().indexOf(btnAction);
+            root.getChildren().add(btnIndex, txtConfirmPassword);
+        }
+    }
+
+    /**
+     * Premier lancement : crée admin.jks via keytool (vrai certificat X.509),
+     * lit la clé publique depuis le keystore créé, et synchronise avec le serveur.
+     * Le mot de passe est le MÊME pour le keystore ET la BDD.
+     */
+    private void runInitialSetup(String email, String pass) throws Exception {
+        lblStatus.setText("Génération des clés RSA via keytool (2048 bits)...");
+
+        // 1. Créer le KeyStore via keytool (génère un vrai certificat X.509 auto-signé)
+        //    Le mot de passe choisi protège à la fois le fichier JKS et la clé privée
+        KeyStoreManager.createKeyStore(KEYSTORE_FILE, pass, KEY_ALIAS, null);
+
+        // 2. Lire la clé publique depuis le keystore fraîchement créé
+        java.security.PublicKey pubKey = KeyStoreManager.extractPublicKey(KEYSTORE_FILE, pass, KEY_ALIAS);
+        String pubKeyBase64 = Base64.getEncoder().encodeToString(pubKey.getEncoded());
+
+        // 3. Envoyer au serveur : le serveur hashera le mdp (BCrypt) et stockera la clé publique
+        com.chrionline.client.network.Client client =
+                com.chrionline.client.network.Client.getInstance("localhost", 12345);
+        client.connecter();
+
+        Map<String, Object> reqInit = new HashMap<>();
+        reqInit.put("commande", "ADMIN_INIT_SECURITY");
+        reqInit.put("email", email);
+        reqInit.put("mdp", pass);
+        reqInit.put("publicKey", pubKeyBase64);
+
+        Map<String, Object> resInit = client.envoyerRequeteAttendreReponse(reqInit);
+
+        if ("OK".equals(resInit.get("statut"))) {
+            lblStatus.setText("Clés générées et mot de passe synchronisé ! Connexion...");
+
+            // 4. Auto-connexion immédiate
+            Map<String, Object> reqChallenge = new HashMap<>();
+            reqChallenge.put("commande", "ADMIN_GET_CHALLENGE");
+            reqChallenge.put("email", email);
+            Map<String, Object> resChallenge = client.envoyerRequeteAttendreReponse(reqChallenge);
+
+            if ("OK".equals(resChallenge.get("statut"))) {
+                runChallengeLogin(client, email, pass, (String) resChallenge.get("challenge"));
+            } else {
+                lblStatus.setText("Init OK mais échec challenge : " + resChallenge.get("message"));
+            }
+        } else {
+            // Échec serveur → supprimer le keystore local orphelin
+            new File(KEYSTORE_FILE).delete();
+            lblStatus.setText("Erreur serveur : " + resInit.get("message"));
+        }
+    }
+
+    /**
+     * Connexion par challenge-response RSA.
+     * Le mot de passe ouvre le keystore local → signe le challenge → envoie la signature.
+     */
+    @SuppressWarnings("unchecked")
+    private void runChallengeLogin(com.chrionline.client.network.Client client,
+                                   String email, String pass, String challenge) throws Exception {
+        File ksFile = new File(KEYSTORE_FILE);
+        if (!ksFile.exists()) {
+            lblStatus.setText("Keystore introuvable sur cette machine.\n" +
+                    "Contactez un administrateur pour réinitialiser votre clé.");
+            return;
+        }
+
+        lblStatus.setText("Signature du défi...");
+
+        // 1. Ouvrir le keystore avec le mot de passe et récupérer la clé privée
+        java.security.PrivateKey privateKey = KeyStoreManager.getPrivateKey(
+                KEYSTORE_FILE, pass, KEY_ALIAS, pass);
+
+        // 2. Signer le challenge
+        byte[] signature = Signer.sign(challenge, privateKey);
+        String sigBase64 = Base64.getEncoder().encodeToString(signature);
+
+        // 3. Envoyer la signature au serveur
+        Map<String, Object> reqLogin = new HashMap<>();
+        reqLogin.put("commande", "ADMIN_LOGIN_CHALLENGE");
+        reqLogin.put("email", email);
+        reqLogin.put("signature", sigBase64);
+
+        Map<String, Object> resLogin = client.envoyerRequeteAttendreReponse(reqLogin);
+
+        if ("OK".equals(resLogin.get("statut"))) {
+            lblStatus.setText("Authentification RSA réussie !");
+            Map<String, Object> data = (Map<String, Object>) resLogin.get("data");
+            com.chrionline.client.session.SessionManager.getInstance().setUser(data);
+
+            AdminDashboardView dashboard = new AdminDashboardView();
+            dashboard.start(new Stage());
+            this.close();
+        } else {
+            lblStatus.setText("Échec : " + resLogin.get("message"));
+        }
     }
 }
