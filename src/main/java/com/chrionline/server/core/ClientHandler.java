@@ -396,7 +396,19 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private static final Map<String, String> pendingChallenges = new java.util.concurrent.ConcurrentHashMap<>();
+    private static class ChallengeData {
+        String challenge;
+        long timestamp;
+        ChallengeData(String challenge) {
+            this.challenge = challenge;
+            this.timestamp = System.currentTimeMillis();
+        }
+        boolean isExpired() {
+            return (System.currentTimeMillis() - timestamp) > 120_000; // 120 secondes (2 minutes)
+        }
+    }
+
+    private static final Map<String, ChallengeData> pendingChallenges = new java.util.concurrent.ConcurrentHashMap<>();
 
     private void handleAdminInitSecurity(Map<String, Object> req) {
         String email  = (String) req.get("email");
@@ -433,19 +445,29 @@ public class ClientHandler implements Runnable {
 
     private void handleAdminGetChallenge(Map<String, Object> req) {
         String email = (String) req.get("email");
-        if (email == null || email.isBlank()) {
-            envoyerMessage(creerReponse("ERREUR", "Email requis."));
+        String mdp   = (String) req.get("mdp");
+        String clientIp = socket.getInetAddress().getHostAddress();
+
+        if (email == null || email.isBlank() || mdp == null || mdp.isBlank()) {
+            envoyerMessage(creerReponse("ERREUR", "Email et mot de passe requis."));
             return;
         }
 
-        // Vérifier que l'email appartient à un admin
+        // 1. Protection Brute Force : Vérifier le mot de passe (gère aussi le blocage)
+        Map<String, Object> authResult = com.chrionline.server.dao.UserDAO.verifyAdminPassword(email, mdp, clientIp);
+        if (!"OK".equals(authResult.get("statut"))) {
+            envoyerMessage(authResult);
+            return;
+        }
+
+        // 2. Vérifier que l'email appartient à un admin
         try {
             String sqlCheck = "SELECT a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
             try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
                  java.sql.PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
                 ps.setString(1, email);
                 if (!ps.executeQuery().next()) {
-                    envoyerMessage(creerReponse("ERREUR", "Cet email n'est pas un compte administrateur."));
+                    envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
                     return;
                 }
             }
@@ -454,7 +476,7 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        // Vérifier si la clé publique est déjà enregistrée
+        // 3. Vérifier si la clé publique est déjà enregistrée
         String pubKey = com.chrionline.server.dao.UserDAO.getPublicKey(email);
         if (pubKey == null || pubKey.isBlank()) {
             envoyerMessage(creerReponse("ERREUR_NO_KEY", "Sécurité RSA non initialisée pour cet admin."));
@@ -462,7 +484,7 @@ public class ClientHandler implements Runnable {
         }
         
         String challenge = com.chrionline.securite.ChallengeGenerator.generateChallenge();
-        pendingChallenges.put(email, challenge);
+        pendingChallenges.put(email, new ChallengeData(challenge));
         
         Map<String, Object> resp = creerReponse("OK", "Challenge généré");
         resp.put("challenge", challenge);
@@ -472,12 +494,29 @@ public class ClientHandler implements Runnable {
     private void handleAdminLoginChallenge(Map<String, Object> req) {
         String email = (String) req.get("email");
         String signatureBase64 = (String) req.get("signature");
+        String clientIp = socket.getInetAddress().getHostAddress();
         
-        String challenge = pendingChallenges.get(email);
-        if (challenge == null) {
-            envoyerMessage(creerReponse("ERREUR", "Aucun challenge en cours pour cet email."));
+        // 1. Protection Brute Force : Vérifier si le compte est bloqué
+        Map<String, Object> lockStatus = com.chrionline.server.dao.UserDAO.checkAccountLock(email, clientIp);
+        if (lockStatus != null) {
+            envoyerMessage(lockStatus);
             return;
         }
+
+        ChallengeData challengeData = pendingChallenges.get(email);
+        if (challengeData == null) {
+            envoyerMessage(creerReponse("ERREUR", "Aucun challenge en cours pour cet email. Demandez-en un nouveau."));
+            return;
+        }
+
+        // 2. Vérification de l'expiration du challenge (120s)
+        if (challengeData.isExpired()) {
+            pendingChallenges.remove(email);
+            envoyerMessage(creerReponse("ERREUR", "Le challenge a expiré (limite de 2 minutes). Veuillez en redemander un."));
+            return;
+        }
+        
+        String challenge = challengeData.challenge;
         
         try {
             // 1. Récupérer la clé publique
@@ -499,6 +538,7 @@ public class ClientHandler implements Runnable {
             if (com.chrionline.securite.Verifier.verify(challenge, sigBytes, publicKey)) {
                 // Succès !
                 pendingChallenges.remove(email);
+                com.chrionline.server.dao.UserDAO.resetFailedAttempts(email);
                 
                 // Finaliser la session (comme handleLoginAdmin)
                 String sql = "SELECT u.*, a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
@@ -530,8 +570,9 @@ public class ClientHandler implements Runnable {
                     }
                 }
             } else {
-                envoyerMessage(creerReponse("ERREUR", "Signature invalide."));
-                SecurityLogger.loginEchec(email, socket.getInetAddress().getHostAddress());
+                // Échec de la signature : incrémenter les tentatives
+                Map<String, Object> failRes = com.chrionline.server.dao.UserDAO.handleLoginFailure(email, clientIp);
+                envoyerMessage(failRes);
             }
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur lors de la vérification : " + e.getMessage()));

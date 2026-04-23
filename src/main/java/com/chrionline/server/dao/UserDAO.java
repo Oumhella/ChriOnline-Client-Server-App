@@ -724,6 +724,131 @@ public class UserDAO {
         return null;
     }
 
+    /**
+     * Vérifie le mot de passe d'un administrateur et gère la sécurité (blocage/échec).
+     */
+    public static Map<String, Object> verifyAdminPassword(String email, String plainPassword, String clientIp) {
+        // 1. Vérifier si déjà bloqué
+        Map<String, Object> lockStatus = checkAccountLock(email, clientIp);
+        if (lockStatus != null) return lockStatus;
+
+        String sql = "SELECT password FROM utilisateur WHERE email = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                String hash = rs.getString("password");
+                if (BCrypt.checkpw(plainPassword, hash)) {
+                    // Succès : on ne réinitialise pas encore failed_attempts (on attend la signature)
+                    // Mais on valide que le mot de passe est bon
+                    return Map.of("statut", "OK");
+                }
+            }
+            // Échec (email inconnu ou mdp faux)
+            return handleLoginFailure(email, clientIp);
+        } catch (Exception e) {
+            System.err.println("[UserDAO] verifyAdminPassword error: " + e.getMessage());
+            return Map.of("statut", "ERREUR", "message", "Erreur serveur lors de la vérification.");
+        }
+    }
+
+    /**
+     * Vérifie si un compte est verrouillé et retourne les informations de blocage si c'est le cas.
+     */
+    public static Map<String, Object> checkAccountLock(String email, String clientIp) {
+        String sql = "SELECT account_locked, lock_time, failed_attempts FROM utilisateur WHERE email = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                boolean accountLocked = rs.getBoolean("account_locked");
+                Timestamp lockTime = rs.getTimestamp("lock_time");
+                int failedAttempts = rs.getInt("failed_attempts");
+
+                if (accountLocked && lockTime != null) {
+                    int dureeMinutes = calculerDureeBlocage(failedAttempts);
+                    long tempsEcoule = System.currentTimeMillis() - lockTime.getTime();
+                    long tempsRestantSec = (long) (dureeMinutes * 60) - (tempsEcoule / 1000);
+
+                    if (tempsRestantSec > 0) {
+                        SecurityLogger.compteBloque(email, clientIp);
+                        Map<String, Object> res = new java.util.HashMap<>();
+                        res.put("statut", "ERREUR_BLOQUE");
+                        res.put("message", "Compte temporairement suspendu. Réessayez dans " + tempsRestantSec + "s.");
+                        res.put("delaySeconds", tempsRestantSec);
+                        return res;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[UserDAO] checkAccountLock error: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Gère un échec de connexion (incrémentation tentatives, blocage éventuel).
+     */
+    public static Map<String, Object> handleLoginFailure(String email, String clientIp) {
+        String sql = "SELECT idUtilisateur, failed_attempts FROM utilisateur WHERE email = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                int idUtilisateur = rs.getInt("idUtilisateur");
+                int failedAttempts = rs.getInt("failed_attempts") + 1;
+                
+                SecurityLogger.loginEchec(email, clientIp);
+                
+                if (failedAttempts % 3 == 0) {
+                    try {
+                        bloquerCompte(conn, idUtilisateur, failedAttempts);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    int dureeMinutes = calculerDureeBlocage(failedAttempts);
+                    
+                    if (failedAttempts >= 6 && !"unknown".equals(clientIp)) {
+                        SecurityBlacklistDAO.addIp(clientIp, email, failedAttempts + " échecs de connexion", dureeMinutes);
+                    }
+                    
+                    return Map.of("statut", "ERREUR_BLOQUE", 
+                                 "message", "Compte bloqué suite à " + failedAttempts + " échecs.",
+                                 "delaySeconds", (long) dureeMinutes * 60);
+                } else {
+                    try {
+                        incrementerTentatives(conn, idUtilisateur, failedAttempts);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    int restantes = 3 - (failedAttempts % 3);
+                    return Map.of("statut", "ERREUR", 
+                                 "message", "Identification incorrecte. Tentatives restantes : " + restantes);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[UserDAO] handleLoginFailure error: " + e.getMessage());
+        }
+        return Map.of("statut", "ERREUR", "message", "Erreur lors de la gestion de l'échec.");
+    }
+
+    /**
+     * Réinitialise les tentatives de connexion en cas de succès.
+     */
+    public static void resetFailedAttempts(String email) {
+        String sql = "UPDATE utilisateur SET failed_attempts = 0, account_locked = false, lock_time = NULL WHERE email = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            System.err.println("[UserDAO] resetFailedAttempts error: " + e.getMessage());
+        }
+    }
+
     private static void rollback(Connection conn) {
         if (conn != null) {
             try { conn.rollback(); } catch (SQLException ignored) {}

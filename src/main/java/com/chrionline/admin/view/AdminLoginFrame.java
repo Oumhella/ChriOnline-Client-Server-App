@@ -127,6 +127,7 @@ public class AdminLoginFrame extends Stage {
         Map<String, Object> reqChallenge = new HashMap<>();
         reqChallenge.put("commande", "ADMIN_GET_CHALLENGE");
         reqChallenge.put("email", email);
+        reqChallenge.put("mdp", pass); // Envoyer le mot de passe pour vérification serveur
 
         Map<String, Object> resChallenge = client.envoyerRequeteAttendreReponse(reqChallenge);
         String statut = (String) resChallenge.get("statut");
@@ -140,8 +141,22 @@ public class AdminLoginFrame extends Stage {
             String challenge = (String) resChallenge.get("challenge");
             runChallengeLogin(client, email, pass, challenge);
 
+        } else if ("ERREUR_BLOQUE".equals(statut)) {
+            String msg = (String) resChallenge.get("message");
+            lblStatus.setText(msg);
+            lblStatus.setTextFill(Color.RED);
+            // Optionnel: désactiver le bouton pendant X secondes
+            if (resChallenge.containsKey("delaySeconds")) {
+                long delay = ((Number) resChallenge.get("delaySeconds")).longValue();
+                btnAction.setDisable(true);
+                new Thread(() -> {
+                    try { Thread.sleep(delay * 1000); } catch (InterruptedException ignored) {}
+                    javafx.application.Platform.runLater(() -> btnAction.setDisable(false));
+                }).start();
+            }
         } else {
             lblStatus.setText("Erreur : " + resChallenge.get("message"));
+            lblStatus.setTextFill(Color.ORANGE);
         }
     }
 
@@ -251,8 +266,21 @@ public class AdminLoginFrame extends Stage {
             AdminDashboardView dashboard = new AdminDashboardView();
             dashboard.start(new Stage());
             this.close();
+        } else if ("ERREUR_BLOQUE".equals(resLogin.get("statut"))) {
+            String msg = (String) resLogin.get("message");
+            lblStatus.setText(msg);
+            lblStatus.setTextFill(Color.RED);
+            if (resLogin.containsKey("delaySeconds")) {
+                long delay = ((Number) resLogin.get("delaySeconds")).longValue();
+                btnAction.setDisable(true);
+                new Thread(() -> {
+                    try { Thread.sleep(delay * 1000); } catch (InterruptedException ignored) {}
+                    javafx.application.Platform.runLater(() -> btnAction.setDisable(false));
+                }).start();
+            }
         } else {
             lblStatus.setText("Échec : " + resLogin.get("message"));
+            lblStatus.setTextFill(Color.ORANGE);
         }
     }
 }
