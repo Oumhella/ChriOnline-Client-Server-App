@@ -10,8 +10,11 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
+import javafx.stage.Modality;
 
 import java.io.File;
 import java.util.Base64;
@@ -40,6 +43,7 @@ public class AdminLoginFrame extends Stage {
     private TextField txtEmail;
     private PasswordField txtPassword;
     private PasswordField txtConfirmPassword;
+    private TextField txtTotpCode;
     private Label lblTitle;
     private Label lblStatus;
     private Button btnAction;
@@ -77,14 +81,20 @@ public class AdminLoginFrame extends Stage {
         txtConfirmPassword.setPromptText("Confirmer le mot de passe");
         txtConfirmPassword.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-padding: 10;");
 
+        txtTotpCode = new TextField();
+        txtTotpCode.setPromptText("Code TOTP (Microsoft Authenticator)");
+        txtTotpCode.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-padding: 10;");
+        txtTotpCode.setVisible(false);
+        txtTotpCode.setManaged(false);
+
         btnAction = new Button("Se connecter");
         btnAction.setStyle("-fx-background-color: #C96B4A; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20;");
         btnAction.setCursor(javafx.scene.Cursor.HAND);
         btnAction.setOnAction(e -> handleAction());
 
-        // Au départ : pas de champ de confirmation
-        root.getChildren().addAll(lblTitle, txtEmail, txtPassword, btnAction, lblStatus);
-        setScene(new Scene(root, 450, 400));
+        // Au départ : pas de champ de confirmation ni TOTP
+        root.getChildren().addAll(lblTitle, txtEmail, txtPassword, txtTotpCode, btnAction, lblStatus);
+        setScene(new Scene(root, 450, 450));
     }
 
     private void handleAction() {
@@ -206,12 +216,29 @@ public class AdminLoginFrame extends Stage {
         Map<String, Object> resInit = client.envoyerRequeteAttendreReponse(reqInit);
 
         if ("OK".equals(resInit.get("statut"))) {
-            lblStatus.setText("Clés générées et mot de passe synchronisé ! Connexion...");
+            lblStatus.setText("Clés générées et mot de passe synchronisé !");
 
+            if (resInit.containsKey("otpauthUri")) {
+                String uri = (String) resInit.get("otpauthUri");
+                String totpSecret = (String) resInit.get("totpSecret");
+                showQrCodePopup(uri, totpSecret, () -> continueLoginAfterSetup(client, email, pass));
+            } else {
+                continueLoginAfterSetup(client, email, pass);
+            }
+        } else {
+            // Échec serveur → supprimer le keystore local orphelin
+            new File(KEYSTORE_FILE).delete();
+            lblStatus.setText("Erreur serveur : " + resInit.get("message"));
+        }
+    }
+
+    private void continueLoginAfterSetup(com.chrionline.client.network.Client client, String email, String pass) {
+        try {
             // 4. Auto-connexion immédiate
             Map<String, Object> reqChallenge = new HashMap<>();
             reqChallenge.put("commande", "ADMIN_GET_CHALLENGE");
             reqChallenge.put("email", email);
+            reqChallenge.put("mdp", pass); // Requis par le serveur pour vérifier le 1er facteur
             Map<String, Object> resChallenge = client.envoyerRequeteAttendreReponse(reqChallenge);
 
             if ("OK".equals(resChallenge.get("statut"))) {
@@ -219,10 +246,9 @@ public class AdminLoginFrame extends Stage {
             } else {
                 lblStatus.setText("Init OK mais échec challenge : " + resChallenge.get("message"));
             }
-        } else {
-            // Échec serveur → supprimer le keystore local orphelin
-            new File(KEYSTORE_FILE).delete();
-            lblStatus.setText("Erreur serveur : " + resInit.get("message"));
+        } catch (Exception e) {
+            lblStatus.setText("Erreur post-init : " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -258,7 +284,22 @@ public class AdminLoginFrame extends Stage {
 
         Map<String, Object> resLogin = client.envoyerRequeteAttendreReponse(reqLogin);
 
-        if ("OK".equals(resLogin.get("statut"))) {
+        if ("REQUIRES_TOTP".equals(resLogin.get("statut"))) {
+            lblStatus.setText("Signature valide. Veuillez entrer le code TOTP.");
+            lblStatus.setTextFill(Color.web("#6B9E7A")); // Vert
+
+            // Mettre à jour l'interface pour demander le code TOTP
+            txtEmail.setVisible(false);
+            txtEmail.setManaged(false);
+            txtPassword.setVisible(false);
+            txtPassword.setManaged(false);
+            
+            txtTotpCode.setVisible(true);
+            txtTotpCode.setManaged(true);
+            
+            btnAction.setText("Vérifier TOTP");
+            btnAction.setOnAction(e -> runTotpVerification(client, email));
+        } else if ("OK".equals(resLogin.get("statut"))) {
             lblStatus.setText("Authentification RSA réussie !");
             Map<String, Object> data = (Map<String, Object>) resLogin.get("data");
             com.chrionline.client.session.SessionManager.getInstance().setUser(data);
@@ -282,5 +323,113 @@ public class AdminLoginFrame extends Stage {
             lblStatus.setText("Échec : " + resLogin.get("message"));
             lblStatus.setTextFill(Color.ORANGE);
         }
+    }
+
+    /**
+     * Affiche le QR Code pour configurer Microsoft Authenticator.
+     */
+    private void showQrCodePopup(String otpauthUri, String totpSecret, Runnable onComplete) {
+        javafx.application.Platform.runLater(() -> {
+            Stage popup = new Stage();
+            popup.initModality(Modality.APPLICATION_MODAL);
+            popup.setTitle("Configuration 2FA - Microsoft Authenticator");
+
+            VBox layout = new VBox(15);
+            layout.setAlignment(Pos.CENTER);
+            layout.setPadding(new Insets(20));
+            layout.setStyle("-fx-background-color: #1a1a1a;");
+
+            Label info = new Label("1. Ouvrez Microsoft Authenticator\n2. Ajoutez un compte professionnel/scolaire\n3. Scannez ce QR Code :");
+            info.setTextFill(Color.WHITE);
+            info.setWrapText(true);
+
+            // Charger l'image depuis l'API publique (quickchart.io est plus fiable)
+            try {
+                String qrUrl = "https://quickchart.io/qr?size=250&text=" + 
+                               java.net.URLEncoder.encode(otpauthUri, "UTF-8");
+                
+                // backgroundLoading = false pour forcer le chargement immédiat et lever une exception si erreur
+                Image qrImage = new Image(qrUrl, false);
+                
+                if (qrImage.isError()) {
+                    throw new Exception("Erreur interne Image JavaFX", qrImage.getException());
+                }
+                
+                ImageView qrView = new ImageView(qrImage);
+                layout.getChildren().add(qrView);
+            } catch (Exception e) {
+                Label err = new Label("Erreur de chargement du QR Code (vérifiez votre connexion).\nEntrez le secret manuel ci-dessous dans votre application.");
+                err.setTextFill(Color.RED);
+                err.setWrapText(true);
+                err.setAlignment(Pos.CENTER);
+                layout.getChildren().add(err);
+            }
+
+            Label manual = new Label("Secret manuel : " + totpSecret);
+            manual.setTextFill(Color.ORANGE);
+            manual.setStyle("-fx-font-weight: bold;");
+
+            Button btnDone = new Button("J'ai scanné le code");
+            btnDone.setStyle("-fx-background-color: #6B9E7A; -fx-text-fill: white; -fx-font-weight: bold;");
+            btnDone.setOnAction(e -> {
+                popup.close();
+                onComplete.run();
+            });
+
+            layout.getChildren().addAll(info, manual, btnDone);
+            popup.setScene(new Scene(layout, 350, 450));
+            popup.showAndWait();
+        });
+    }
+
+    /**
+     * Vérification finale du code TOTP
+     */
+    @SuppressWarnings("unchecked")
+    private void runTotpVerification(com.chrionline.client.network.Client client, String email) {
+        String code = txtTotpCode.getText().trim();
+        if (code.length() != 6) {
+            lblStatus.setText("Veuillez entrer les 6 chiffres.");
+            lblStatus.setTextFill(Color.ORANGE);
+            return;
+        }
+
+        lblStatus.setText("Vérification...");
+        lblStatus.setTextFill(Color.WHITE);
+        btnAction.setDisable(true);
+
+        new Thread(() -> {
+            try {
+                Map<String, Object> req = new HashMap<>();
+                req.put("commande", "ADMIN_VERIFY_TOTP");
+                req.put("email", email);
+                req.put("totpCode", code);
+
+                Map<String, Object> res = client.envoyerRequeteAttendreReponse(req);
+
+                javafx.application.Platform.runLater(() -> {
+                    btnAction.setDisable(false);
+                    if ("OK".equals(res.get("statut"))) {
+                        lblStatus.setText("Authentification réussie !");
+                        lblStatus.setTextFill(Color.web("#6B9E7A"));
+
+                        Map<String, Object> data = (Map<String, Object>) res.get("data");
+                        com.chrionline.client.session.SessionManager.getInstance().setUser(data);
+
+                        AdminDashboardView dashboard = new AdminDashboardView();
+                        dashboard.start(new Stage());
+                        this.close();
+                    } else {
+                        lblStatus.setText("Code invalide : " + res.get("message"));
+                        lblStatus.setTextFill(Color.RED);
+                    }
+                });
+            } catch (Exception e) {
+                javafx.application.Platform.runLater(() -> {
+                    btnAction.setDisable(false);
+                    lblStatus.setText("Erreur réseau : " + e.getMessage());
+                });
+            }
+        }).start();
     }
 }
