@@ -45,6 +45,14 @@ public class SchemaUpdater {
                 System.out.println("Erreur lors de la recréation de 'security_blacklist': " + e.getMessage());
             }
 
+            // 4. Ajout de la colonne totp_secret pour l'authentification 2FA TOTP
+            try {
+                stmt.execute("ALTER TABLE utilisateur ADD COLUMN totp_secret VARCHAR(64)");
+                System.out.println("Colonne 'totp_secret' ajoutée à la table 'utilisateur'.");
+            } catch (Exception e) {
+                System.out.println("La colonne 'totp_secret' existe peut-être déjà ou erreur: " + e.getMessage());
+            }
+
             System.out.println("Mise à jour terminée !");
             System.exit(0);
         } catch (Exception e) {

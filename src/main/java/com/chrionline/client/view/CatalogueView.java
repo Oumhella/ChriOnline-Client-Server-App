@@ -90,15 +90,6 @@ public class CatalogueView extends Application {
             scene.setRoot(root);
         }
         
-        scene.setOnKeyPressed(e -> {
-            if (e.isControlDown() && e.isShiftDown() && e.getCode() == javafx.scene.input.KeyCode.A) {
-                try {
-                    new com.chrionline.admin.view.AdminLoginFrame().show();
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-        });
 
         if (!stage.isShowing()) stage.show();
     }

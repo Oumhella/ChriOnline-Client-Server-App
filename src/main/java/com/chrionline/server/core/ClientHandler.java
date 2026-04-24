@@ -39,6 +39,7 @@ public class ClientHandler implements Runnable {
             "ADMIN_INIT_SECURITY",
             "ADMIN_GET_CHALLENGE",
             "ADMIN_LOGIN_CHALLENGE",
+            "ADMIN_VERIFY_TOTP",
             "INSCRIPTION",
             "CONFIRMER_EMAIL",
             "OUBLIER_MOT_DE_PASSE",
@@ -189,6 +190,7 @@ public class ClientHandler implements Runnable {
             case "ADMIN_GET_CHALLENGE" -> handleAdminGetChallenge(req);
             case "ADMIN_LOGIN_CHALLENGE" -> handleAdminLoginChallenge(req);
             case "ADMIN_INIT_SECURITY" -> handleAdminInitSecurity(req);
+            case "ADMIN_VERIFY_TOTP" -> handleAdminVerifyTotp(req);
             case "INSCRIPTION" -> handleInscription(req);
             case "LISTE_PRODUITS" -> handleListeProduits(req);
             case "DETAIL_PRODUIT", "GET_PRODUIT_BY_ID" -> handleDetailProduit(req);
@@ -404,11 +406,13 @@ public class ClientHandler implements Runnable {
             this.timestamp = System.currentTimeMillis();
         }
         boolean isExpired() {
-            return (System.currentTimeMillis() - timestamp) > 120_000; // 120 secondes (2 minutes)
+            return (System.currentTimeMillis() - timestamp) > 30_000; // 30 secondes
         }
     }
 
     private static final Map<String, ChallengeData> pendingChallenges = new java.util.concurrent.ConcurrentHashMap<>();
+    // Sessions admin en attente de vérification TOTP (email → timestamp de validation RSA)
+    private static final Map<String, Long> pendingTotpSessions = new java.util.concurrent.ConcurrentHashMap<>();
 
     private void handleAdminInitSecurity(Map<String, Object> req) {
         String email  = (String) req.get("email");
@@ -429,10 +433,17 @@ public class ClientHandler implements Runnable {
                 }
             }
 
-            // 2. Mettre à jour le mot de passe (BCrypt) ET stocker la clé publique
-            //    Le même mot de passe en clair protège le keystore local ET sert de hash en BDD
-            if (com.chrionline.server.dao.UserDAO.initAdminSecurity(email, mdp, pubKey)) {
-                envoyerMessage(creerReponse("OK", "Sécurité Admin initialisée avec succès."));
+            // 2. Mettre à jour le mot de passe (BCrypt), stocker la clé publique ET générer le secret TOTP
+            String totpSecret = com.chrionline.server.dao.UserDAO.initAdminSecurity(email, mdp, pubKey);
+            if (totpSecret != null) {
+                // Générer l'URI otpauth pour le QR Code
+                String otpauthUri = com.chrionline.securite.TOTPService.generateOtpAuthUri(totpSecret, email);
+                
+                Map<String, Object> resp = creerReponse("OK", "Sécurité Admin initialisée avec succès.");
+                resp.put("totpSecret", totpSecret);
+                resp.put("otpauthUri", otpauthUri);
+                envoyerMessage(resp);
+                
                 SecurityLogger.logSecurityEvent("ADMIN_INIT_SECURITY", email,
                         socket.getInetAddress().getHostAddress(), "SUCCESS");
             } else {
@@ -509,10 +520,10 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        // 2. Vérification de l'expiration du challenge (120s)
+        // 2. Vérification de l'expiration du challenge (30s)
         if (challengeData.isExpired()) {
             pendingChallenges.remove(email);
-            envoyerMessage(creerReponse("ERREUR", "Le challenge a expiré (limite de 2 minutes). Veuillez en redemander un."));
+            envoyerMessage(creerReponse("ERREUR", "Le challenge a expiré (limite de 30 secondes). Veuillez en redemander un."));
             return;
         }
         
@@ -536,39 +547,19 @@ public class ClientHandler implements Runnable {
             
             // 3. Vérifier la signature
             if (com.chrionline.securite.Verifier.verify(challenge, sigBytes, publicKey)) {
-                // Succès !
+                // Signature RSA valide → demander le code TOTP (2ème facteur)
                 pendingChallenges.remove(email);
                 com.chrionline.server.dao.UserDAO.resetFailedAttempts(email);
                 
-                // Finaliser la session (comme handleLoginAdmin)
-                String sql = "SELECT u.*, a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
-                try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
-                     java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
-                    ps.setString(1, email);
-                    java.sql.ResultSet rs = ps.executeQuery();
-                    if (rs.next()) {
-                        this.userId = rs.getInt("idUtilisateur");
-                        this.userEmail = rs.getString("email");
-                        this.userRole = "admin";
-                        
-                        Map<String, Object> data = new HashMap<>();
-                        data.put("userId", this.userId);
-                        data.put("email", this.userEmail);
-                        data.put("role", this.userRole);
-                        data.put("nom", rs.getString("nom"));
-                        data.put("prenom", rs.getString("prenom"));
-                        
-                        Map<String, Object> rep = new HashMap<>();
-                        rep.put("statut", "OK");
-                        rep.put("message", "Authentification RSA réussie.");
-                        rep.put("data", data);
-                        
-                        enrichirReponseConnexionAvecSession(rep, req);
-                        envoyerMessage(rep);
-                        
-                        SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId, socket.getInetAddress().getHostAddress());
-                    }
-                }
+                // Stocker l'email dans les sessions en attente de TOTP
+                pendingTotpSessions.put(email, System.currentTimeMillis());
+                
+                Map<String, Object> rep = creerReponse("REQUIRES_TOTP", 
+                    "Signature RSA valide. Entrez le code de votre application Authenticator.");
+                envoyerMessage(rep);
+                
+                SecurityLogger.logSecurityEvent("ADMIN_RSA_OK", email,
+                        socket.getInetAddress().getHostAddress(), "AWAITING_TOTP");
             } else {
                 // Échec de la signature : incrémenter les tentatives
                 Map<String, Object> failRes = com.chrionline.server.dao.UserDAO.handleLoginFailure(email, clientIp);
@@ -576,6 +567,85 @@ public class ClientHandler implements Runnable {
             }
         } catch (Exception e) {
             envoyerMessage(creerReponse("ERREUR", "Erreur lors de la vérification : " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Vérifie le code TOTP soumis par l'admin (3ème facteur après mdp + RSA).
+     * Finalise la session admin si le code est valide.
+     */
+    private void handleAdminVerifyTotp(Map<String, Object> req) {
+        String email = (String) req.get("email");
+        String totpCode = (String) req.get("totpCode");
+        String clientIp = socket.getInetAddress().getHostAddress();
+
+        if (email == null || totpCode == null) {
+            envoyerMessage(creerReponse("ERREUR", "Email et code TOTP requis."));
+            return;
+        }
+
+        // 1. Vérifier qu'une session TOTP est en attente pour cet email
+        Long rsaTimestamp = pendingTotpSessions.get(email);
+        if (rsaTimestamp == null) {
+            envoyerMessage(creerReponse("ERREUR", "Aucune session RSA validée. Recommencez la connexion."));
+            return;
+        }
+
+        // 2. Vérifier que la session TOTP n'a pas expiré (2 minutes après la validation RSA)
+        if (System.currentTimeMillis() - rsaTimestamp > 120_000) {
+            pendingTotpSessions.remove(email);
+            envoyerMessage(creerReponse("ERREUR", "Session TOTP expirée. Recommencez la connexion."));
+            return;
+        }
+
+        // 3. Récupérer le secret TOTP de l'admin
+        String totpSecret = com.chrionline.server.dao.UserDAO.getTotpSecret(email);
+        if (totpSecret == null) {
+            envoyerMessage(creerReponse("ERREUR", "TOTP non configuré pour cet admin."));
+            return;
+        }
+
+        // 4. Vérifier le code TOTP
+        if (!com.chrionline.securite.TOTPService.verifyCode(totpSecret, totpCode)) {
+            envoyerMessage(creerReponse("ERREUR", "Code TOTP invalide. Vérifiez votre application Authenticator."));
+            SecurityLogger.logSecurityEvent("ADMIN_TOTP_FAIL", email, clientIp, "INVALID_CODE");
+            return;
+        }
+
+        // 5. Succès ! Nettoyer et finaliser la session
+        pendingTotpSessions.remove(email);
+
+        try {
+            String sql = "SELECT u.*, a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
+            try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
+                 java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, email);
+                java.sql.ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    this.userId = rs.getInt("idUtilisateur");
+                    this.userEmail = rs.getString("email");
+                    this.userRole = "admin";
+
+                    Map<String, Object> data = new HashMap<>();
+                    data.put("userId", this.userId);
+                    data.put("email", this.userEmail);
+                    data.put("role", this.userRole);
+                    data.put("nom", rs.getString("nom"));
+                    data.put("prenom", rs.getString("prenom"));
+
+                    Map<String, Object> rep = new HashMap<>();
+                    rep.put("statut", "OK");
+                    rep.put("message", "Authentification 3 facteurs réussie.");
+                    rep.put("data", data);
+
+                    enrichirReponseConnexionAvecSession(rep, req);
+                    envoyerMessage(rep);
+
+                    SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId, clientIp);
+                }
+            }
+        } catch (Exception e) {
+            envoyerMessage(creerReponse("ERREUR", "Erreur serveur : " + e.getMessage()));
         }
     }
 

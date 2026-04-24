@@ -4,7 +4,6 @@ import com.chrionline.client.network.Client;
 import com.chrionline.client.view.CatalogueView;
 import com.chrionline.client.view.ConfirmationView;
 import com.chrionline.client.view.OTPView;
-import com.chrionline.admin.view.AdminDashboardView;
 import javafx.application.Platform;
 import javafx.animation.*;
 import javafx.scene.control.*;
@@ -65,7 +64,7 @@ public class ConnexionController {
 
                         // Blocage admin sur la vue client standard
                         if ("admin".equals(role)) {
-                            erreur("Accès refusé. Utilisez le raccourci administrateur (CTRL+SHIFT+A).");
+                            erreur("Accès refusé. Utilisez l'application d'administration séparée.");
                             return;
                         }
 
@@ -96,11 +95,7 @@ public class ConnexionController {
                             }
                             Platform.runLater(() -> {
                                 try {
-                                    if ("admin".equals(role)) {
-                                        new com.chrionline.admin.view.AdminDashboardView().start(stage);
-                                    } else {
                                         new com.chrionline.client.view.HomeView().start(stage);
-                                    }
                                 } catch (Exception ex) {
                                     ex.printStackTrace();
                                     erreur("Erreur de redirection : " + ex.getMessage());
@@ -220,7 +215,7 @@ public class ConnexionController {
                         // Blocage admin sur la vue client standard
                         if ("admin".equals(role)) {
                             msgOtp.setStyle("-fx-text-fill: #C96B4A;");
-                            msgOtp.setText("✗ Accès refusé. Utilisez le raccourci admin.");
+                            msgOtp.setText("✗ Accès refusé. Utilisez l'application d'administration séparée.");
                             return;
                         }
 
@@ -234,11 +229,7 @@ public class ConnexionController {
                             try { Thread.sleep(800); } catch (InterruptedException ignored) {}
                             Platform.runLater(() -> {
                                 try {
-                                    if ("admin".equals(role)) {
-                                        new AdminDashboardView().start(stage);
-                                    } else {
                                         new com.chrionline.client.view.HomeView().start(stage);
-                                    }
                                 } catch (Exception ex) {
                                     ex.printStackTrace();
                                 }
