@@ -174,8 +174,7 @@ public class ClientHandler implements Runnable {
 
         // ─── Contrôle d'accès : Autorisation Admin (Command Injection Prevention) ──
         if (ADMIN_COMMANDS.contains(commande) && !"admin".equals(userRole)) {
-            System.out.println("[SECURITY] Commande admin '" + commande + "' rejetée : rôle='"
-                    + userRole + "' userId=" + userId + " (" + clientIp + ")");
+            SecurityLogger.accesNonAutorise(commande, userId, userRole, clientIp);
             envoyerMessage(creerReponse("ERREUR", "Accès refusé. Droits administrateur requis."));
             return;
         }
@@ -392,6 +391,7 @@ public class ClientHandler implements Runnable {
 
     private void handleBlockIP(Map<String, Object> req) {
         if (!"admin".equals(userRole)) {
+            SecurityLogger.accesNonAutorise("ADMIN_BLOCK_IP", userId, userRole, socket.getInetAddress().getHostAddress());
             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
             return;
         }
