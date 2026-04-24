@@ -687,23 +687,48 @@ public class UserDAO {
     }
 
     /**
-     * Initialise la sécurité RSA pour un administrateur.
-     * Met à jour son mot de passe et stocke sa clé publique.
+     * Initialise la sécurité RSA + TOTP pour un administrateur.
+     * Met à jour son mot de passe, stocke sa clé publique et génère un secret TOTP.
+     *
+     * @return le secret TOTP Base32 (pour afficher le QR Code côté client), ou null en cas d'erreur
      */
-    public static boolean initAdminSecurity(String email, String plainPassword, String publicKeyBase64) {
-        String sql = "UPDATE utilisateur SET password = ?, public_key = ? WHERE email = ?";
+    public static String initAdminSecurity(String email, String plainPassword, String publicKeyBase64) {
+        String totpSecret = com.chrionline.securite.TOTPService.generateSecret();
+        String sql = "UPDATE utilisateur SET password = ?, public_key = ?, totp_secret = ? WHERE email = ?";
         String hash = BCrypt.hashpw(plainPassword, BCrypt.gensalt());
         
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, hash);
             ps.setString(2, publicKeyBase64);
-            ps.setString(3, email);
-            return ps.executeUpdate() > 0;
+            ps.setString(3, totpSecret);
+            ps.setString(4, email);
+            if (ps.executeUpdate() > 0) {
+                return totpSecret;
+            }
+            return null;
         } catch (Exception e) {
             System.err.println("[UserDAO] initAdminSecurity error: " + e.getMessage());
-            return false;
+            return null;
         }
+    }
+
+    /**
+     * Récupère le secret TOTP d'un administrateur pour la vérification 2FA.
+     */
+    public static String getTotpSecret(String email) {
+        String sql = "SELECT totp_secret FROM utilisateur WHERE email = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getString("totp_secret");
+            }
+        } catch (Exception e) {
+            System.err.println("[UserDAO] getTotpSecret error: " + e.getMessage());
+        }
+        return null;
     }
 
     /**
