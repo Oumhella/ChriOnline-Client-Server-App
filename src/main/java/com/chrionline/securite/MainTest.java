@@ -18,7 +18,7 @@ public class MainTest {
             String pass = "testPass123";
             String alias = "testAlias";
             
-            PrivateKey privateKey = KeyStoreManager.getPrivateKey(keystorePath, pass, alias, pass);
+            PrivateKey privateKey = KeyStoreManager.getPrivateKey(keystorePath, alias);
             System.out.println("[2] Clé privée chargée avec succès.");
             System.out.println("    Voici son contenu (Base64) :");
             System.out.println("    " + Base64.getEncoder().encodeToString(privateKey.getEncoded()));
@@ -29,7 +29,7 @@ public class MainTest {
             System.out.println("[3] Challenge signé par le serveur/client.");
 
             // 4. Chargement de la clé publique
-            PublicKey publicKey = KeyStoreManager.getPublicKey(keystorePath, pass, alias);
+            PublicKey publicKey = KeyStoreManager.getPublicKey(keystorePath, alias);
             System.out.println("[4] Clé publique chargée avec succès.");
             System.out.println("    Voici son contenu (Base64) :");
             System.out.println("    " + Base64.getEncoder().encodeToString(publicKey.getEncoded()));

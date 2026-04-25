@@ -456,18 +456,17 @@ public class ClientHandler implements Runnable {
 
     private void handleAdminGetChallenge(Map<String, Object> req) {
         String email = (String) req.get("email");
-        String mdp   = (String) req.get("mdp");
         String clientIp = socket.getInetAddress().getHostAddress();
 
-        if (email == null || email.isBlank() || mdp == null || mdp.isBlank()) {
-            envoyerMessage(creerReponse("ERREUR", "Email et mot de passe requis."));
+        if (email == null || email.isBlank()) {
+            envoyerMessage(creerReponse("ERREUR", "Email requis."));
             return;
         }
 
-        // 1. Protection Brute Force : Vérifier le mot de passe (gère aussi le blocage)
-        Map<String, Object> authResult = com.chrionline.server.dao.UserDAO.verifyAdminPassword(email, mdp, clientIp);
-        if (!"OK".equals(authResult.get("statut"))) {
-            envoyerMessage(authResult);
+        // 1. Protection Brute Force : Vérifier si le compte est bloqué (même sans mot de passe, on protège l'email)
+        Map<String, Object> lockStatus = com.chrionline.server.dao.UserDAO.checkAccountLock(email, clientIp);
+        if (lockStatus != null) {
+            envoyerMessage(lockStatus);
             return;
         }
 
