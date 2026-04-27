@@ -17,17 +17,16 @@ public class RecaptchaService {
     private static final HttpClient httpClient = HttpClient.newHttpClient();
 
     static {
-        try (InputStream in = RecaptchaService.class
-                .getClassLoader().getResourceAsStream("server.properties")) {
-            if (in != null) {
-                Properties props = new Properties();
-                props.load(in);
-                secretKey = props.getProperty("recaptcha.secret");
+        try {
+            java.util.Map<String, String> config = com.chrionline.securite.VaultServerService.getServerConfig();
+            secretKey = config.get("recaptcha_secret");
+            if (secretKey == null) {
+                System.err.println("[RECAPTCHA] Clé secrète introuvable dans Vault (secret/server/config -> recaptcha_secret).");
             } else {
-                System.err.println("[RECAPTCHA] server.properties introuvable.");
+                System.out.println("[RECAPTCHA] Clé secrète chargée depuis Vault.");
             }
         } catch (Exception e) {
-            System.err.println("[RECAPTCHA] Erreur chargement config : " + e.getMessage());
+            System.err.println("[RECAPTCHA] Erreur chargement Vault : " + e.getMessage());
         }
     }
 
