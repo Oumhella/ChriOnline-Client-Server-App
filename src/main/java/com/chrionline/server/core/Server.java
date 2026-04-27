@@ -50,35 +50,70 @@ public class Server {
      */
     public void demarrer() {
         try {
-            // Chargement de la configuration SSL
-            java.util.Properties props = new java.util.Properties();
-            try (java.io.InputStream in = getClass().getClassLoader().getResourceAsStream("server.properties")) {
-                if (in != null)
-                    props.load(in);
+            AppLogger.info("[VAULT-PKI] Récupération dynamique des certificats SSL...");
+
+            // 1. Récupérer les données depuis Vault
+            java.util.Map<String, String> certData = com.chrionline.securite.VaultServerService.generateServerCertificate();
+            String serverCertPem = certData.get("certificate");
+            String privateKeyPem = certData.get("private_key");
+            String caCertPem = certData.get("issuing_ca");
+
+            if (serverCertPem == null || privateKeyPem == null || caCertPem == null) {
+                throw new Exception("Erreur Vault PKI : Un des certificats est null (Cert=" + (serverCertPem != null) + 
+                                   ", Key=" + (privateKeyPem != null) + ", CA=" + (caCertPem != null) + ")");
             }
 
-            String ksName = props.getProperty("server.ssl.keystore", "keystore.jks");
-            String ksPass = props.getProperty("server.ssl.password", "password123");
+            // 2. Préparer le KeyStore en mémoire (Certificat Serveur + Clé Privée)
+            java.security.KeyStore keyStore = java.security.KeyStore.getInstance("PKCS12");
+            keyStore.load(null, null);
 
-            char[] password = ksPass.toCharArray();
-            java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
-            try (java.io.InputStream ksIn = getClass().getClassLoader().getResourceAsStream(ksName)) {
-                if (ksIn == null)
-                    throw new IOException("Keystore introuvable : " + ksName);
-                ks.load(ksIn, password);
+            // Parser la clé privée et le certificat
+            java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
+            java.security.cert.Certificate serverCert = cf.generateCertificate(new java.io.ByteArrayInputStream(serverCertPem.getBytes()));
+            java.security.cert.Certificate caCert = cf.generateCertificate(new java.io.ByteArrayInputStream(caCertPem.getBytes()));
+
+            // 3. Charger la clé privée (Gestion PKCS#1 vs PKCS#8)
+            byte[] pkDer;
+            if (privateKeyPem.contains("BEGIN RSA PRIVATE KEY")) {
+                String base64 = privateKeyPem
+                        .replace("-----BEGIN RSA PRIVATE KEY-----", "")
+                        .replace("-----END RSA PRIVATE KEY-----", "")
+                        .replaceAll("\\s+", "");
+                pkDer = convertPkcs1ToPkcs8(java.util.Base64.getDecoder().decode(base64));
+            } else {
+                String base64 = privateKeyPem
+                        .replace("-----BEGIN PRIVATE KEY-----", "")
+                        .replace("-----END PRIVATE KEY-----", "")
+                        .replaceAll("\\s+", "");
+                pkDer = java.util.Base64.getDecoder().decode(base64);
             }
 
-            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance("SunX509");
-            kmf.init(ks, password);
+            java.security.spec.PKCS8EncodedKeySpec spec = new java.security.spec.PKCS8EncodedKeySpec(pkDer);
+            java.security.KeyFactory kf = java.security.KeyFactory.getInstance("RSA");
+            java.security.PrivateKey privateKey = kf.generatePrivate(spec);
+
+            // Ajouter au KeyStore
+            keyStore.setKeyEntry("server", privateKey, "password".toCharArray(), new java.security.cert.Certificate[]{serverCert, caCert});
+
+            // 3. Préparer le TrustStore en mémoire (CA Root)
+            java.security.KeyStore trustStore = java.security.KeyStore.getInstance("PKCS12");
+            trustStore.load(null, null);
+            trustStore.setCertificateEntry("ca", caCert);
+
+            // 4. Initialiser le SSLContext
+            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(keyStore, "password".toCharArray());
+
+            javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory.getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(trustStore);
+
             javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
-            sslContext.init(kmf.getKeyManagers(), null, null);
+            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
             javax.net.ssl.SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
-            // Utilisation du backlog de 10000 pour simuler la tolérance au flood avant
-            // rejet OS
             serverSocket = ssf.createServerSocket(port, 10000);
 
-            AppLogger.info("[SERVER-SSL] Démarré sur le port " + port + " avec TLS");
+            AppLogger.info("[SERVER-SSL] Démarré avec succès via Vault PKI (Certificats éphémères)");
             System.out.println("[SURVEILLANCE & LOGS] OS SYN Cookies : Tolérés (gestion au niveau OS).");
             AppLogger.info("[SERVER] En attente de connexions sécurisées...");
 
@@ -132,7 +167,16 @@ public class Server {
     public void accepterConnexion() {
         try {
             Socket socketClient = serverSocket.accept();
-            String clientIp = socketClient.getInetAddress().getHostAddress();
+            InetAddress clientAddr = socketClient.getInetAddress();
+            String clientIp = clientAddr.getHostAddress();
+
+            // 0. Filtrage Réseau Local / VPN : Rejeter automatiquement les IP publiques (Internet)
+            if (!clientAddr.isSiteLocalAddress() && !clientAddr.isLoopbackAddress()) {
+                AppLogger.warn("[SÉCURITÉ] Connexion EXTERNE rejetée depuis " + clientIp
+                        + " (seules les connexions réseau local / VPN sont autorisées)");
+                socketClient.close();
+                return;
+            }
 
             // 1. Vérification de sécurité (Protection DoS / SYN Flood) via
             // ConnectionSecurityManager
@@ -142,7 +186,7 @@ public class Server {
                 return;
             }
 
-            AppLogger.info("[SERVER] Nouveau client connecté : " + clientIp);
+            AppLogger.info("[SERVER] Nouveau client connecté (réseau local) : " + clientIp);
 
             // 1.bis. Réduire le temps d'attente (soTimeout) pour libérer les ressources si
             // inactif - AUGMENTE A 5 MINUTES (300000ms) POUR LA PAGE DE CONNEXION
@@ -356,5 +400,20 @@ public class Server {
 
     public List<ClientHandler> getClientConnectes() {
         return clientConnectes;
+    }
+
+    private byte[] convertPkcs1ToPkcs8(byte[] pkcs1Bytes) {
+        int pkcs1Length = pkcs1Bytes.length;
+        int totalLength = pkcs1Length + 22;
+        byte[] pkcs8Header = {
+            0x30, (byte) 0x82, (byte) ((totalLength >> 8) & 0xff), (byte) (totalLength & 0xff),
+            0x02, 0x01, 0x00,
+            0x30, 0x0d, 0x06, 0x09, 0x2a, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00,
+            0x04, (byte) 0x82, (byte) ((pkcs1Length >> 8) & 0xff), (byte) (pkcs1Length & 0xff)
+        };
+        byte[] result = new byte[pkcs8Header.length + pkcs1Bytes.length];
+        System.arraycopy(pkcs8Header, 0, result, 0, pkcs8Header.length);
+        System.arraycopy(pkcs1Bytes, 0, result, pkcs8Header.length, pkcs1Bytes.length);
+        return result;
     }
 }
