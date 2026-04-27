@@ -19,85 +19,99 @@ import java.security.cert.Certificate;
 public class KeyStoreManager {
 
     /**
-     * Charge une clé privée depuis un KeyStore PKCS12.
+     * Charge une clé privée depuis un KeyStore PKCS12 (Mot de passe géré par Vault).
      */
-    public static PrivateKey getPrivateKey(String keyStorePath, String password, String alias, String keyPassword) throws Exception {
+    public static PrivateKey getPrivateKey(String keyStorePath, String alias) throws Exception {
         KeyStore ks = KeyStore.getInstance("PKCS12");
-        try (FileInputStream fis = new FileInputStream(keyStorePath)) {
-            ks.load(fis, password.toCharArray());
+        char[] password = null;
+        try {
+            password = VaultKeystoreService.getKeystorePassword();
+            try (FileInputStream fis = new FileInputStream(keyStorePath)) {
+                ks.load(fis, password);
+            }
+            return (PrivateKey) ks.getKey(alias, password);
+        } finally {
+            // Nettoyage en mémoire du mot de passe (s'il s'agissait d'un tableau alloué par nous)
+            if (password != null) {
+                java.util.Arrays.fill(password, '\0');
+            }
         }
-        return (PrivateKey) ks.getKey(alias, keyPassword.toCharArray());
     }
 
     /**
      * Charge la clé publique depuis le certificat d'un KeyStore PKCS12.
      */
-    public static PublicKey getPublicKey(String keyStorePath, String password, String alias) throws Exception {
+    public static PublicKey getPublicKey(String keyStorePath, String alias) throws Exception {
         KeyStore ks = KeyStore.getInstance("PKCS12");
-        try (FileInputStream fis = new FileInputStream(keyStorePath)) {
-            ks.load(fis, password.toCharArray());
+        char[] password = null;
+        try {
+            password = VaultKeystoreService.getKeystorePassword();
+            try (FileInputStream fis = new FileInputStream(keyStorePath)) {
+                ks.load(fis, password);
+            }
+            Certificate cert = ks.getCertificate(alias);
+            if (cert == null) throw new Exception("Aucun certificat pour l'alias : " + alias);
+            return cert.getPublicKey();
+        } finally {
+            if (password != null) {
+                java.util.Arrays.fill(password, '\0');
+            }
         }
-        Certificate cert = ks.getCertificate(alias);
-        if (cert == null) throw new Exception("Aucun certificat pour l'alias : " + alias);
-        return cert.getPublicKey();
     }
 
     /**
      * Crée un KeyStore PKCS12 avec une paire de clés RSA auto-signée via keytool.
-     * keytool génère un vrai certificat X.509 valide, ce qui évite les erreurs
-     * "Empty input" ou "Could not parse certificate" des implémentations maison.
-     *
-     * @param path     Chemin du fichier keystore à créer (ex: "admin.jks")
-     * @param password Mot de passe qui protège le keystore ET la clé
-     * @param alias    Alias de la paire de clés dans le keystore
-     * @throws Exception si keytool échoue ou n'est pas trouvé
+     * Le mot de passe est récupéré depuis Vault.
      */
-    public static void createKeyStore(String path, String password, String alias,
-                                      java.security.KeyPair ignoredKeyPair) throws Exception {
-        // Supprimer l'ancien fichier s'il existe
+    public static void createKeyStore(String path, String alias, java.security.KeyPair ignoredKeyPair) throws Exception {
         File f = new File(path);
         if (f.exists()) f.delete();
 
-        // Construire la commande keytool
-        // keytool est dans le même répertoire que java
-        String javaHome = System.getProperty("java.home");
-        String keytool  = javaHome + File.separator + "bin" + File.separator + "keytool";
+        char[] password = null;
+        try {
+            password = VaultKeystoreService.getKeystorePassword();
+            String passStr = new String(password);
 
-        String[] cmd = {
-            keytool,
-            "-genkeypair",
-            "-alias",     alias,
-            "-keyalg",    "RSA",
-            "-keysize",   "2048",
-            "-validity",  "3650",           // 10 ans
-            "-dname",     "CN=Admin,O=ChriOnline,C=FR",
-            "-keystore",  path,
-            "-storetype", "PKCS12",
-            "-storepass", password,
-            "-keypass",   password,
-            "-noprompt"
-        };
+            String javaHome = System.getProperty("java.home");
+            String keytool  = javaHome + File.separator + "bin" + File.separator + "keytool";
 
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
+            String[] cmd = {
+                keytool,
+                "-genkeypair",
+                "-alias",     alias,
+                "-keyalg",    "RSA",
+                "-keysize",   "2048",
+                "-validity",  "3650",
+                "-dname",     "CN=Admin,O=ChriOnline,C=FR",
+                "-keystore",  path,
+                "-storetype", "PKCS12",
+                "-storepass", passStr,
+                "-keypass",   passStr,
+                "-noprompt"
+            };
 
-        // Lire la sortie pour le diagnostic
-        String output = new String(proc.getInputStream().readAllBytes());
-        int exitCode  = proc.waitFor();
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
 
-        if (exitCode != 0) {
-            throw new Exception("keytool a échoué (exit=" + exitCode + ") : " + output);
+            String output = new String(proc.getInputStream().readAllBytes());
+            int exitCode  = proc.waitFor();
+
+            if (exitCode != 0) {
+                throw new Exception("keytool a échoué (exit=" + exitCode + ") : " + output);
+            }
+            System.out.println("[KeyStoreManager] KeyStore créé avec succès via mot de passe Vault : " + path);
+        } finally {
+            if (password != null) {
+                java.util.Arrays.fill(password, '\0');
+            }
         }
-
-        System.out.println("[KeyStoreManager] KeyStore créé avec succès : " + path);
     }
 
     /**
-     * Extrait la clé publique depuis un KeyStore existant.
-     * Utilisé après createKeyStore pour obtenir la clé à envoyer au serveur.
+     * Extrait la clé publique depuis un KeyStore existant (mot de passe Vault).
      */
-    public static java.security.PublicKey extractPublicKey(String path, String password, String alias) throws Exception {
-        return getPublicKey(path, password, alias);
+    public static java.security.PublicKey extractPublicKey(String path, String alias) throws Exception {
+        return getPublicKey(path, alias);
     }
 }
