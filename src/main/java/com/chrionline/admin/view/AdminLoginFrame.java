@@ -92,32 +92,28 @@ public class AdminLoginFrame extends Stage {
         btnAction.setCursor(javafx.scene.Cursor.HAND);
         btnAction.setOnAction(e -> handleAction());
 
-        // Au départ : pas de champ de confirmation ni TOTP
-        root.getChildren().addAll(lblTitle, txtEmail, txtPassword, txtTotpCode, btnAction, lblStatus);
+        // Au départ : Uniquement l'email. Le mot de passe est récupéré depuis Vault.
+        root.getChildren().addAll(lblTitle, txtEmail, txtTotpCode, btnAction, lblStatus);
         setScene(new Scene(root, 450, 450));
     }
 
     private void handleAction() {
         String email = txtEmail.getText().trim();
-        String pass  = txtPassword.getText();
 
-        if (email.isEmpty() || pass.isEmpty()) {
-            lblStatus.setText("Veuillez remplir tous les champs.");
+        if (email.isEmpty()) {
+            lblStatus.setText("Veuillez entrer votre email.");
             return;
         }
 
         try {
             if (pendingInit) {
-                // ── Mode Initialisation (2ème clic) ──
-                String confirm = txtConfirmPassword.getText();
-                if (!pass.equals(confirm)) {
-                    lblStatus.setText("Les mots de passe ne correspondent pas.");
-                    return;
-                }
-                runInitialSetup(email, pass);
+                // ── Mode Initialisation ──
+                // On récupère le mot de passe depuis Vault pour initialiser le compte
+                String passFromVault = new String(com.chrionline.securite.VaultKeystoreService.getKeystorePassword());
+                runInitialSetup(email, passFromVault);
             } else {
-                // ── Mode normal (1er clic) : demander un challenge ──
-                checkAccountAndProceed(email, pass);
+                // ── Mode normal ──
+                checkAccountAndProceed(email);
             }
         } catch (Exception ex) {
             lblStatus.setText("Erreur : " + ex.getMessage());
@@ -128,7 +124,7 @@ public class AdminLoginFrame extends Stage {
     /**
      * Demande un challenge au serveur. Si ERREUR_NO_KEY, passe en mode initialisation.
      */
-    private void checkAccountAndProceed(String email, String pass) throws Exception {
+    private void checkAccountAndProceed(String email) throws Exception {
         com.chrionline.client.network.Client client =
                 com.chrionline.client.network.Client.getInstance("localhost", 12345);
         client.connecter();
@@ -137,7 +133,7 @@ public class AdminLoginFrame extends Stage {
         Map<String, Object> reqChallenge = new HashMap<>();
         reqChallenge.put("commande", "ADMIN_GET_CHALLENGE");
         reqChallenge.put("email", email);
-        reqChallenge.put("mdp", pass); // Envoyer le mot de passe pour vérification serveur
+        // On n'envoie plus de mot de passe (Option A : Authentification RSA pure)
 
         Map<String, Object> resChallenge = client.envoyerRequeteAttendreReponse(reqChallenge);
         String statut = (String) resChallenge.get("statut");
@@ -149,7 +145,7 @@ public class AdminLoginFrame extends Stage {
         } else if ("OK".equals(statut)) {
             // ── Compte déjà initialisé : signer le challenge ──
             String challenge = (String) resChallenge.get("challenge");
-            runChallengeLogin(client, email, pass, challenge);
+            runChallengeLogin(client, email, challenge);
 
         } else if ("ERREUR_BLOQUE".equals(statut)) {
             String msg = (String) resChallenge.get("message");
@@ -176,14 +172,8 @@ public class AdminLoginFrame extends Stage {
     private void switchToInitMode() {
         pendingInit = true;
         lblTitle.setText("Initialisation Sécurité Admin");
-        lblStatus.setText("Premier lancement détecté !\nChoisissez un mot de passe qui protégera votre coffre-fort de clés.");
-        btnAction.setText("Générer les clés et Initialiser");
-
-        // Ajouter le champ de confirmation AVANT le bouton
-        if (!root.getChildren().contains(txtConfirmPassword)) {
-            int btnIndex = root.getChildren().indexOf(btnAction);
-            root.getChildren().add(btnIndex, txtConfirmPassword);
-        }
+        lblStatus.setText("Premier lancement détecté !\nVotre mot de passe sera récupéré depuis Vault pour créer votre coffre-fort de clés.");
+        btnAction.setText("Initialiser via Vault");
     }
 
     /**
@@ -195,11 +185,11 @@ public class AdminLoginFrame extends Stage {
         lblStatus.setText("Génération des clés RSA via keytool (2048 bits)...");
 
         // 1. Créer le KeyStore via keytool (génère un vrai certificat X.509 auto-signé)
-        //    Le mot de passe choisi protège à la fois le fichier JKS et la clé privée
-        KeyStoreManager.createKeyStore(KEYSTORE_FILE, pass, KEY_ALIAS, null);
+        //    Le mot de passe Vault protège à la fois le fichier JKS et la clé privée
+        KeyStoreManager.createKeyStore(KEYSTORE_FILE, KEY_ALIAS, null);
 
         // 2. Lire la clé publique depuis le keystore fraîchement créé
-        java.security.PublicKey pubKey = KeyStoreManager.extractPublicKey(KEYSTORE_FILE, pass, KEY_ALIAS);
+        java.security.PublicKey pubKey = KeyStoreManager.extractPublicKey(KEYSTORE_FILE, KEY_ALIAS);
         String pubKeyBase64 = Base64.getEncoder().encodeToString(pubKey.getEncoded());
 
         // 3. Envoyer au serveur : le serveur hashera le mdp (BCrypt) et stockera la clé publique
@@ -238,11 +228,10 @@ public class AdminLoginFrame extends Stage {
             Map<String, Object> reqChallenge = new HashMap<>();
             reqChallenge.put("commande", "ADMIN_GET_CHALLENGE");
             reqChallenge.put("email", email);
-            reqChallenge.put("mdp", pass); // Requis par le serveur pour vérifier le 1er facteur
             Map<String, Object> resChallenge = client.envoyerRequeteAttendreReponse(reqChallenge);
 
             if ("OK".equals(resChallenge.get("statut"))) {
-                runChallengeLogin(client, email, pass, (String) resChallenge.get("challenge"));
+                runChallengeLogin(client, email, (String) resChallenge.get("challenge"));
             } else {
                 lblStatus.setText("Init OK mais échec challenge : " + resChallenge.get("message"));
             }
@@ -258,7 +247,7 @@ public class AdminLoginFrame extends Stage {
      */
     @SuppressWarnings("unchecked")
     private void runChallengeLogin(com.chrionline.client.network.Client client,
-                                   String email, String pass, String challenge) throws Exception {
+                                   String email, String challenge) throws Exception {
         File ksFile = new File(KEYSTORE_FILE);
         if (!ksFile.exists()) {
             lblStatus.setText("Keystore introuvable sur cette machine.\n" +
@@ -268,9 +257,9 @@ public class AdminLoginFrame extends Stage {
 
         lblStatus.setText("Signature du défi...");
 
-        // 1. Ouvrir le keystore avec le mot de passe et récupérer la clé privée
+        // 1. Ouvrir le keystore avec le mot de passe Vault et récupérer la clé privée
         java.security.PrivateKey privateKey = KeyStoreManager.getPrivateKey(
-                KEYSTORE_FILE, pass, KEY_ALIAS, pass);
+                KEYSTORE_FILE, KEY_ALIAS);
 
         // 2. Signer le challenge
         byte[] signature = Signer.sign(challenge, privateKey);
