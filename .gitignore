@@ -56,3 +56,9 @@ admin.jks
 *.jks
 *.p12
 *.key
+*.pem
+
+# HashiCorp Vault
+vault/data/
+vault/logs/
+.vault-token

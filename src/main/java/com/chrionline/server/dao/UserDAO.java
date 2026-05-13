@@ -688,29 +688,47 @@ public class UserDAO {
 
     /**
      * Initialise la sécurité RSA + TOTP pour un administrateur.
-     * Met à jour son mot de passe, stocke sa clé publique et génère un secret TOTP.
+     * Met à jour son mot de passe en BDD, stocke la clé publique dans Vault KV et génère un secret TOTP.
      *
      * @return le secret TOTP Base32 (pour afficher le QR Code côté client), ou null en cas d'erreur
      */
     public static String initAdminSecurity(String email, String plainPassword, String publicKeyBase64) {
         String totpSecret = com.chrionline.securite.TOTPService.generateSecret();
-        String sql = "UPDATE utilisateur SET password = ?, public_key = ?, totp_secret = ? WHERE email = ?";
+        String sql = "UPDATE utilisateur SET password = ?, totp_secret = ? WHERE email = ?";
         String hash = BCrypt.hashpw(plainPassword, BCrypt.gensalt());
         
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, hash);
-            ps.setString(2, publicKeyBase64);
-            ps.setString(3, totpSecret);
-            ps.setString(4, email);
+            ps.setString(2, totpSecret);
+            ps.setString(3, email);
             if (ps.executeUpdate() > 0) {
-                return totpSecret;
+                // Sauvegarder la clé publique dans Vault KV
+                try {
+                    com.chrionline.securite.VaultServerService.saveAdminPublicKey(email, publicKeyBase64);
+                    return totpSecret;
+                } catch (Exception e) {
+                    System.err.println("[UserDAO] Erreur CRITIQUE sauvegarde Vault : " + e.getMessage());
+                    return null; // Échec global car Vault est indispensable
+                }
             }
             return null;
         } catch (Exception e) {
             System.err.println("[UserDAO] initAdminSecurity error: " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Récupère la clé publique RSA d'un administrateur depuis Vault KV.
+     */
+    public static String getPublicKey(String email) {
+        try {
+            return com.chrionline.securite.VaultServerService.getAdminPublicKey(email);
+        } catch (Exception e) {
+            System.err.println("[UserDAO] Erreur récupération clé publique Vault : " + e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -727,24 +745,6 @@ public class UserDAO {
             }
         } catch (Exception e) {
             System.err.println("[UserDAO] getTotpSecret error: " + e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Récupère la clé publique d'un utilisateur.
-     */
-    public static String getPublicKey(String email) {
-        String sql = "SELECT public_key FROM utilisateur WHERE email = ?";
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, email);
-            ResultSet rs = ps.executeQuery();
-            if (rs.next()) {
-                return rs.getString("public_key");
-            }
-        } catch (Exception e) {
-            System.err.println("[UserDAO] getPublicKey error: " + e.getMessage());
         }
         return null;
     }

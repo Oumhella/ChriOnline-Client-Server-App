@@ -60,6 +60,16 @@ public class ClientHandler implements Runnable {
 
     private final Socket socket;
     private final Server server;
+    private static String firewallToken;
+
+    static {
+        try {
+            firewallToken = com.chrionline.securite.VaultServerService.getServerConfig().get("firewall_token");
+        } catch (Exception e) {
+            System.err.println("[HANDLER] Erreur chargement firewallToken : " + e.getMessage());
+        }
+    }
+
     private final AuthenticationService authService;
     private final ProduitService produitService;
     private final PanierService panierService;
@@ -139,6 +149,14 @@ public class ClientHandler implements Runnable {
 
         AppLogger.info("[HANDLER] Reçu : " + commande + " de " + socketIp);
 
+        // ─── SÉCURITÉ : Firewall Token ──────────────────────────────────────────
+        String clientFirewallToken = (String) req.get("firewallToken");
+        if (firewallToken != null && !firewallToken.equals(clientFirewallToken)) {
+            AppLogger.warn("[SECURITY] Firewall Token invalide de " + socketIp);
+            envoyerMessage(creerReponse("ERREUR_SECURITE", "Accès refusé par le pare-feu."));
+            return;
+        }
+
         // ─── SÉCURITÉ : Blacklist + Détection IP Spoofing ────────────────────────
         SecurityInterceptor.ValidationResult validation = SecurityInterceptor.validateRequest(commande, req, socketIp);
         if (!validation.isOk()) {
@@ -159,19 +177,19 @@ public class ClientHandler implements Runnable {
         }
 
         if (!COMMANDES_PUBLIQUES.contains(commande)) {
-            String sessionId = (String) req.get("sessionId");
+            String jwt = (String) req.get("jwt");
             com.chrionline.server.session.Session session =
-                    com.chrionline.server.session.SessionManager.validateSession(sessionId, clientIp, dynamicTimeoutMs);
+                    com.chrionline.server.session.SessionManager.validateSession(jwt, clientIp, dynamicTimeoutMs);
             if (session == null) {
-                rejeterSessionInvalide(clientIp, commande, sessionId);
+                rejeterSessionInvalide(clientIp, commande, jwt);
                 return;
             }
             appliquerIdentiteDepuisSession(session);
             injecterUtilisateurDansRequete(req);
 
             // 2. Régénération automatique et constante ("roulement") de l'ID après chaque transaction valide
-            this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(sessionId, clientIp);
-            req.put("sessionId", this.nextSessionIdToInject);
+            this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(jwt, clientIp);
+            req.put("jwt", this.nextSessionIdToInject);
         } else {
             this.nextSessionIdToInject = null;
         }
@@ -1166,12 +1184,12 @@ public class ClientHandler implements Runnable {
         int uid = uidObj instanceof Integer ? (Integer) uidObj : ((Long) uidObj).intValue();
 
         String ip = socket.getInetAddress().getHostAddress();
-        String oldSid = (String) req.get("sessionId");
+        String oldSid = (String) req.get("jwt");
         String newSid = com.chrionline.server.session.SessionManager.regenerateSession(oldSid, ip);
         if (newSid == null) {
             newSid = com.chrionline.server.session.SessionManager.createSession(uid, ip);
         }
-        data.put("sessionId", newSid);
+        data.put("jwt", newSid);
 
         this.userId = uid;
         this.userEmail = (String) data.get("email");
@@ -1181,7 +1199,7 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleDeconnexion(Map<String, Object> req, String clientIp) {
-        String sid = (String) req.get("sessionId");
+        String sid = (String) req.get("jwt");
         if (sid != null && !sid.isBlank()) {
             com.chrionline.server.session.SessionManager.invalidateSession(sid);
             SecurityLogger.logSecurityEvent("LOGOUT", this.userEmail != null ? this.userEmail : "UNKNOWN", clientIp, "sessionId=" + sid);

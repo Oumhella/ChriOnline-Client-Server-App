@@ -53,6 +53,14 @@ public class SchemaUpdater {
                 System.out.println("La colonne 'totp_secret' existe peut-être déjà ou erreur: " + e.getMessage());
             }
 
+            // 5. Suppression de la colonne public_key (les clés sont maintenant stockées dans server_keys/)
+            try {
+                stmt.execute("ALTER TABLE utilisateur DROP COLUMN public_key");
+                System.out.println("Colonne 'public_key' supprimée de la table 'utilisateur' (migration vers fichiers).");
+            } catch (Exception e) {
+                System.out.println("La colonne 'public_key' n'existe peut-être plus ou erreur: " + e.getMessage());
+            }
+
             System.out.println("Mise à jour terminée !");
             System.exit(0);
         } catch (Exception e) {
