@@ -53,15 +53,22 @@ public class Server {
             AppLogger.info("[VAULT-PKI] Récupération dynamique des certificats SSL...");
 
             // 1. Récupérer les données depuis Vault
-            java.util.Map<String, String> certData = com.chrionline.securite.VaultServerService.generateServerCertificate();
+            java.util.Map<String, String> certData = null;
+            try {
+                certData = com.chrionline.securite.VaultServerService.generateServerCertificate();
+            } catch (Exception e) {
+                AppLogger.warn("[SERVER] Vault PKI indisponible. Tentative de chargement du KeyStore local...");
+            }
+
+            if (certData == null || certData.get("certificate") == null || certData.get("private_key") == null) {
+                // FALLBACK: Utilisation d'un Keystore local si Vault échoue
+                demarrerAvecKeystoreLocal(port);
+                return;
+            }
+
             String serverCertPem = certData.get("certificate");
             String privateKeyPem = certData.get("private_key");
             String caCertPem = certData.get("issuing_ca");
-
-            if (serverCertPem == null || privateKeyPem == null || caCertPem == null) {
-                throw new Exception("Erreur Vault PKI : Un des certificats est null (Cert=" + (serverCertPem != null) + 
-                                   ", Key=" + (privateKeyPem != null) + ", CA=" + (caCertPem != null) + ")");
-            }
 
             // 2. Préparer le KeyStore en mémoire (Certificat Serveur + Clé Privée)
             java.security.KeyStore keyStore = java.security.KeyStore.getInstance("PKCS12");
@@ -400,6 +407,45 @@ public class Server {
 
     public List<ClientHandler> getClientConnectes() {
         return clientConnectes;
+    }
+
+    /**
+     * Démarrage de secours utilisant un fichier KeyStore local (JKS).
+     */
+    private void demarrerAvecKeystoreLocal(int port) {
+        try {
+            AppLogger.warn("[SERVER-FALLBACK] Démarrage en mode dégradé avec keystore_test.jks");
+            
+            char[] password = "testPass123".toCharArray(); 
+            java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
+            
+            try (java.io.FileInputStream fis = new java.io.FileInputStream("keystore_test.jks")) {
+                ks.load(fis, password);
+            }
+
+            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(ks, password);
+
+            javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+            sslContext.init(kmf.getKeyManagers(), null, null);
+
+            javax.net.ssl.SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
+            serverSocket = ssf.createServerSocket(port);
+
+            AppLogger.info("[SERVER-SSL] Démarré via KeyStore LOCAL (Fallback)");
+            
+            // Lancer le thread UDP
+            Thread udpThread = new Thread(this::ecouterUDP);
+            udpThread.setDaemon(true);
+            udpThread.start();
+
+            while (!serverSocket.isClosed()) {
+                accepterConnexion();
+            }
+        } catch (Exception e) {
+            AppLogger.error("[SERVER-FATAL] Échec du démarrage SSL (même en mode fallback) : " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private byte[] convertPkcs1ToPkcs8(byte[] pkcs1Bytes) {
