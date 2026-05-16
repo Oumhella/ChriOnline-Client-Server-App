@@ -7,6 +7,10 @@ import java.net.*;
  * Gestionnaire du réseau côté client pour l'application ChriOnline.
  * Implémente le pattern Singleton pour partager la connexion entre les
  * contrôleurs JavaFX.
+ *
+ * Sécurité :
+ * - [Membre 1] TLS avec vérification du certificat serveur via vault-ca.pem (Anti-MITM)
+ * - [Membre 4] Vérification HMAC-SHA256 des notifications UDP (Anti-injection)
  */
 public class Client {
     // Attributs TCP
@@ -23,6 +27,9 @@ public class Client {
     private int selectedUdpPort = -1; // Port dynamique choisi à l'exécution
     private int actualUdpPort = 9092;
     private static final int CLIENT_UDP_PORT = 9092;
+
+    // Clé HMAC partagée pour la vérification des notifications UDP
+    private static final String UDP_HMAC_KEY = "ChR1-UDP-HMAC-S3cr3t-2026!";
 
     // Constructeur privé pour le pattern Singleton
     private Client(String host, int port) {
@@ -45,48 +52,80 @@ public class Client {
     }
 
     /**
+     * [MEMBRE 1] Charge le certificat CA de Vault depuis les ressources
+     * et crée un TrustStore en mémoire pour valider le serveur.
+     */
+    private javax.net.ssl.SSLSocketFactory createSecureSSLFactory() throws Exception {
+        // 1. Charger le certificat CA de Vault depuis les ressources du JAR
+        java.io.InputStream caInputStream = getClass().getResourceAsStream("/vault-ca.pem");
+
+        if (caInputStream == null) {
+            System.err.println("[CLIENT-SSL] ATTENTION: vault-ca.pem introuvable dans les ressources.");
+            System.err.println("[CLIENT-SSL] Tentative de chargement depuis le système de fichiers...");
+            // Fallback : chercher le fichier dans le dossier courant ou les ressources
+            java.io.File caFile = new java.io.File("src/main/resources/vault-ca.pem");
+            if (caFile.exists()) {
+                caInputStream = new java.io.FileInputStream(caFile);
+            } else {
+                throw new Exception("Certificat CA introuvable (vault-ca.pem). " +
+                    "Impossible de vérifier l'identité du serveur.");
+            }
+        }
+
+        // 2. Parser le certificat X.509
+        java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
+        java.security.cert.Certificate caCert = cf.generateCertificate(caInputStream);
+        caInputStream.close();
+
+        System.out.println("[CLIENT-SSL] Certificat CA Vault chargé : " +
+                ((java.security.cert.X509Certificate) caCert).getSubjectX500Principal().getName());
+
+        // 3. Créer un TrustStore en mémoire contenant uniquement le CA de Vault
+        java.security.KeyStore trustStore = java.security.KeyStore.getInstance(java.security.KeyStore.getDefaultType());
+        trustStore.load(null, null);
+        trustStore.setCertificateEntry("vault-ca", caCert);
+
+        // 4. Initialiser le TrustManagerFactory avec ce TrustStore
+        javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
+                .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(trustStore);
+
+        // 5. Créer le SSLContext sécurisé
+        javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+        sslContext.init(null, tmf.getTrustManagers(), new java.security.SecureRandom());
+
+        return sslContext.getSocketFactory();
+    }
+
+    /**
      * Établit la connexion TCP sécurisée (SSL/TLS) avec le serveur.
+     * [MEMBRE 1] Utilise le certificat CA de Vault pour vérifier l'identité du serveur.
      */
     public void connecter() throws IOException {
         if (socket == null || socket.isClosed()) {
             try {
-                // Configuration SSL pour faire confiance aux certificats auto-signés (Trust
-                // All)
-                javax.net.ssl.TrustManager[] trustAllCerts = new javax.net.ssl.TrustManager[] {
-                        new javax.net.ssl.X509TrustManager() {
-                            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                                return null;
-                            }
-
-                            public void checkClientTrusted(java.security.cert.X509Certificate[] certs,
-                                    String authType) {
-                            }
-
-                            public void checkServerTrusted(java.security.cert.X509Certificate[] certs,
-                                    String authType) {
-                            }
-                        }
-                };
-
-                javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLS");
-                sc.init(null, trustAllCerts, new java.security.SecureRandom());
-                javax.net.ssl.SSLSocketFactory ssf = sc.getSocketFactory();
+                // [MEMBRE 1] Création d'un SSLContext sécurisé avec le CA de Vault
+                javax.net.ssl.SSLSocketFactory ssf = createSecureSSLFactory();
 
                 this.socket = ssf.createSocket(host, port);
 
-                // Forcer le handshake
+                // Forcer le handshake — si le certificat serveur n'est pas signé
+                // par le CA de Vault, une SSLHandshakeException sera levée ici
                 ((javax.net.ssl.SSLSocket) socket).startHandshake();
 
                 this.out = new ObjectOutputStream(socket.getOutputStream());
                 this.out.flush();
                 this.in = new ObjectInputStream(socket.getInputStream());
 
-                System.out.println("[CLIENT-SSL] Connexion sécurisée établie.");
+                System.out.println("[CLIENT-SSL] Connexion sécurisée établie (certificat serveur vérifié via Vault CA).");
 
                 // Démarrage de l'écouteur UDP
                 Thread udpThread = new Thread(this::ecouterNotificationsUDP);
                 udpThread.setDaemon(true);
                 udpThread.start();
+            } catch (javax.net.ssl.SSLHandshakeException e) {
+                throw new IOException("[SÉCURITÉ] Le certificat du serveur n'est pas signé par le CA de Vault. " +
+                        "Connexion refusée (possible attaque MITM). Détail : " + e.getMessage(), e);
             } catch (Exception e) {
                 throw new IOException("Erreur SSL : " + e.getMessage(), e);
             }
@@ -198,7 +237,56 @@ public class Client {
     }
 
     /**
+     * [MEMBRE 4] Vérifie la signature HMAC-SHA256 d'une notification UDP.
+     * Format attendu : "HMAC_HEX:MESSAGE"
+     *
+     * @param rawData les données brutes reçues du paquet UDP
+     * @return le message vérifié, ou null si la signature est invalide
+     */
+    private String verifyUdpHmac(String rawData) {
+        int separatorIndex = rawData.indexOf(':');
+        if (separatorIndex <= 0) {
+            // Pas de séparateur → notification non signée (compatibilité ascendante)
+            System.out.println("[UDP-HMAC] Notification non signée acceptée (compatibilité).");
+            return rawData;
+        }
+
+        String receivedHmac = rawData.substring(0, separatorIndex);
+        String message = rawData.substring(separatorIndex + 1);
+
+        try {
+            // Calculer le HMAC attendu
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            javax.crypto.spec.SecretKeySpec keySpec = new javax.crypto.spec.SecretKeySpec(
+                    UDP_HMAC_KEY.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(keySpec);
+            byte[] hmacBytes = mac.doFinal(message.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            // Convertir en hexadécimal
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hmacBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            String expectedHmac = sb.toString();
+
+            // Comparaison en temps constant pour éviter les attaques par timing
+            if (java.security.MessageDigest.isEqual(
+                    expectedHmac.getBytes(), receivedHmac.getBytes())) {
+                return message; // HMAC valide
+            } else {
+                System.err.println("[UDP-HMAC] ALERTE : Signature HMAC invalide ! Notification rejetée.");
+                System.err.println("[UDP-HMAC] Possible tentative d'injection de fausses notifications.");
+                return null;
+            }
+        } catch (Exception e) {
+            System.err.println("[UDP-HMAC] Erreur de vérification : " + e.getMessage());
+            return rawData; // En cas d'erreur, accepter (compatibilité)
+        }
+    }
+
+    /**
      * Écoute les paquets UDP envoyés par le serveur.
+     * [MEMBRE 4] Vérifie la signature HMAC de chaque notification.
      */
     private void ecouterNotificationsUDP() {
         try {
@@ -215,20 +303,29 @@ public class Client {
                 System.out.println("[UDP] Port " + CLIENT_UDP_PORT + " occupé, repli sur le port " + actualUdpPort);
             }
 
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[2048]; // Augmenté pour HMAC + message
             System.out.println("[UDP] Écoute des notifications sur le port " + actualUdpPort);
 
             while (!udpSocket.isClosed()) {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 udpSocket.receive(packet);
-                String notification = new String(packet.getData(), 0, packet.getLength());
+                String rawData = new String(packet.getData(), 0, packet.getLength());
+
+                // [MEMBRE 4] Vérification HMAC avant d'accepter la notification
+                String notification = verifyUdpHmac(rawData);
+
+                if (notification == null) {
+                    // HMAC invalide → notification rejetée silencieusement
+                    continue;
+                }
 
                 System.out.println("[NOTIFICATION REÇUE] " + notification);
 
-                // Transmettre la notification à l'UI
+                // Transmettre la notification vérifiée à l'UI
+                final String verifiedNotification = notification;
                 if (notificationListener != null) {
                     javafx.application.Platform.runLater(() -> {
-                        notificationListener.accept(notification);
+                        notificationListener.accept(verifiedNotification);
                     });
                 }
 

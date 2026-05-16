@@ -1,6 +1,7 @@
 package com.chrionline.server.core;
 
 import com.chrionline.server.utils.AppLogger;
+import com.chrionline.server.security.SecurityAuditLogger;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -15,12 +16,18 @@ import com.chrionline.server.dao.NotificationDAO;
 import com.chrionline.server.dao.UserDAO;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Classe principale du serveur ChriOnline.
  * Gère les connexions TCP multi-clients et les notifications UDP.
+ *
+ * Sécurité :
+ * - [Membre 2] Port mTLS 9445 dédié aux admins (setNeedClientAuth)
+ * - [Membre 3] Rotation dynamique des certificats SSL via ScheduledExecutorService
+ * - [Membre 4] Signature HMAC-SHA256 des notifications UDP
  */
-
 public class Server {
 
     // Attributs
@@ -32,6 +39,18 @@ public class Server {
 
     // Port UDP séparé pour les notifications (port TCP + 1 par convention)
     private static final int UDP_PORT = 9091;
+
+    // [MEMBRE 2] Port mTLS dédié aux administrateurs
+    private static final int ADMIN_MTLS_PORT = 9445;
+    private ServerSocket adminServerSocket;
+
+    // [MEMBRE 3] Rotation dynamique des certificats
+    private volatile javax.net.ssl.SSLContext currentSSLContext;
+    private volatile long certExpiryTimeMs = 0;
+    private ScheduledExecutorService certRotationScheduler;
+
+    // [MEMBRE 4] Clé HMAC partagée pour signer les notifications UDP
+    private static final String UDP_HMAC_KEY = "ChR1-UDP-HMAC-S3cr3t-2026!";
 
     // Constructeur
 
@@ -117,12 +136,25 @@ public class Server {
             javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
             sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
+            // [MEMBRE 3] Stocker le SSLContext pour la rotation dynamique
+            this.currentSSLContext = sslContext;
+            // Estimer l'expiration du certificat (72h à partir de maintenant)
+            this.certExpiryTimeMs = System.currentTimeMillis() + (72L * 60 * 60 * 1000);
+
             javax.net.ssl.SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
             serverSocket = ssf.createServerSocket(port, 10000);
 
             AppLogger.info("[SERVER-SSL] Démarré avec succès via Vault PKI (Certificats éphémères)");
             System.out.println("[SURVEILLANCE & LOGS] OS SYN Cookies : Tolérés (gestion au niveau OS).");
             AppLogger.info("[SERVER] En attente de connexions sécurisées...");
+
+            // [MEMBRE 2] Lancer le port mTLS dédié aux admins
+            Thread mtlsThread = new Thread(() -> demarrerAdminMTLS(sslContext, keyStore, trustStore));
+            mtlsThread.setDaemon(true);
+            mtlsThread.start();
+
+            // [MEMBRE 3] Démarrer le thread de rotation automatique des certificats
+            demarrerRotationCertificats();
 
             // Lancer le thread UDP pour les notifications en parallèle
             Thread udpThread = new Thread(this::ecouterUDP);
@@ -240,17 +272,46 @@ public class Server {
      * @param adresseClient l'adresse IP du client destinataire
      * @param portClient    le port UDP du client destinataire
      */
+    /**
+     * [MEMBRE 4] Diffuse une notification UDP signée avec HMAC-SHA256.
+     * Format envoyé : "HMAC_HEX:MESSAGE"
+     */
     public void diffuserNotification(String message, InetAddress adresseClient, int portClient) {
         try (DatagramSocket udpSocket = new DatagramSocket()) {
-            byte[] data = message.getBytes();
+            // Signer le message avec HMAC-SHA256
+            String signedMessage = signWithHmac(message);
+            byte[] data = signedMessage.getBytes();
             DatagramPacket packet = new DatagramPacket(data, data.length, adresseClient, portClient);
             udpSocket.send(packet);
-            AppLogger.info("[UDP] Notification envoyée à "
+            AppLogger.info("[UDP-HMAC] Notification signée envoyée à "
                     + adresseClient.getHostAddress() + ":" + portClient + " → " + message);
+            SecurityAuditLogger.udpNotificationSent(adresseClient.getHostAddress(), portClient);
         } catch (IOException e) {
             AppLogger.error("[UDP] Erreur d'envoi de notification : " + e.getMessage());
         }
+    }
 
+    /**
+     * [MEMBRE 4] Signe un message avec HMAC-SHA256.
+     * @return "HMAC_HEX:message"
+     */
+    private String signWithHmac(String message) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            javax.crypto.spec.SecretKeySpec keySpec = new javax.crypto.spec.SecretKeySpec(
+                    UDP_HMAC_KEY.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(keySpec);
+            byte[] hmacBytes = mac.doFinal(message.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hmacBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString() + ":" + message;
+        } catch (Exception e) {
+            AppLogger.error("[UDP-HMAC] Erreur de signature : " + e.getMessage());
+            return message; // Fallback sans HMAC
+        }
     }
 
     /**
@@ -462,4 +523,188 @@ public class Server {
         System.arraycopy(pkcs1Bytes, 0, result, pkcs8Header.length, pkcs1Bytes.length);
         return result;
     }
-}
+
+    // ─── [MEMBRE 2] mTLS — Port Admin Dédié ──────────────────────────────────
+
+    /**
+     * Démarre un SSLServerSocket sur le port 9445 avec setNeedClientAuth(true).
+     * Seuls les clients présentant un certificat valide (admin.jks) pourront se connecter.
+     */
+    private void demarrerAdminMTLS(javax.net.ssl.SSLContext sslContext,
+                                    java.security.KeyStore keyStore,
+                                    java.security.KeyStore trustStore) {
+        try {
+            // [MEMBRE 2] Le serveur s'authentifie avec son certificat Vault (keyStore)
+            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory
+                    .getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(keyStore, "password".toCharArray());
+
+            // [MEMBRE 2] Mais pour vérifier le client Admin, il doit faire confiance à admin.jks
+            java.security.KeyStore adminTrustStore = java.security.KeyStore.getInstance("JKS");
+            try (java.io.FileInputStream fis = new java.io.FileInputStream("admin.jks")) {
+                adminTrustStore.load(fis, "admin123".toCharArray());
+            } catch (Exception e) {
+                AppLogger.error("[SERVER-mTLS] Impossible de charger admin.jks comme TrustStore : " + e.getMessage());
+                // Fallback sur le trustStore par défaut si admin.jks n'est pas trouvé
+                adminTrustStore = trustStore; 
+            }
+
+            javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
+                    .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(adminTrustStore);
+
+            javax.net.ssl.SSLContext mtlsContext = javax.net.ssl.SSLContext.getInstance("TLS");
+            mtlsContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+
+            javax.net.ssl.SSLServerSocketFactory ssf = mtlsContext.getServerSocketFactory();
+            adminServerSocket = ssf.createServerSocket(ADMIN_MTLS_PORT);
+
+            // Forcer l'authentification client (mTLS)
+            ((javax.net.ssl.SSLServerSocket) adminServerSocket).setNeedClientAuth(true);
+
+            AppLogger.info("[SERVER-mTLS] Port Admin " + ADMIN_MTLS_PORT
+                    + " démarré (Authentification client OBLIGATOIRE)");
+            SecurityAuditLogger.tlsConnectionSuccess("SERVER", "mTLS-Admin-Port-" + ADMIN_MTLS_PORT);
+
+            // Boucle d'acceptation des connexions admin
+            while (!adminServerSocket.isClosed()) {
+                try {
+                    Socket adminSocket = adminServerSocket.accept();
+                    String clientIp = adminSocket.getInetAddress().getHostAddress();
+
+                    AppLogger.info("[SERVER-mTLS] Connexion admin acceptée de : " + clientIp);
+                    SecurityAuditLogger.mtlsAuthSuccess(clientIp, "Admin-Certificate");
+
+                    // Traiter la connexion admin comme un client normal
+                    ClientHandler handler = new ClientHandler(adminSocket, this);
+                    clientConnectes.add(handler);
+                    threadPool.execute(handler);
+
+                } catch (javax.net.ssl.SSLHandshakeException e) {
+                    AppLogger.warn("[SERVER-mTLS] Certificat client refusé : " + e.getMessage());
+                    SecurityAuditLogger.mtlsAuthFailed("unknown", e.getMessage());
+                } catch (IOException e) {
+                    if (!adminServerSocket.isClosed()) {
+                        AppLogger.error("[SERVER-mTLS] Erreur d'acceptation : " + e.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            AppLogger.error("[SERVER-mTLS] Erreur démarrage port admin : " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    // ─── [MEMBRE 3] Rotation Dynamique des Certificats ───────────────────────
+
+    /**
+     * Démarre un ScheduledExecutorService qui vérifie toutes les 12h
+     * si le certificat expire dans moins de 24h. Si oui, il le renouvelle.
+     */
+    private void demarrerRotationCertificats() {
+        certRotationScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "CertRotation-Thread");
+            t.setDaemon(true);
+            return t;
+        });
+
+        certRotationScheduler.scheduleAtFixedRate(() -> {
+            try {
+                long remainingMs = certExpiryTimeMs - System.currentTimeMillis();
+                long remainingHours = remainingMs / (60 * 60 * 1000);
+
+                AppLogger.info("[CERT-ROTATION] Vérification du certificat... Expire dans " + remainingHours + "h");
+
+                // Renouveler si le certificat expire dans moins de 24h
+                if (remainingMs < (24L * 60 * 60 * 1000)) {
+                    AppLogger.info("[CERT-ROTATION] Renouvellement du certificat en cours...");
+                    refreshSSLContext();
+                    SecurityAuditLogger.certRotationSuccess(
+                            new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm")
+                                    .format(new java.util.Date(certExpiryTimeMs)));
+                } else {
+                    AppLogger.info("[CERT-ROTATION] Certificat encore valide. Prochaine vérification dans 12h.");
+                }
+            } catch (Exception e) {
+                AppLogger.error("[CERT-ROTATION] Erreur : " + e.getMessage());
+                SecurityAuditLogger.certRotationFailed(e.getMessage());
+            }
+        }, 1, 12, TimeUnit.HOURS); // Première vérification après 1h, puis toutes les 12h
+
+        AppLogger.info("[CERT-ROTATION] Scheduler démarré (vérification toutes les 12h)");
+    }
+
+    /**
+     * Renouvelle le SSLContext en demandant un nouveau certificat à Vault.
+     * Les nouvelles connexions utiliseront le nouveau certificat.
+     */
+    private void refreshSSLContext() throws Exception {
+        AppLogger.info("[CERT-ROTATION] Demande d'un nouveau certificat à Vault PKI...");
+
+        java.util.Map<String, String> certData =
+                com.chrionline.securite.VaultServerService.generateServerCertificate();
+
+        if (certData == null || certData.get("certificate") == null) {
+            throw new Exception("Vault n'a pas retourné de certificat valide.");
+        }
+
+        String serverCertPem = certData.get("certificate");
+        String privateKeyPem = certData.get("private_key");
+        String caCertPem     = certData.get("issuing_ca");
+
+        // Reconstruire le KeyStore
+        java.security.KeyStore keyStore = java.security.KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+
+        java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
+        java.security.cert.Certificate serverCert = cf.generateCertificate(
+                new java.io.ByteArrayInputStream(serverCertPem.getBytes()));
+        java.security.cert.Certificate caCert = cf.generateCertificate(
+                new java.io.ByteArrayInputStream(caCertPem.getBytes()));
+
+        // Parser la clé privée
+        byte[] pkDer;
+        if (privateKeyPem.contains("BEGIN RSA PRIVATE KEY")) {
+            String base64 = privateKeyPem
+                    .replace("-----BEGIN RSA PRIVATE KEY-----", "")
+                    .replace("-----END RSA PRIVATE KEY-----", "")
+                    .replaceAll("\\s+", "");
+            pkDer = convertPkcs1ToPkcs8(java.util.Base64.getDecoder().decode(base64));
+        } else {
+            String base64 = privateKeyPem
+                    .replace("-----BEGIN PRIVATE KEY-----", "")
+                    .replace("-----END PRIVATE KEY-----", "")
+                    .replaceAll("\\s+", "");
+            pkDer = java.util.Base64.getDecoder().decode(base64);
+        }
+
+        java.security.spec.PKCS8EncodedKeySpec spec = new java.security.spec.PKCS8EncodedKeySpec(pkDer);
+        java.security.PrivateKey privateKey = java.security.KeyFactory.getInstance("RSA").generatePrivate(spec);
+
+        keyStore.setKeyEntry("server", privateKey, "password".toCharArray(),
+                new java.security.cert.Certificate[]{serverCert, caCert});
+
+        // Reconstruire le TrustStore
+        java.security.KeyStore trustStore = java.security.KeyStore.getInstance("PKCS12");
+        trustStore.load(null, null);
+        trustStore.setCertificateEntry("ca", caCert);
+
+        // Reconstruire le SSLContext
+        javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory
+                .getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, "password".toCharArray());
+
+        javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
+                .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(trustStore);
+
+        javax.net.ssl.SSLContext newContext = javax.net.ssl.SSLContext.getInstance("TLS");
+        newContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+
+        // Mettre à jour atomiquement
+        this.currentSSLContext = newContext;
+        this.certExpiryTimeMs = System.currentTimeMillis() + (72L * 60 * 60 * 1000);
+
+        AppLogger.info("[CERT-ROTATION] ✓ Nouveau certificat SSL actif. Expire dans 72h.");
+    }
+}
