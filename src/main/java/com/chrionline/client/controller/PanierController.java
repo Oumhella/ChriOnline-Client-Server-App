@@ -123,7 +123,17 @@ public class PanierController {
             req.put("idUtilisateur", idUtilisateur);
             req.put("methodePaiement", methodePaiement);
             req.put("nomCarte", nomCarte != null ? nomCarte : "");
-            req.put("numeroCarte", numeroCarte != null ? numeroCarte : "");
+
+            // [MEMBRE 4] Chiffrement applicatif AES-256/GCM du numéro de carte
+            // Même si le tunnel TLS est compromis, la carte reste illisible
+            if (numeroCarte != null && !numeroCarte.isEmpty()) {
+                String numeroChiffre = com.chrionline.securite.PaymentCrypto.encrypt(numeroCarte);
+                req.put("numeroCarteChiffre", numeroChiffre);
+                System.out.println("[PAIEMENT] Numéro de carte chiffré avec AES-256/GCM avant envoi.");
+            } else {
+                req.put("numeroCarte", "");
+            }
+
             if (payment2faCode != null && !payment2faCode.isBlank()) {
                 req.put("payment2faCode", payment2faCode.trim());
             }

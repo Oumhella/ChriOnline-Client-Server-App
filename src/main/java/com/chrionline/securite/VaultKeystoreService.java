@@ -3,67 +3,120 @@ package com.chrionline.securite;
 import com.bettercloud.vault.Vault;
 import com.bettercloud.vault.VaultConfig;
 import com.bettercloud.vault.VaultException;
+import com.bettercloud.vault.response.AuthResponse;
 import com.bettercloud.vault.response.LogicalResponse;
 
 /**
- * Service pour interagir avec HashiCorp Vault.
- * Permet de récupérer le mot de passe du Keystore de façon sécurisée via API.
+ * Service pour récupérer le mot de passe du Keystore admin depuis Vault.
+ * 
+ * Supporte deux modes d'authentification :
+ * 1. AppRole (VAULT_ROLE_ID + VAULT_SECRET_ID) — Recommandé
+ * 2. Token statique (VAULT_TOKEN) — Legacy / Compatibilité
+ * 
+ * Si Vault est indisponible, retourne un mot de passe de secours (mode dégradé).
  */
 public class VaultKeystoreService {
 
-    // L'URL de développement locale de Vault
     private static final String VAULT_ADDR = "http://127.0.0.1:8200";
-    
-    // Le chemin vers le secret (sans le prefixe 'data/' car le driver v2 l'ajoute automatiquement)
     private static final String SECRET_PATH = "secret/admin/keystore";
+    private static final String FALLBACK_PASSWORD = "testPass123";
 
     /**
-     * Se connecte à Vault en utilisant le VAULT_TOKEN et récupère le mot de passe JKS.
-     * 
-     * @return le mot de passe sous forme de char[]
-     * @throws Exception si la connexion échoue, si le token est invalide, ou si le secret n'existe pas
+     * Récupère le mot de passe du Keystore depuis Vault.
+     * En mode dégradé (Vault indisponible), retourne le mot de passe de secours.
      */
     public static char[] getKeystorePassword() throws Exception {
-        // 1. Lire le Token depuis les variables d'environnement système
-        String vaultToken = System.getenv("VAULT_TOKEN");
-        if (vaultToken == null || vaultToken.trim().isEmpty()) {
-            throw new Exception("VAULT_TOKEN introuvable dans les variables d'environnement.\n" +
-                                "Veuillez configurer la variable d'environnement VAULT_TOKEN sur votre OS.");
+        // 1. Vérifier si Vault est joignable
+        if (!isVaultReachable()) {
+            System.err.println("[VaultKeystoreService] Vault injoignable. Utilisation du mot de passe de secours.");
+            return FALLBACK_PASSWORD.toCharArray();
         }
 
+        // 2. Tenter l'authentification AppRole
+        String roleId = System.getenv("VAULT_ROLE_ID");
+        String secretId = System.getenv("VAULT_SECRET_ID");
+        String token = System.getenv("VAULT_TOKEN");
+
+        if (roleId != null && !roleId.trim().isEmpty()
+                && secretId != null && !secretId.trim().isEmpty()) {
+            return getPasswordWithAppRole(roleId, secretId);
+        } else if (token != null && !token.trim().isEmpty()) {
+            return getPasswordWithToken(token);
+        } else {
+            System.err.println("[VaultKeystoreService] Aucune authentification configurée. Mode secours.");
+            return FALLBACK_PASSWORD.toCharArray();
+        }
+    }
+
+    /**
+     * Récupère le mot de passe via authentification AppRole.
+     */
+    private static char[] getPasswordWithAppRole(String roleId, String secretId) {
         try {
-            // 2. Configurer le client Vault
+            // 1. Authentification AppRole → obtenir un token temporaire
+            VaultConfig loginConfig = new VaultConfig()
+                    .address(VAULT_ADDR)
+                    .build();
+            Vault loginVault = new Vault(loginConfig);
+            AuthResponse authResponse = loginVault.auth().loginByAppRole(roleId, secretId);
+            String appToken = authResponse.getAuthClientToken();
+
+            // 2. Utiliser le token pour lire le secret
+            return getPasswordWithToken(appToken);
+        } catch (VaultException e) {
+            System.err.println("[VaultKeystoreService] Échec AppRole : " + e.getMessage());
+            return FALLBACK_PASSWORD.toCharArray();
+        }
+    }
+
+    /**
+     * Récupère le mot de passe avec un token Vault.
+     */
+    private static char[] getPasswordWithToken(String token) {
+        try {
             VaultConfig config = new VaultConfig()
                     .address(VAULT_ADDR)
-                    .token(vaultToken)
-                    .engineVersion(2) // On force l'utilisation du moteur KV v2
+                    .token(token)
+                    .engineVersion(2)
                     .build();
 
-            // 3. Instancier le client Vault
             Vault vault = new Vault(config);
-
-            // 4. Effectuer la requête GET
             LogicalResponse response = vault.logical().read(SECRET_PATH);
 
-            // Vérification de la réponse
             if (response.getRestResponse().getStatus() != 200) {
-                throw new Exception("Erreur API Vault (Status: " + response.getRestResponse().getStatus() + ")");
+                System.err.println("[VaultKeystoreService] Erreur Vault (Status: "
+                        + response.getRestResponse().getStatus() + "). Mode secours.");
+                return FALLBACK_PASSWORD.toCharArray();
             }
 
-            // 5. Extraire le mot de passe depuis la map de données ("data" -> "password" ou directement "password" selon le KV)
-            // Dans KV v2, le secret est encapsulé dans "data"
             String passwordStr = response.getData().get("password");
-
             if (passwordStr == null) {
-                throw new Exception("Le secret '" + SECRET_PATH + "' ne contient pas la clé 'password'.");
+                System.err.println("[VaultKeystoreService] Clé 'password' absente dans le secret. Mode secours.");
+                return FALLBACK_PASSWORD.toCharArray();
             }
 
-            // 6. Convertir en char[] pour une meilleure sécurité mémoire
             return passwordStr.toCharArray();
-
         } catch (VaultException e) {
-            // 7. Gestion des erreurs spécifiques à Vault (Vault injoignable, token expiré...)
-            throw new Exception("Impossible de récupérer le mot de passe depuis Vault. Raison : " + e.getMessage(), e);
+            System.err.println("[VaultKeystoreService] Erreur Vault : " + e.getMessage() + ". Mode secours.");
+            return FALLBACK_PASSWORD.toCharArray();
+        }
+    }
+
+    /**
+     * Vérifie si le serveur Vault est joignable (Health Check).
+     */
+    private static boolean isVaultReachable() {
+        try {
+            java.net.URL url = new java.net.URL(VAULT_ADDR + "/v1/sys/health");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(2000);
+            int code = conn.getResponseCode();
+            // Vault renvoie 200 (OK), 429 (Standby), 472 (DR), 473 (Performance Standby), 501 (Not Init), 503 (Sealed)
+            return code > 0;
+        } catch (Exception e) {
+            return false;
         }
     }
 }
