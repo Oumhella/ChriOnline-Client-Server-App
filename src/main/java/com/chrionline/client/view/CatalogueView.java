@@ -216,6 +216,15 @@ public class CatalogueView extends Application {
             List<com.chrionline.shared.models.Categorie> categories = controller.recupererCategories();
 
             Platform.runLater(() -> {
+                // Lier les catégories aux produits pour récupérer le discount
+                for (Produit p : produitsInit) {
+                    for (com.chrionline.shared.models.Categorie c : categories) {
+                        if (c.getId() == p.getIdCategorie()) {
+                            p.setCategorie(c);
+                            break;
+                        }
+                    }
+                }
                 this.masterProductList = produitsInit;
                 
                 // Charger le combo catégories
@@ -325,10 +334,44 @@ public class CatalogueView extends Application {
             ? p.getFormats().stream().mapToDouble(ProductFormat::getPrix).min().orElse(0) 
             : p.getPrix();
         
-        Text price = new Text(String.format("%.2f MAD", minPrice));
-        price.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
-        price.setFill(Color.web(BRUN));
-        priceTag.getChildren().add(price);
+        double discount = (p.getCategorie() != null) ? p.getCategorie().getDiscount() : 0.0;
+        
+        if (discount > 0) {
+            double oldPrice = minPrice / (1.0 - discount / 100.0);
+            
+            Text oldPriceTxt = new Text(String.format("%.2f", oldPrice));
+            oldPriceTxt.setFont(Font.font("Georgia", FontWeight.NORMAL, 11));
+            oldPriceTxt.setFill(Color.web(BRUN_LIGHT));
+            oldPriceTxt.setStrikethrough(true);
+            
+            Text discountBadge = new Text(String.format(" -%.0f%% ", discount));
+            discountBadge.setFont(Font.font("Georgia", FontWeight.BOLD, 10));
+            discountBadge.setFill(Color.WHITE);
+            
+            StackPane badgePane = new StackPane();
+            Rectangle bg = new Rectangle(40, 16, Color.web(TERRACOTTA));
+            bg.setArcWidth(8); bg.setArcHeight(8);
+            badgePane.getChildren().addAll(bg, discountBadge);
+            
+            VBox pricesBox = new VBox(2);
+            pricesBox.setAlignment(Pos.CENTER_RIGHT);
+            
+            Text minPriceTxt = new Text(String.format("%.2f MAD", minPrice));
+            minPriceTxt.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+            minPriceTxt.setFill(Color.web(BRUN));
+            
+            pricesBox.getChildren().addAll(oldPriceTxt, minPriceTxt);
+            
+            Region space = new Region();
+            space.setPrefWidth(5);
+            
+            priceTag.getChildren().addAll(badgePane, space, pricesBox);
+        } else {
+            Text price = new Text(String.format("%.2f MAD", minPrice));
+            price.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
+            price.setFill(Color.web(BRUN));
+            priceTag.getChildren().add(price);
+        }
         
         StackPane.setAlignment(priceTag, Pos.BOTTOM_RIGHT);
         StackPane.setMargin(priceTag, new Insets(0, 15, 15, 0));

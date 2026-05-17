@@ -261,24 +261,23 @@ public class ProduitService {
         try {
             int id = Integer.parseInt(req.get("id_categorie").toString());
             double discount = Double.parseDouble(req.get("discount").toString());
-            // 1. Appliquer le discount sur les produits existants de cette catégorie
-            ProduitDAO.applyDiscount(id, discount);
-
-            // 2. Mettre à jour le taux de discount de la catégorie en BDD (pour les futurs produits ou affichage)
-            boolean updateSuccess = false;
+            
             Categorie c = null;
             List<Categorie> cats = ProduitDAO.findAllCategories();
-            for (Categorie iter : cats) {
-                if (iter.getId() == id) {
-                    c = iter;
-                    break;
-                }
+            for(Categorie iter : cats) {
+                if(iter.getId() == id) { c = iter; break; }
             }
-            if (c != null) {
+            
+            boolean catUpdated = false;
+            if(c != null) {
                 c.setDiscount(discount);
-                updateSuccess = ProduitDAO.updateCategorie(c);
+                catUpdated = ProduitDAO.updateCategorie(c);
             }
-            res.put("statut", updateSuccess ? "OK" : "ERREUR");
+            
+            // Appliquer aux produits existants (peut retourner false s'il n'y a pas de produits)
+            ProduitDAO.applyDiscount(id, discount);
+            
+            res.put("statut", catUpdated ? "OK" : "ERREUR");
         } catch (Exception e) {
             res.put("statut", "ERREUR");
             res.put("message", e.getMessage());
