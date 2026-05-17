@@ -750,6 +750,40 @@ public class UserDAO {
     }
 
     /**
+     * Récupère le secret TOTP d'un utilisateur par son ID.
+     */
+    public static String getTotpSecretById(int userId) {
+        String sql = "SELECT totp_secret FROM utilisateur WHERE idUtilisateur = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getString("totp_secret");
+            }
+        } catch (Exception e) {
+            System.err.println("[UserDAO] getTotpSecretById error: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Met à jour le secret TOTP d'un utilisateur par son ID.
+     */
+    public static boolean updateTotpSecretById(int userId, String secret) {
+        String sql = "UPDATE utilisateur SET totp_secret = ? WHERE idUtilisateur = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, secret);
+            ps.setInt(2, userId);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.err.println("[UserDAO] updateTotpSecretById error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Vérifie le mot de passe d'un administrateur et gère la sécurité (blocage/échec).
      */
     public static Map<String, Object> verifyAdminPassword(String email, String plainPassword, String clientIp) {

@@ -19,6 +19,12 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 
 import java.util.Map;
 
@@ -49,6 +55,11 @@ public class CheckoutView extends Application {
     private TextField txtCode2fa;
     private VBox box2faSection;
     private boolean enAttente2fa = false;
+
+    // Éléments UI pour TOTP (Microsoft Authenticator)
+    private Label lbl2faTitle;
+    private VBox setupTotpBox;
+    private ImageView imgQrCode;
 
     public CheckoutView(int idUtilisateur, CommandeDTO recap) {
         this.idUtilisateur = idUtilisateur;
@@ -206,15 +217,46 @@ public class CheckoutView extends Application {
     }
 
     private VBox build2FASection() {
-        VBox box = new VBox(10);
-        box.setPadding(new Insets(0));
-        Label l = new Label("Code de confirmation (email)");
-        l.setFont(Font.font("Georgia", FontWeight.BOLD, 13));
-        l.setTextFill(Color.web(BRUN));
+        VBox box = new VBox(12);
+        box.setPadding(new Insets(12));
+        box.setStyle("-fx-background-color: #F8F5F0; -fx-border-color: #E8E0D5; -fx-border-radius: 8; -fx-background-radius: 8; -fx-border-width: 1;");
+
+        lbl2faTitle = new Label("Sécurité Double Facteur (2FA)");
+        lbl2faTitle.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
+        lbl2faTitle.setTextFill(Color.web(BRUN));
+
+        // 1. Setup TOTP Section (Initialement invisible)
+        setupTotpBox = new VBox(8);
+        setupTotpBox.setVisible(false);
+        setupTotpBox.setManaged(false);
+
+        Label lblSetupDesc = new Label("1. Ouvrez l'application Microsoft Authenticator\n2. Ajoutez un compte professionnel ou scolaire\n3. Scannez ce QR Code :");
+        lblSetupDesc.setFont(Font.font("System", 12));
+        lblSetupDesc.setTextFill(Color.web(BRUN_MED));
+
+        // QR Code ImageView
+        imgQrCode = new ImageView();
+        imgQrCode.setFitWidth(180);
+        imgQrCode.setFitHeight(180);
+        
+        HBox qrBox = new HBox(imgQrCode);
+        qrBox.setAlignment(Pos.CENTER);
+        qrBox.setStyle("-fx-padding: 5; -fx-background-color: #FFF; -fx-border-color: #E8E0D5; -fx-border-radius: 4; -fx-background-radius: 4;");
+        qrBox.setMaxWidth(190);
+
+        setupTotpBox.getChildren().addAll(lblSetupDesc, qrBox);
+
+        // 2. Champ de validation du code
+        Label lblCodePrompt = new Label("Saisissez le code à 6 chiffres généré :");
+        lblCodePrompt.setFont(Font.font("System", FontWeight.BOLD, 12));
+        lblCodePrompt.setTextFill(Color.web(BRUN));
+
         txtCode2fa = new TextField();
-        txtCode2fa.setPromptText("6 chiffres (vérifiez votre boîte Gmail)");
-        txtCode2fa.setMaxWidth(240);
-        box.getChildren().addAll(l, txtCode2fa);
+        txtCode2fa.setPromptText("Ex: 123456");
+        txtCode2fa.setMaxWidth(160);
+        txtCode2fa.setStyle("-fx-font-size: 14; -fx-alignment: center; -fx-font-weight: bold; -fx-border-color: #E8E0D5; -fx-border-radius: 4; -fx-background-radius: 4;");
+
+        box.getChildren().addAll(lbl2faTitle, setupTotpBox, lblCodePrompt, txtCode2fa);
         box.setVisible(false);
         box.setManaged(false);
         return box;
@@ -250,7 +292,7 @@ public class CheckoutView extends Application {
         if (enAttente2fa) {
             String code = txtCode2fa != null ? txtCode2fa.getText().trim() : "";
             if (code.length() != 6 || !code.chars().allMatch(Character::isDigit)) {
-                msgLabel.setText("⚠ Saisissez le code à 6 chiffres reçu dans votre boîte Gmail (ou votre email).");
+                msgLabel.setText("⚠ Saisissez le code à 6 chiffres généré par votre application Microsoft Authenticator.");
                 return;
             }
         }
@@ -260,14 +302,45 @@ public class CheckoutView extends Application {
         final String methodeFinale = methode;
         final String code2fa = enAttente2fa ? txtCode2fa.getText().trim() : null;
 
+        // [Memory Cleaning] Récupération sous forme de char[] et effacement immédiat de l'UI
+        final char[] numeroCarteChars = "carte".equals(methodeFinale) 
+                ? txtNumeroCarte.getText().toCharArray() 
+                : new char[0];
+        final String nomCarteStr = txtNomCarte.getText();
+        txtNumeroCarte.clear();
+        txtNomCarte.clear();
+
         new Thread(() -> {
             Map<String, Object> rep = controller.confirmerCommandeEtape(
-                    methodeFinale, txtNomCarte.getText(), txtNumeroCarte.getText(), code2fa);
+                    methodeFinale, nomCarteStr, numeroCarteChars, code2fa);
             Platform.runLater(() -> {
-                if ("REQUIRES_PAYMENT_2FA".equals(rep.get("statut"))) {
+                if ("REQUIRES_TOTP_SETUP".equals(rep.get("statut"))) {
                     enAttente2fa = true;
+                    String otpauthUri = (String) rep.get("otpauthUri");
+                    
+                    try {
+                        String qrUrl = "https://quickchart.io/qr?size=180&text=" + URLEncoder.encode(otpauthUri, StandardCharsets.UTF_8.toString());
+                        imgQrCode.setImage(new Image(qrUrl, true));
+                    } catch (Exception ex) {
+                        System.err.println("[CheckoutView] Échec QR Code : " + ex.getMessage());
+                    }
+
+                    setupTotpBox.setVisible(true);
+                    setupTotpBox.setManaged(true);
                     box2faSection.setVisible(true);
                     box2faSection.setManaged(true);
+                    lbl2faTitle.setText("1. Liaison Microsoft Authenticator");
+                    msgLabel.setText("Liaison de sécurité double facteur requise.");
+                    msgLabel.setTextFill(Color.web(BRUN_MED));
+                    return;
+                }
+                if ("REQUIRES_PAYMENT_2FA".equals(rep.get("statut"))) {
+                    enAttente2fa = true;
+                    setupTotpBox.setVisible(false);
+                    setupTotpBox.setManaged(false);
+                    box2faSection.setVisible(true);
+                    box2faSection.setManaged(true);
+                    lbl2faTitle.setText("Code Microsoft Authenticator");
                     msgLabel.setText((String) rep.getOrDefault("message", "Code requis."));
                     msgLabel.setTextFill(Color.web(BRUN_MED));
                     return;

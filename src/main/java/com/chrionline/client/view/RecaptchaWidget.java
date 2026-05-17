@@ -22,7 +22,8 @@ public class RecaptchaWidget extends HBox {
     private String token = null;
     private final WebView webView;
     private final WebEngine webEngine;
-    private final JSBridge bridge = new JSBridge(); // RÉTABLI : Référence forte obligatoire contre le Garbage Collector !
+    private final JSBridge bridge = new JSBridge(); // RÉTABLI : Référence forte obligatoire contre le Garbage Collector
+                                                    // !
 
     // ── Serveur HTTP local statique pour tromper reCAPTCHA ──
     private static HttpServer server;

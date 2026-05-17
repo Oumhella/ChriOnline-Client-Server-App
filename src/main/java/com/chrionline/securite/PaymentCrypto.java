@@ -1,143 +1,191 @@
 package com.chrionline.securite;
 
 import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
+import java.security.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 /**
- * Chiffrement applicatif AES-256/GCM pour les données de paiement.
+ * Moteur de cryptographie asymétrique RSA pour sécuriser les données de paiement.
  *
- * Défense en profondeur : même si le tunnel TLS est compromis,
- * le numéro de carte bancaire reste illisible car chiffré avec une clé
- * distincte stockée dans Vault (secret/server/config → payment_aes_key).
- *
- * Format du message chiffré (Base64) : IV (12 octets) || Ciphertext+Tag
+ * Zéro-Knowledge : 
+ * - Le client utilise exclusivement la clé publique du serveur pour chiffrer la carte.
+ * - Seul le serveur possède la clé privée (stockée de manière sécurisée ou générée
+ *   dynamiquement en mémoire) et peut déchiffrer les données.
+ * - Aucune clé symétrique ou secrète n'est stockée côté client.
  */
 public class PaymentCrypto {
 
-    private static final String ALGORITHM = "AES/GCM/NoPadding";
-    private static final int GCM_IV_LENGTH = 12;   // 96 bits (recommandé par NIST)
-    private static final int GCM_TAG_LENGTH = 128;  // 128 bits d'authentification
+    private static final String ALGORITHM = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
 
-    // Clé AES chargée depuis Vault ou en dur pour le fallback
-    private static byte[] aesKeyBytes;
+    // Clés RSA (la clé privée reste au niveau du serveur, la clé publique est partagée)
+    private static PrivateKey serverPrivateKey;
+    private static PublicKey serverPublicKey;
 
     static {
+        // Côté serveur : on essaie d'initialiser la paire de clés RSA
         try {
-            // Tenter de charger la clé depuis Vault (secret/server/config → payment_aes_key)
-            java.util.Map<String, String> config = VaultServerService.getServerConfig();
-            String keyFromVault = config.get("payment_aes_key");
+            if (isServerEnvironment()) {
+                // Tenter de charger les clés RSA depuis Vault
+                java.util.Map<String, String> config = VaultServerService.getServerConfig();
+                String privKeyBase64 = config.get("payment_rsa_private");
+                String pubKeyBase64 = config.get("payment_rsa_public");
 
-            if (keyFromVault != null && !keyFromVault.isEmpty()) {
-                // Dériver une clé de 256 bits à partir du secret via SHA-256
-                java.security.MessageDigest sha = java.security.MessageDigest.getInstance("SHA-256");
-                aesKeyBytes = sha.digest(keyFromVault.getBytes(StandardCharsets.UTF_8));
-                System.out.println("[PaymentCrypto] Clé AES chargée depuis Vault.");
+                if (privKeyBase64 != null && !privKeyBase64.isEmpty() && pubKeyBase64 != null && !pubKeyBase64.isEmpty()) {
+                    KeyFactory kf = KeyFactory.getInstance("RSA");
+                    
+                    byte[] privBytes = Base64.getDecoder().decode(privKeyBase64);
+                    serverPrivateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(privBytes));
+                    
+                    byte[] pubBytes = Base64.getDecoder().decode(pubKeyBase64);
+                    serverPublicKey = kf.generatePublic(new X509EncodedKeySpec(pubBytes));
+                    
+                    System.out.println("[PaymentCrypto-RSA] Paire de clés chargée depuis Vault.");
+                } else {
+                    // Fallback : générer dynamiquement une paire de clés RSA de 2048 bits
+                    KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+                    kpg.initialize(2048);
+                    KeyPair kp = kpg.generateKeyPair();
+                    serverPrivateKey = kp.getPrivate();
+                    serverPublicKey = kp.getPublic();
+                    System.out.println("[PaymentCrypto-RSA] Paire de clés RSA générée dynamiquement (Vault indisponible).");
+                }
             } else {
-                // Fallback : clé dérivée d'un secret par défaut (développement uniquement)
-                java.security.MessageDigest sha = java.security.MessageDigest.getInstance("SHA-256");
-                aesKeyBytes = sha.digest("ChriOnline-Dev-Payment-Key-2026".getBytes(StandardCharsets.UTF_8));
-                System.out.println("[PaymentCrypto] WARNING: Clé AES par défaut utilisée (Vault indisponible).");
+                System.out.println("[PaymentCrypto-RSA] Environnement Client : Clé publique en attente du serveur.");
             }
         } catch (Exception e) {
-            System.err.println("[PaymentCrypto] Erreur d'initialisation : " + e.getMessage());
+            System.err.println("[PaymentCrypto-RSA] Erreur d'initialisation : " + e.getMessage());
+            // Fallback de sécurité : générer une paire temporaire pour que l'application ne plante pas
             try {
-                java.security.MessageDigest sha = java.security.MessageDigest.getInstance("SHA-256");
-                aesKeyBytes = sha.digest("ChriOnline-Dev-Payment-Key-2026".getBytes(StandardCharsets.UTF_8));
-            } catch (Exception ex) {
-                throw new RuntimeException("Impossible d'initialiser PaymentCrypto", ex);
-            }
+                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+                kpg.initialize(2048);
+                KeyPair kp = kpg.generateKeyPair();
+                serverPrivateKey = kp.getPrivate();
+                serverPublicKey = kp.getPublic();
+            } catch (Exception ignored) {}
         }
     }
 
     /**
-     * Chiffre un texte en clair (ex: numéro de carte) avec AES-256/GCM.
-     *
-     * @param plaintext le texte en clair à chiffrer
-     * @return le texte chiffré encodé en Base64 (IV + ciphertext+tag)
+     * Permet au client de définir la clé publique du serveur reçue par le réseau.
+     */
+    public static void setServerPublicKey(String pubKeyBase64) {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(pubKeyBase64);
+            KeyFactory kf = KeyFactory.getInstance("RSA");
+            serverPublicKey = kf.generatePublic(new X509EncodedKeySpec(keyBytes));
+            System.out.println("[PaymentCrypto-RSA] Clé publique du serveur enregistrée avec succès.");
+        } catch (Exception e) {
+            System.err.println("[PaymentCrypto-RSA] Échec de l'enregistrement de la clé publique : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Récupère la clé publique sous forme Base64 pour l'envoyer aux clients.
+     */
+    public static String getServerPublicKeyBase64() {
+        if (serverPublicKey == null) return null;
+        return Base64.getEncoder().encodeToString(serverPublicKey.getEncoded());
+    }
+
+    public static boolean hasPublicKey() {
+        return serverPublicKey != null;
+    }
+
+    /**
+     * Chiffre les données sensibles (carte bancaire) à l'aide de la clé publique RSA.
      */
     public static String encrypt(String plaintext) {
-        if (plaintext == null || plaintext.isEmpty()) {
+        if (plaintext == null || plaintext.isEmpty()) return plaintext;
+        if (serverPublicKey == null) {
+            System.err.println("[PaymentCrypto-RSA] Erreur : Clé publique manquante. Chiffrement impossible.");
             return plaintext;
         }
         try {
-            // 1. Générer un IV aléatoire unique pour chaque chiffrement
-            byte[] iv = new byte[GCM_IV_LENGTH];
-            new SecureRandom().nextBytes(iv);
-
-            // 2. Initialiser le chiffrement AES-GCM
-            SecretKey key = new SecretKeySpec(aesKeyBytes, "AES");
             Cipher cipher = Cipher.getInstance(ALGORITHM);
-            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
-            cipher.init(Cipher.ENCRYPT_MODE, key, gcmSpec);
-
-            // 3. Chiffrer
+            cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey);
             byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
-
-            // 4. Concaténer IV + Ciphertext et encoder en Base64
-            byte[] message = new byte[iv.length + ciphertext.length];
-            System.arraycopy(iv, 0, message, 0, iv.length);
-            System.arraycopy(ciphertext, 0, message, iv.length, ciphertext.length);
-
-            return Base64.getEncoder().encodeToString(message);
-
+            return Base64.getEncoder().encodeToString(ciphertext);
         } catch (Exception e) {
-            System.err.println("[PaymentCrypto] Erreur de chiffrement : " + e.getMessage());
-            return plaintext; // Fallback : retourner en clair (ne devrait jamais arriver)
+            System.err.println("[PaymentCrypto-RSA] Échec du chiffrement RSA : " + e.getMessage());
+            return plaintext;
         }
     }
 
     /**
-     * Déchiffre un texte chiffré par {@link #encrypt(String)}.
-     *
-     * @param encryptedBase64 le texte chiffré encodé en Base64
-     * @return le texte en clair original
+     * Chiffre les données sensibles (carte bancaire) sous forme de char[] et nettoie impérativement la mémoire.
      */
-    public static String decrypt(String encryptedBase64) {
-        if (encryptedBase64 == null || encryptedBase64.isEmpty()) {
-            return encryptedBase64;
+    public static String encrypt(char[] plaintext) {
+        if (plaintext == null || plaintext.length == 0) return "";
+        if (serverPublicKey == null) {
+            System.err.println("[PaymentCrypto-RSA] Erreur : Clé publique manquante. Chiffrement impossible.");
+            return "";
         }
         try {
-            // 1. Décoder le Base64
-            byte[] message = Base64.getDecoder().decode(encryptedBase64);
+            // Conversion char[] -> byte[] temporaire
+            java.nio.CharBuffer charBuffer = java.nio.CharBuffer.wrap(plaintext);
+            java.nio.ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(charBuffer);
+            byte[] bytes = new byte[byteBuffer.remaining()];
+            byteBuffer.get(bytes);
 
-            // 2. Extraire l'IV (12 premiers octets)
-            byte[] iv = new byte[GCM_IV_LENGTH];
-            System.arraycopy(message, 0, iv, 0, iv.length);
-
-            // 3. Extraire le ciphertext+tag
-            byte[] ciphertext = new byte[message.length - iv.length];
-            System.arraycopy(message, iv.length, ciphertext, 0, ciphertext.length);
-
-            // 4. Déchiffrer
-            SecretKey key = new SecretKeySpec(aesKeyBytes, "AES");
+            // Chiffrement RSA
             Cipher cipher = Cipher.getInstance(ALGORITHM);
-            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
-            cipher.init(Cipher.DECRYPT_MODE, key, gcmSpec);
+            cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey);
+            byte[] ciphertext = cipher.doFinal(bytes);
 
-            byte[] plaintext = cipher.doFinal(ciphertext);
-            return new String(plaintext, StandardCharsets.UTF_8);
+            // Écrasement immédiat de la clé temporaire en mémoire
+            java.util.Arrays.fill(bytes, (byte) 0);
 
+            return Base64.getEncoder().encodeToString(ciphertext);
         } catch (Exception e) {
-            System.err.println("[PaymentCrypto] Erreur de déchiffrement : " + e.getMessage());
-            // Si le déchiffrement échoue, le texte n'était peut-être pas chiffré
-            return encryptedBase64;
+            System.err.println("[PaymentCrypto-RSA] Échec du chiffrement RSA : " + e.getMessage());
+            return "";
+        } finally {
+            // Nettoyage impératif et immédiat du tableau d'entrée
+            java.util.Arrays.fill(plaintext, '0');
         }
     }
 
     /**
-     * Vérifie si un texte semble être chiffré (format Base64 valide + longueur minimale).
+     * Déchiffre les données sensibles à l'aide de la clé privée RSA (Serveur uniquement).
      */
-    public static boolean isEncrypted(String text) {
-        if (text == null || text.length() < 20) return false;
+    public static String decrypt(String ciphertextBase64) {
+        if (ciphertextBase64 == null || ciphertextBase64.isEmpty()) return ciphertextBase64;
+        if (serverPrivateKey == null) {
+            System.err.println("[PaymentCrypto-RSA] Erreur : Clé privée manquante. Déchiffrement impossible.");
+            return ciphertextBase64;
+        }
         try {
-            byte[] decoded = Base64.getDecoder().decode(text);
-            return decoded.length > GCM_IV_LENGTH; // Au moins IV + quelques octets
+            byte[] cipherBytes = Base64.getDecoder().decode(ciphertextBase64);
+            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            cipher.init(Cipher.DECRYPT_MODE, serverPrivateKey);
+            byte[] plaintextBytes = cipher.doFinal(cipherBytes);
+            return new String(plaintextBytes, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            System.err.println("[PaymentCrypto-RSA] Échec du déchiffrement RSA : " + e.getMessage());
+            return ciphertextBase64;
+        }
+    }
+
+    /**
+     * Vérifie si l'environnement actuel est le serveur en vérifiant la présence de la classe du serveur.
+     */
+    private static boolean isServerEnvironment() {
+        try {
+            Class.forName("com.chrionline.server.core.Server");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    public static boolean isEncrypted(String text) {
+        if (text == null || text.length() < 24) return false;
+        try {
+            Base64.getDecoder().decode(text);
+            return true;
         } catch (IllegalArgumentException e) {
             return false;
         }

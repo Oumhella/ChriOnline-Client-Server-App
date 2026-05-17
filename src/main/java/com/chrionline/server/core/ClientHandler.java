@@ -55,6 +55,7 @@ public class ClientHandler implements Runnable {
             "DECONNEXION",
             "UDP_REGISTER",
             "REGISTER_UDP",
+            "PAYMENT_GET_PUBLIC_KEY",
             "INCONNUE"
     );
 
@@ -245,6 +246,12 @@ public class ClientHandler implements Runnable {
             case "UDP_REGISTER" -> {
                 this.udpPort = (int) req.getOrDefault("port", 9092);
                 System.out.println("[HANDLER] Port UDP enregistré pour client " + userId + " : " + udpPort);
+            }
+            case "PAYMENT_GET_PUBLIC_KEY" -> {
+                Map<String, Object> rep = new java.util.HashMap<>();
+                rep.put("statut", "OK");
+                rep.put("publicKey", com.chrionline.securite.PaymentCrypto.getServerPublicKeyBase64());
+                envoyerMessage(rep);
             }
             case "PANIER_GET" -> envoyerMessage(panierService.getPanier(req));
             case "PANIER_AJOUTER" -> envoyerMessage(panierService.ajouterProduit(req));
@@ -751,6 +758,14 @@ public class ClientHandler implements Runnable {
     private void handleCommandeConfirmer(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleCommandeConfirmer");
         try {
+            // [Session Hardening] Vérification de la cohérence de l'idUtilisateur de la session
+            int reqUserId = req.containsKey("idUtilisateur") ? ((Number) req.get("idUtilisateur")).intValue() : -1;
+            if (reqUserId != this.userId && !isAdminMtlsConnection) {
+                SecurityLogger.logSecurityEvent("PAYMENT_ABUSE", String.valueOf(this.userId), socket.getInetAddress().getHostAddress(), "FAILURE: user id mismatch");
+                envoyerMessage(creerReponse("ERREUR", "Transaction non autorisée : Session incohérente."));
+                return;
+            }
+
             // [MEMBRE 4] Déchiffrement applicatif du numéro de carte bancaire
             String numeroChiffre = (String) req.get("numeroCarteChiffre");
             if (numeroChiffre != null && !numeroChiffre.isEmpty()) {

@@ -127,18 +127,13 @@ public class PanierService {
             return erreur("Parametres manquants.");
         }
 
-        // ── 2FA simulé : 1re requête sans code → génération ; 2e requête avec code → validation ──
+        // ── 2FA TOTP (Google Authenticator) : 1re requête sans code → enrôlement/demande ; 2e requête avec code → validation ──
         if (code2fa == null || code2fa.isBlank()) {
-            String code = PaymentTwoFactorService.generateAndStore(idUtilisateur);
-            logger.info("[PAYMENT_2FA] Code simulé pour utilisateur {} : {} (valide 5 min)", idUtilisateur, code);
-            Map<String, Object> attente = new HashMap<>();
-            attente.put("statut", "REQUIRES_PAYMENT_2FA");
-            attente.put("message", "Un code à 6 chiffres vous a été envoyé par email. Consultez votre boîte Gmail (ou votre messagerie), puis saisissez-le ci-dessous pour confirmer le paiement.");
-            return attente;
+            return PaymentTwoFactorService.initiateVerification(idUtilisateur);
         }
 
         if (!PaymentTwoFactorService.verifyAndConsume(idUtilisateur, code2fa)) {
-            logger.warn("[PAYMENT_2FA] Code invalide ou expiré pour utilisateur {}", idUtilisateur);
+            logger.warn("[PAYMENT_TOTP] Code TOTP invalide pour l'utilisateur ID: {}", idUtilisateur);
             return erreur2faInvalide();
         }
 

@@ -115,21 +115,38 @@ public class PanierController {
      * </ul>
      */
     @SuppressWarnings("unchecked")
-    public Map<String, Object> confirmerCommandeEtape(String methodePaiement, String nomCarte, String numeroCarte,
+    public Map<String, Object> confirmerCommandeEtape(String methodePaiement, String nomCarte, char[] numeroCarte,
                                                       String payment2faCode) {
         try {
+            // [ZKP RSA] Récupérer la clé publique du serveur si non définie
+            if (!com.chrionline.securite.PaymentCrypto.hasPublicKey()) {
+                try {
+                    Map<String, Object> keyReq = new HashMap<>();
+                    keyReq.put("commande", "PAYMENT_GET_PUBLIC_KEY");
+                    client.connecter();
+                    client.envoyerRequete(keyReq);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> keyRep = (Map<String, Object>) client.lireReponse();
+                    if (keyRep != null && "OK".equals(keyRep.get("statut"))) {
+                        String pubKeyBase64 = (String) keyRep.get("publicKey");
+                        com.chrionline.securite.PaymentCrypto.setServerPublicKey(pubKeyBase64);
+                    }
+                } catch (Exception ex) {
+                    System.err.println("[PanierController] Échec récupération clé publique de paiement : " + ex.getMessage());
+                }
+            }
+
             Map<String, Object> req = new HashMap<>();
             req.put("commande", "COMMANDE_CONFIRMER");
             req.put("idUtilisateur", idUtilisateur);
             req.put("methodePaiement", methodePaiement);
             req.put("nomCarte", nomCarte != null ? nomCarte : "");
 
-            // [MEMBRE 4] Chiffrement applicatif AES-256/GCM du numéro de carte
-            // Même si le tunnel TLS est compromis, la carte reste illisible
-            if (numeroCarte != null && !numeroCarte.isEmpty()) {
+            // [ZKP RSA & Memory Cleaning] Chiffrement RSA et écrasement immédiat de la RAM
+            if (numeroCarte != null && numeroCarte.length > 0) {
                 String numeroChiffre = com.chrionline.securite.PaymentCrypto.encrypt(numeroCarte);
                 req.put("numeroCarteChiffre", numeroChiffre);
-                System.out.println("[PAIEMENT] Numéro de carte chiffré avec AES-256/GCM avant envoi.");
+                System.out.println("[PAIEMENT] Numéro de carte chiffré asymétriquement avec RSA-256 (OAEP) avant envoi.");
             } else {
                 req.put("numeroCarte", "");
             }
@@ -157,7 +174,8 @@ public class PanierController {
      */
     @Deprecated
     public CommandeDTO confirmerCommande(String methodePaiement, String nomCarte, String numeroCarte) {
-        Map<String, Object> rep = confirmerCommandeEtape(methodePaiement, nomCarte, numeroCarte, null);
+        char[] cardChars = numeroCarte != null ? numeroCarte.toCharArray() : new char[0];
+        Map<String, Object> rep = confirmerCommandeEtape(methodePaiement, nomCarte, cardChars, null);
         if ("OK".equals(rep.get("statut"))) {
             return (CommandeDTO) rep.get("commandeResult");
         }
