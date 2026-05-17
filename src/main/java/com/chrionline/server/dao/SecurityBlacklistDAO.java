@@ -124,4 +124,36 @@ public class SecurityBlacklistDAO {
             System.err.println("[SecurityBlacklistDAO] cleanupExpired: " + e.getMessage());
         }
     }
+
+    // ─── Dashboard Supervision ────────────────────────────────────────────────
+
+    /**
+     * Retourne la liste de toutes les IPs actuellement en liste noire active
+     * pour l'interface de supervision admin.
+     */
+    public static java.util.List<java.util.Map<String, Object>> getAllActiveBlacklist() {
+        java.util.List<java.util.Map<String, Object>> list = new java.util.ArrayList<>();
+        String sql = """
+            SELECT ip_address, email, raison, date_ajout, expire_le
+            FROM security_blacklist
+            WHERE actif = TRUE AND expire_le > NOW()
+            ORDER BY date_ajout DESC
+        """;
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                java.util.Map<String, Object> entry = new java.util.HashMap<>();
+                entry.put("ip", rs.getString("ip_address"));
+                entry.put("email", rs.getString("email"));
+                entry.put("raison", rs.getString("raison"));
+                entry.put("date_ajout", rs.getTimestamp("date_ajout").toString());
+                entry.put("expire_le", rs.getTimestamp("expire_le").toString());
+                list.add(entry);
+            }
+        } catch (Exception e) {
+            System.err.println("[SecurityBlacklistDAO] getAllActiveBlacklist: " + e.getMessage());
+        }
+        return list;
+    }
 }

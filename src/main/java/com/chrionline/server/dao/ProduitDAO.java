@@ -383,8 +383,8 @@ public class ProduitDAO {
             else ps.setNull(1, Types.INTEGER);
             ps.setString(2, c.getNom());
             ps.setString(3, c.getDescription());
-            ps.setInt(4, c.getId());
-            ps.setDouble(5, c.getDiscount());
+            ps.setDouble(4, c.getDiscount());
+            ps.setInt(5, c.getId());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("[ProduitDAO] Erreur updateCategorie : " + e.getMessage());

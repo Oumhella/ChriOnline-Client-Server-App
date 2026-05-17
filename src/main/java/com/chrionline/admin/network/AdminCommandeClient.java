@@ -18,23 +18,23 @@ import java.util.Map;
  *
  * [MEMBRE 2] Sécurité renforcée :
  * - TrustStore : vérifie le certificat serveur via vault-ca.pem
- * - KeyStore  : présente le certificat admin (admin.jks) au serveur
+ * - KeyStore : présente le certificat admin (admin.jks) au serveur
  * - Port dédié : 9445 avec setNeedClientAuth(true) côté serveur
  */
 public class AdminCommandeClient {
 
-    private final String SERVER_IP   = "127.0.0.1";
-    private final int    SERVER_PORT = 9445; // [MEMBRE 2] Port mTLS dédié aux admins
+    private final String SERVER_IP = "127.0.0.1";
+    private final int SERVER_PORT = 9445; // [MEMBRE 2] Port mTLS dédié aux admins
 
     // Chemins des fichiers de sécurité
     private static final String TRUSTSTORE_PATH = "src/main/resources/vault-ca.pem";
-    private static final String KEYSTORE_PATH   = "admin.jks";
-    private static final String KEYSTORE_PASS   = "admin123";
+    private static final String KEYSTORE_PATH = "admin.jks";
+    private static final String KEYSTORE_PASS = "admin123";
 
     /**
      * [MEMBRE 2] Crée une SSLSocketFactory avec authentification mutuelle (mTLS) :
      * - TrustManager : charge vault-ca.pem pour vérifier le serveur
-     * - KeyManager   : charge admin.jks pour présenter le certificat client
+     * - KeyManager : charge admin.jks pour présenter le certificat client
      */
     private SSLSocketFactory getSSLSocketFactory() throws Exception {
         // 1. Charger le TrustStore avec le CA de Vault
@@ -64,7 +64,8 @@ public class AdminCommandeClient {
         java.io.File ksFile = new java.io.File(KEYSTORE_PATH);
         if (!ksFile.exists()) {
             System.err.println("[ADMIN-mTLS] ATTENTION: " + KEYSTORE_PATH + " introuvable.");
-            System.err.println("[ADMIN-mTLS] Le serveur refusera la connexion (mTLS requis sur le port " + SERVER_PORT + ").");
+            System.err.println(
+                    "[ADMIN-mTLS] Le serveur refusera la connexion (mTLS requis sur le port " + SERVER_PORT + ").");
             throw new Exception("Fichier KeyStore admin introuvable (" + KEYSTORE_PATH + "). " +
                     "Générez-le avec : keytool -genkeypair -alias admin -keyalg RSA -keysize 2048 " +
                     "-keystore admin.jks -storepass admin123");
@@ -91,8 +92,8 @@ public class AdminCommandeClient {
         try {
             SSLSocketFactory ssf = getSSLSocketFactory();
             try (SSLSocket socket = (SSLSocket) ssf.createSocket(SERVER_IP, SERVER_PORT);
-                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-                 ObjectInputStream  in  = new ObjectInputStream(socket.getInputStream())) {
+                    ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                    ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
 
                 socket.startHandshake();
 
@@ -118,8 +119,8 @@ public class AdminCommandeClient {
         try {
             SSLSocketFactory ssf = getSSLSocketFactory();
             try (SSLSocket socket = (SSLSocket) ssf.createSocket(SERVER_IP, SERVER_PORT);
-                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-                 ObjectInputStream  in  = new ObjectInputStream(socket.getInputStream())) {
+                    ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                    ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
 
                 socket.startHandshake();
 
@@ -145,8 +146,8 @@ public class AdminCommandeClient {
         try {
             SSLSocketFactory ssf = getSSLSocketFactory();
             try (SSLSocket socket = (SSLSocket) ssf.createSocket(SERVER_IP, SERVER_PORT);
-                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-                 ObjectInputStream  in  = new ObjectInputStream(socket.getInputStream())) {
+                    ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                    ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
 
                 socket.startHandshake();
 
