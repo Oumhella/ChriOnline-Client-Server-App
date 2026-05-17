@@ -34,6 +34,6 @@ services:
       - ./vault/setup.sh:/vault/setup.sh:ro
       - ./vault/data:/vault/data
     entrypoint: /bin/sh
-    command: -c "tr -d '\r' < /vault/setup.sh > /tmp/setup.sh && sh /tmp/setup.sh"
+    command: ["-c", "sed 's/\\r$//' /vault/setup.sh > /tmp/setup.sh && sh /tmp/setup.sh"]
     restart: "no"
 
