@@ -35,6 +35,9 @@ public class SessionManager {
             this.email = (String) data.get("email");
             this.role = (String) data.get("role");
             Object sid = data.get("sessionId");
+            if (sid == null) {
+                sid = data.get("jwt");
+            }
             if (sid instanceof String) {
                 this.serverSessionId = (String) sid;
             }
