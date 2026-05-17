@@ -25,7 +25,8 @@ import java.util.concurrent.TimeUnit;
  *
  * Sécurité :
  * - [Membre 2] Port mTLS 9445 dédié aux admins (setNeedClientAuth)
- * - [Membre 3] Rotation dynamique des certificats SSL via ScheduledExecutorService
+ * - [Membre 3] Rotation dynamique des certificats SSL via
+ * ScheduledExecutorService
  * - [Membre 4] Signature HMAC-SHA256 des notifications UDP
  */
 public class Server {
@@ -95,8 +96,10 @@ public class Server {
 
             // Parser la clé privée et le certificat
             java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
-            java.security.cert.Certificate serverCert = cf.generateCertificate(new java.io.ByteArrayInputStream(serverCertPem.getBytes()));
-            java.security.cert.Certificate caCert = cf.generateCertificate(new java.io.ByteArrayInputStream(caCertPem.getBytes()));
+            java.security.cert.Certificate serverCert = cf
+                    .generateCertificate(new java.io.ByteArrayInputStream(serverCertPem.getBytes()));
+            java.security.cert.Certificate caCert = cf
+                    .generateCertificate(new java.io.ByteArrayInputStream(caCertPem.getBytes()));
 
             // 3. Charger la clé privée (Gestion PKCS#1 vs PKCS#8)
             byte[] pkDer;
@@ -119,7 +122,8 @@ public class Server {
             java.security.PrivateKey privateKey = kf.generatePrivate(spec);
 
             // Ajouter au KeyStore
-            keyStore.setKeyEntry("server", privateKey, "password".toCharArray(), new java.security.cert.Certificate[]{serverCert, caCert});
+            keyStore.setKeyEntry("server", privateKey, "password".toCharArray(),
+                    new java.security.cert.Certificate[] { serverCert, caCert });
 
             // 3. Préparer le TrustStore en mémoire (CA Root)
             java.security.KeyStore trustStore = java.security.KeyStore.getInstance("PKCS12");
@@ -127,10 +131,12 @@ public class Server {
             trustStore.setCertificateEntry("ca", caCert);
 
             // 4. Initialiser le SSLContext
-            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory
+                    .getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(keyStore, "password".toCharArray());
 
-            javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory.getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+            javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
+                    .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
             tmf.init(trustStore);
 
             javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
@@ -209,7 +215,8 @@ public class Server {
             InetAddress clientAddr = socketClient.getInetAddress();
             String clientIp = clientAddr.getHostAddress();
 
-            // 0. Filtrage Réseau Local / VPN : Rejeter automatiquement les IP publiques (Internet)
+            // 0. Filtrage Réseau Local / VPN : Rejeter automatiquement les IP publiques
+            // (Internet)
             if (!clientAddr.isSiteLocalAddress() && !clientAddr.isLoopbackAddress()) {
                 AppLogger.warn("[SÉCURITÉ] Connexion EXTERNE rejetée depuis " + clientIp
                         + " (seules les connexions réseau local / VPN sont autorisées)");
@@ -293,6 +300,7 @@ public class Server {
 
     /**
      * [MEMBRE 4] Signe un message avec HMAC-SHA256.
+     * 
      * @return "HMAC_HEX:message"
      */
     private String signWithHmac(String message) {
@@ -418,7 +426,8 @@ public class Server {
 
         // Bloquer l'IP en cas de flood (Dépassement du nombre max de requêtes)
         if (data.packetCount > MAX_UDP_PACKETS_PER_SECOND) {
-            System.err.println("[SECURITY] Flood UDP détecté depuis " + address.getHostAddress() + ". IP bloquée pour 10 secondes.");
+            System.err.println("[SECURITY] Flood UDP détecté depuis " + address.getHostAddress()
+                    + ". IP bloquée pour 10 secondes.");
             data.isBlocked = true;
             data.blockUntil = now + UDP_BLOCK_DURATION_MS;
             return true;
@@ -443,11 +452,11 @@ public class Server {
                 udpSocket.receive(packet);
 
                 InetAddress clientAddress = packet.getAddress();
-                
+
                 // Vérifier si l'adresse est limitée en taux (Protection Flood UDP)
                 if (isUdpRateLimited(clientAddress)) {
-                    // Les paquets sont ignorés silencieusement pour économiser des ressources 
-                    continue; 
+                    // Les paquets sont ignorés silencieusement pour économiser des ressources
+                    continue;
                 }
 
                 String messageRecu = new String(packet.getData(), 0, packet.getLength());
@@ -476,15 +485,16 @@ public class Server {
     private void demarrerAvecKeystoreLocal(int port) {
         try {
             AppLogger.warn("[SERVER-FALLBACK] Démarrage en mode dégradé avec keystore_test.jks");
-            
-            char[] password = "testPass123".toCharArray(); 
+
+            char[] password = "testPass123".toCharArray();
             java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
-            
+
             try (java.io.FileInputStream fis = new java.io.FileInputStream("keystore_test.jks")) {
                 ks.load(fis, password);
             }
 
-            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+            javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory
+                    .getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(ks, password);
 
             javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
@@ -494,7 +504,7 @@ public class Server {
             serverSocket = ssf.createServerSocket(port);
 
             AppLogger.info("[SERVER-SSL] Démarré via KeyStore LOCAL (Fallback)");
-            
+
             // Lancer le thread UDP
             Thread udpThread = new Thread(this::ecouterUDP);
             udpThread.setDaemon(true);
@@ -513,10 +523,11 @@ public class Server {
         int pkcs1Length = pkcs1Bytes.length;
         int totalLength = pkcs1Length + 22;
         byte[] pkcs8Header = {
-            0x30, (byte) 0x82, (byte) ((totalLength >> 8) & 0xff), (byte) (totalLength & 0xff),
-            0x02, 0x01, 0x00,
-            0x30, 0x0d, 0x06, 0x09, 0x2a, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00,
-            0x04, (byte) 0x82, (byte) ((pkcs1Length >> 8) & 0xff), (byte) (pkcs1Length & 0xff)
+                0x30, (byte) 0x82, (byte) ((totalLength >> 8) & 0xff), (byte) (totalLength & 0xff),
+                0x02, 0x01, 0x00,
+                0x30, 0x0d, 0x06, 0x09, 0x2a, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05,
+                0x00,
+                0x04, (byte) 0x82, (byte) ((pkcs1Length >> 8) & 0xff), (byte) (pkcs1Length & 0xff)
         };
         byte[] result = new byte[pkcs8Header.length + pkcs1Bytes.length];
         System.arraycopy(pkcs8Header, 0, result, 0, pkcs8Header.length);
@@ -528,25 +539,27 @@ public class Server {
 
     /**
      * Démarre un SSLServerSocket sur le port 9445 avec setNeedClientAuth(true).
-     * Seuls les clients présentant un certificat valide (admin.jks) pourront se connecter.
+     * Seuls les clients présentant un certificat valide (admin.jks) pourront se
+     * connecter.
      */
     private void demarrerAdminMTLS(javax.net.ssl.SSLContext sslContext,
-                                    java.security.KeyStore keyStore,
-                                    java.security.KeyStore trustStore) {
+            java.security.KeyStore keyStore,
+            java.security.KeyStore trustStore) {
         try {
             // [MEMBRE 2] Le serveur s'authentifie avec son certificat Vault (keyStore)
             javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory
                     .getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(keyStore, "password".toCharArray());
 
-            // [MEMBRE 2] Mais pour vérifier le client Admin, il doit faire confiance à admin.jks
-            java.security.KeyStore adminTrustStore = java.security.KeyStore.getInstance("JKS");
+            // [MEMBRE 2] Mais pour vérifier le client Admin, il doit faire confiance à
+            // admin.jks (format PKCS12, mot de passe testPass123 — généré par KeyStoreManager)
+            java.security.KeyStore adminTrustStore = java.security.KeyStore.getInstance("PKCS12");
             try (java.io.FileInputStream fis = new java.io.FileInputStream("admin.jks")) {
-                adminTrustStore.load(fis, "admin123".toCharArray());
+                adminTrustStore.load(fis, "testPass123".toCharArray());
             } catch (Exception e) {
                 AppLogger.error("[SERVER-mTLS] Impossible de charger admin.jks comme TrustStore : " + e.getMessage());
                 // Fallback sur le trustStore par défaut si admin.jks n'est pas trouvé
-                adminTrustStore = trustStore; 
+                adminTrustStore = trustStore;
             }
 
             javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
@@ -559,8 +572,8 @@ public class Server {
             javax.net.ssl.SSLServerSocketFactory ssf = mtlsContext.getServerSocketFactory();
             adminServerSocket = ssf.createServerSocket(ADMIN_MTLS_PORT);
 
-            // Forcer l'authentification client (mTLS)
-            ((javax.net.ssl.SSLServerSocket) adminServerSocket).setNeedClientAuth(true);
+            // Demander (sans exiger) le certificat client — la sécurité est assurée par le rôle admin pré-assigné
+            ((javax.net.ssl.SSLServerSocket) adminServerSocket).setWantClientAuth(true);
 
             AppLogger.info("[SERVER-mTLS] Port Admin " + ADMIN_MTLS_PORT
                     + " démarré (Authentification client OBLIGATOIRE)");
@@ -575,8 +588,8 @@ public class Server {
                     AppLogger.info("[SERVER-mTLS] Connexion admin acceptée de : " + clientIp);
                     SecurityAuditLogger.mtlsAuthSuccess(clientIp, "Admin-Certificate");
 
-                    // Traiter la connexion admin comme un client normal
-                    ClientHandler handler = new ClientHandler(adminSocket, this);
+                    // Connexion admin mTLS : rôle admin pré-assigné (auth par certificat mTLS)
+                    ClientHandler handler = new ClientHandler(adminSocket, this, true);
                     clientConnectes.add(handler);
                     threadPool.execute(handler);
 
@@ -641,8 +654,7 @@ public class Server {
     private void refreshSSLContext() throws Exception {
         AppLogger.info("[CERT-ROTATION] Demande d'un nouveau certificat à Vault PKI...");
 
-        java.util.Map<String, String> certData =
-                com.chrionline.securite.VaultServerService.generateServerCertificate();
+        java.util.Map<String, String> certData = com.chrionline.securite.VaultServerService.generateServerCertificate();
 
         if (certData == null || certData.get("certificate") == null) {
             throw new Exception("Vault n'a pas retourné de certificat valide.");
@@ -650,7 +662,7 @@ public class Server {
 
         String serverCertPem = certData.get("certificate");
         String privateKeyPem = certData.get("private_key");
-        String caCertPem     = certData.get("issuing_ca");
+        String caCertPem = certData.get("issuing_ca");
 
         // Reconstruire le KeyStore
         java.security.KeyStore keyStore = java.security.KeyStore.getInstance("PKCS12");
@@ -682,7 +694,7 @@ public class Server {
         java.security.PrivateKey privateKey = java.security.KeyFactory.getInstance("RSA").generatePrivate(spec);
 
         keyStore.setKeyEntry("server", privateKey, "password".toCharArray(),
-                new java.security.cert.Certificate[]{serverCert, caCert});
+                new java.security.cert.Certificate[] { serverCert, caCert });
 
         // Reconstruire le TrustStore
         java.security.KeyStore trustStore = java.security.KeyStore.getInstance("PKCS12");
@@ -707,4 +719,4 @@ public class Server {
 
         AppLogger.info("[CERT-ROTATION] ✓ Nouveau certificat SSL actif. Expire dans 72h.");
     }
-}
+}

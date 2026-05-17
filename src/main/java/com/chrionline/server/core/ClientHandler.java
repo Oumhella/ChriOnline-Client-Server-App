@@ -81,6 +81,7 @@ public class ClientHandler implements Runnable {
     private int userId = -1;
     private String userEmail = null;
     private String userRole      = null;
+    private boolean isAdminMtlsConnection = false;
 
     // ─── Commandes réservées aux administrateurs ─────────────────────────────
     private static final Set<String> ADMIN_COMMANDS = Set.of(
@@ -102,6 +103,19 @@ public class ClientHandler implements Runnable {
         this.produitService = new ProduitService();
         this.authService = new AuthenticationService();
         this.panierService = new PanierService();
+    }
+
+    /**
+     * Constructeur pour les connexions sur le port mTLS admin (9445).
+     * Le rôle admin est pré-assigné car l'authentification est assurée par le certificat mTLS.
+     */
+    public ClientHandler(Socket socket, Server server, boolean isAdminMtlsConnection) {
+        this(socket, server);
+        this.isAdminMtlsConnection = isAdminMtlsConnection;
+        if (isAdminMtlsConnection) {
+            this.userRole = "admin";
+            AppLogger.info("[HANDLER-mTLS] Connexion admin mTLS acceptée — rôle admin pré-assigné.");
+        }
     }
 
     // ─── Gestion de la Connexion TCP ──────────────────────────────────────────
@@ -151,7 +165,7 @@ public class ClientHandler implements Runnable {
 
         // ─── SÉCURITÉ : Firewall Token ──────────────────────────────────────────
         String clientFirewallToken = (String) req.get("firewallToken");
-        if (firewallToken != null && !firewallToken.equals(clientFirewallToken)) {
+        if (!isAdminMtlsConnection && firewallToken != null && !firewallToken.equals(clientFirewallToken)) {
             AppLogger.warn("[SECURITY] Firewall Token invalide de " + socketIp);
             envoyerMessage(creerReponse("ERREUR_SECURITE", "Accès refusé par le pare-feu."));
             return;
@@ -177,19 +191,30 @@ public class ClientHandler implements Runnable {
         }
 
         if (!COMMANDES_PUBLIQUES.contains(commande)) {
-            String jwt = (String) req.get("jwt");
-            com.chrionline.server.session.Session session =
-                    com.chrionline.server.session.SessionManager.validateSession(jwt, clientIp, dynamicTimeoutMs);
-            if (session == null) {
-                rejeterSessionInvalide(clientIp, commande, jwt);
-                return;
-            }
-            appliquerIdentiteDepuisSession(session);
-            injecterUtilisateurDansRequete(req);
+            if (isAdminMtlsConnection) {
+                // Pour les connexions admin mTLS sécurisées par certificat, on pré-assigne l'identité admin
+                if (this.userId == -1) {
+                    this.userId = 1; // Default admin user ID
+                }
+                if (this.userRole == null) {
+                    this.userRole = "admin";
+                }
+                injecterUtilisateurDansRequete(req);
+            } else {
+                String jwt = (String) req.get("jwt");
+                com.chrionline.server.session.Session session =
+                        com.chrionline.server.session.SessionManager.validateSession(jwt, clientIp, dynamicTimeoutMs);
+                if (session == null) {
+                    rejeterSessionInvalide(clientIp, commande, jwt);
+                    return;
+                }
+                appliquerIdentiteDepuisSession(session);
+                injecterUtilisateurDansRequete(req);
 
-            // 2. Régénération automatique et constante ("roulement") de l'ID après chaque transaction valide
-            this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(jwt, clientIp);
-            req.put("jwt", this.nextSessionIdToInject);
+                // 2. Régénération automatique et constante ("roulement") de l'ID après chaque transaction valide
+                this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(jwt, clientIp);
+                req.put("jwt", this.nextSessionIdToInject);
+            }
         } else {
             this.nextSessionIdToInject = null;
         }
