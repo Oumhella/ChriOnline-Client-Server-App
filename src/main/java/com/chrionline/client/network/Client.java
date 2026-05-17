@@ -165,9 +165,17 @@ public class Client {
             java.util.Map<String, Object> reponse = (java.util.Map<String, Object>) lireReponse();
 
             // Si c'est une connexion réussie, on sauvegarde le JWT
-            if (reponse != null && "OK".equals(reponse.get("statut")) && reponse.containsKey("jwt")) {
-                this.jwtToken = (String) reponse.get("jwt");
-                System.out.println("[CLIENT] JWT de session mis à jour.");
+            if (reponse != null && "OK".equals(reponse.get("statut"))) {
+                if (reponse.containsKey("jwt")) {
+                    this.jwtToken = (String) reponse.get("jwt");
+                    System.out.println("[CLIENT] JWT de session mis à jour.");
+                } else if (reponse.containsKey("data")) {
+                    java.util.Map<String, Object> data = (java.util.Map<String, Object>) reponse.get("data");
+                    if (data != null && data.containsKey("jwt")) {
+                        this.jwtToken = (String) data.get("jwt");
+                        System.out.println("[CLIENT] JWT de session mis à jour depuis data.");
+                    }
+                }
             }
 
             return reponse;
@@ -219,6 +227,14 @@ public class Client {
                 sm.handleServerResponseIfSessionExpired(m);
                 // Rotation automatique du sessionId après action critique (paiement, profil)
                 sm.updateSessionIdIfProvided(m);
+                // Synchroniser également le jeton JWT du client pour éviter de renvoyer l'ancien jeton expiré
+                if (m.containsKey("newSessionId")) {
+                    Object newSid = m.get("newSessionId");
+                    if (newSid instanceof String && !((String) newSid).isBlank()) {
+                        this.jwtToken = (String) newSid;
+                        System.out.println("[CLIENT] Jeton JWT mis à jour après rotation (newSessionId).");
+                    }
+                }
             }
             return o;
         }
