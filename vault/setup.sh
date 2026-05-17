@@ -15,7 +15,7 @@ echo "════════════════════════�
 
 # ── 1. Attendre que Vault soit prêt ──────────────────────────
 echo "[1/8] Attente du démarrage de Vault..."
-until vault status 2>/dev/null | grep -q "Initialized"; do
+until vault status -format=json 2>/dev/null | grep -q '"initialized"'; do
   sleep 2
   echo "  ... Vault pas encore prêt, nouvelle tentative..."
 done
@@ -27,8 +27,8 @@ if [ "$INITIALIZED" = "false" ]; then
   echo "[2/8] Initialisation de Vault (1 clé, seuil 1)..."
   INIT_OUTPUT=$(vault operator init -key-shares=1 -key-threshold=1 -format=json)
   
-  UNSEAL_KEY=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\[\"[^"]*\"' | sed 's/.*\["//' | sed 's/".*//')
-  ROOT_TOKEN=$(echo "$INIT_OUTPUT" | grep -o '"root_token":"[^"]*"' | sed 's/"root_token":"//' | sed 's/"//')
+  UNSEAL_KEY=$(echo "$INIT_OUTPUT" | tr -d '\n' | tr -d ' ' | sed -n 's/.*"unseal_keys_b64":\["\([^"]*\)".*/\1/p')
+  ROOT_TOKEN=$(echo "$INIT_OUTPUT" | tr -d '\n' | tr -d ' ' | sed -n 's/.*"root_token":"\([^"]*\)".*/\1/p')
   
   echo ""
   echo "  ╔═══════════════════════════════════════════════════╗"

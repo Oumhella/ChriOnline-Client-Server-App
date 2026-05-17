@@ -261,21 +261,24 @@ public class ProduitService {
         try {
             int id = Integer.parseInt(req.get("id_categorie").toString());
             double discount = Double.parseDouble(req.get("discount").toString());
-            boolean success = ProduitDAO.applyDiscount(id, discount);
-            // Also update the category discount percentage directly if success? Or the user can just see it.
-            // Let's also update the category's discount field for future reference.
-            if(success) {
-               Categorie c = null;
-               List<Categorie> cats = ProduitDAO.findAllCategories();
-               for(Categorie iter : cats) {
-                   if(iter.getId() == id) { c = iter; break; }
-               }
-               if(c != null) {
-                   c.setDiscount(discount);
-                   ProduitDAO.updateCategorie(c);
-               }
+            // 1. Appliquer le discount sur les produits existants de cette catégorie
+            ProduitDAO.applyDiscount(id, discount);
+
+            // 2. Mettre à jour le taux de discount de la catégorie en BDD (pour les futurs produits ou affichage)
+            boolean updateSuccess = false;
+            Categorie c = null;
+            List<Categorie> cats = ProduitDAO.findAllCategories();
+            for (Categorie iter : cats) {
+                if (iter.getId() == id) {
+                    c = iter;
+                    break;
+                }
             }
-            res.put("statut", success ? "OK" : "ERREUR");
+            if (c != null) {
+                c.setDiscount(discount);
+                updateSuccess = ProduitDAO.updateCategorie(c);
+            }
+            res.put("statut", updateSuccess ? "OK" : "ERREUR");
         } catch (Exception e) {
             res.put("statut", "ERREUR");
             res.put("message", e.getMessage());

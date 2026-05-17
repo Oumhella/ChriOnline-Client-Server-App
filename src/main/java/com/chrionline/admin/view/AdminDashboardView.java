@@ -199,10 +199,8 @@ public class AdminDashboardView extends Application {
         HBox itemProduits = navItem("📦", "Produits", false);
         HBox itemCategories = navItem("🏷️", "Catégories", false);
         HBox itemCommandes = navItem("🛒", "Commandes", false);
-        HBox itemPaiements = navItem("💳", "Paiements", false);
         HBox itemLivraisons = navItem("🚚", "Livraisons", false);
         HBox itemClients = navItem("👥", "Clients", false);
-        HBox itemParams = navItem("⚙️", "Paramètres", false);
 
         // Actions de navigation
         itemDashboard.setOnMouseClicked(e -> rootPane.getChildren().set(1, buildMainArea()));
@@ -234,7 +232,6 @@ public class AdminDashboardView extends Application {
                 }),
                 navSection("VENTES"),
                 itemCommandes,
-                itemPaiements,
                 itemLivraisons,
                 navSection("UTILISATEURS"),
                 itemClients,
@@ -250,7 +247,6 @@ public class AdminDashboardView extends Application {
                 navItem("📧", "Newsletter", false, () -> {
                     afficherVue(new AdminNewsletterView().getView());
                 }),
-                itemParams,
                 navSection("COMPTE"),
                 logoutItem);
 
