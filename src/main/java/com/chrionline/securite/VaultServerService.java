@@ -8,6 +8,13 @@ import com.bettercloud.vault.response.LogicalResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,6 +49,9 @@ public class VaultServerService {
 
     static {
         try {
+            // ── Auto-Unseal : déverrouiller Vault s'il est scellé ──
+            autoUnsealIfNeeded();
+
             String roleId = System.getenv("VAULT_ROLE_ID");
             String secretId = System.getenv("VAULT_SECRET_ID");
 
@@ -63,6 +73,78 @@ public class VaultServerService {
             }
         } catch (Exception e) {
             System.err.println("[VaultServerService] Erreur d'initialisation : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Vérifie si Vault est scellé (sealed) et tente de le déverrouiller
+     * automatiquement en lisant la clé depuis vault/data/unseal_key.txt.
+     */
+    private static void autoUnsealIfNeeded() {
+        try {
+            // 1. Vérifier le statut de Vault via l'API /sys/health
+            URL url = new URL(VAULT_ADDR + "/v1/sys/health");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(3000);
+            conn.setReadTimeout(3000);
+            int httpCode = conn.getResponseCode();
+
+            // Code 503 = Vault est scellé (sealed)
+            if (httpCode == 503) {
+                System.out.println("[VaultServerService] Vault est scellé — tentative d'auto-unseal...");
+
+                // 2. Chercher le fichier unseal_key.txt dans vault/data/
+                Path unsealKeyPath = Paths.get("vault", "data", "unseal_key.txt");
+                if (!Files.exists(unsealKeyPath)) {
+                    System.err.println("[VaultServerService] Fichier unseal_key.txt introuvable. Impossible d'auto-unseal.");
+                    return;
+                }
+
+                String unsealKey = Files.readString(unsealKeyPath).trim();
+                if (unsealKey.isEmpty()) {
+                    System.err.println("[VaultServerService] Clé unseal vide.");
+                    return;
+                }
+
+                // 3. Envoyer la clé de déverrouillage via PUT /sys/unseal
+                URL unsealUrl = new URL(VAULT_ADDR + "/v1/sys/unseal");
+                HttpURLConnection unsealConn = (HttpURLConnection) unsealUrl.openConnection();
+                unsealConn.setRequestMethod("PUT");
+                unsealConn.setRequestProperty("Content-Type", "application/json");
+                unsealConn.setDoOutput(true);
+
+                String jsonBody = "{\"key\":\"" + unsealKey + "\"}";
+                unsealConn.getOutputStream().write(jsonBody.getBytes());
+
+                int unsealStatus = unsealConn.getResponseCode();
+                if (unsealStatus == 200) {
+                    // Lire la réponse pour vérifier si c'est déverrouillé
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(unsealConn.getInputStream()));
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
+                    }
+                    reader.close();
+
+                    if (response.toString().contains("\"sealed\":false")) {
+                        System.out.println("[VaultServerService] ✓ Vault déverrouillé automatiquement avec succès !");
+                    } else {
+                        System.out.println("[VaultServerService] Unseal envoyé, mais Vault nécessite peut-être d'autres clés.");
+                    }
+                } else {
+                    System.err.println("[VaultServerService] Échec auto-unseal (HTTP " + unsealStatus + ")");
+                }
+            } else if (httpCode == 200 || httpCode == 429) {
+                System.out.println("[VaultServerService] Vault est déjà déverrouillé et opérationnel.");
+            }
+            // Si Vault n'est pas accessible du tout, on ignore silencieusement
+        } catch (java.net.ConnectException e) {
+            System.out.println("[VaultServerService] Vault non accessible à " + VAULT_ADDR + " — mode dégradé.");
+        } catch (Exception e) {
+            System.err.println("[VaultServerService] Erreur lors de la vérification du statut Vault : " + e.getMessage());
         }
     }
 
