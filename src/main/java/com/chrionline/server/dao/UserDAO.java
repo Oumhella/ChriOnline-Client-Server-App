@@ -582,6 +582,8 @@ public class UserDAO {
             SELECT u.idUtilisateur, u.nom, u.prenom, u.email, c.statut_compte 
             FROM utilisateur u 
             JOIN client c ON u.idUtilisateur = c.idUtilisateur
+            LEFT JOIN admin a ON u.idUtilisateur = a.idAdmin
+            WHERE a.idAdmin IS NULL
             ORDER BY u.idUtilisateur DESC
         """;
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
