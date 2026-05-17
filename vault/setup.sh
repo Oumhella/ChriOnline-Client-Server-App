@@ -27,8 +27,8 @@ if [ "$INITIALIZED" = "false" ]; then
   echo "[2/8] Initialisation de Vault (1 clé, seuil 1)..."
   INIT_OUTPUT=$(vault operator init -key-shares=1 -key-threshold=1 -format=json)
   
-  UNSEAL_KEY=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\[\"[^"]*\"' | sed 's/.*\["//' | sed 's/".*//')
-  ROOT_TOKEN=$(echo "$INIT_OUTPUT" | grep -o '"root_token":"[^"]*"' | sed 's/"root_token":"//' | sed 's/"//')
+  UNSEAL_KEY=$(echo "$INIT_OUTPUT" | awk '/"unseal_keys_b64":/ {getline; gsub(/[ ",]/, ""); print}')
+  ROOT_TOKEN=$(echo "$INIT_OUTPUT" | awk -F '"' '/"root_token":/ {print $4}')
   
   echo ""
   echo "  ╔═══════════════════════════════════════════════════╗"

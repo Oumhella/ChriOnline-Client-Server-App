@@ -180,6 +180,10 @@ public class Client {
     }
 
     private void injectSecurityHeaders(java.util.Map<String, Object> req) {
+        String sid = com.chrionline.client.session.SessionManager.getInstance().getServerSessionId();
+        if (sid != null && !sid.isBlank()) {
+            this.jwtToken = sid;
+        }
         if (jwtToken != null) {
             req.put("jwt", jwtToken);
         }
@@ -219,6 +223,12 @@ public class Client {
                 sm.handleServerResponseIfSessionExpired(m);
                 // Rotation automatique du sessionId après action critique (paiement, profil)
                 sm.updateSessionIdIfProvided(m);
+
+                // Synchronisation de jwtToken
+                String sid = sm.getServerSessionId();
+                if (sid != null && !sid.isBlank()) {
+                    this.jwtToken = sid;
+                }
             }
             return o;
         }
