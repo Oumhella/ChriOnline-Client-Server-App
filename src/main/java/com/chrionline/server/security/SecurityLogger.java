@@ -12,7 +12,8 @@ import com.chrionline.database.DatabaseConnection;
 
 /**
  * Journalisation centralisée des événements de sécurité.
- * Gère désormais la détection d'attaques par seuil (Threshold detection).
+ * Module IDS/IPS intégré : détection d'attaques par seuil, OTP suspects,
+ * activité admin anormale, et actions correctives automatiques.
  */
 public final class SecurityLogger {
 
@@ -29,9 +30,17 @@ public final class SecurityLogger {
     // Liste noire des IPs bloquées
     private static final java.util.Set<String> blacklistedIPs = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    // Seuil : 5 événements critiques en 60 secondes
-    private static final int THRESHOLD_COUNT = 5;
+    // IDS : 3 événements critiques en 60 secondes déclenchent une alerte
+    private static final int THRESHOLD_COUNT = 3;
     private static final long THRESHOLD_WINDOW_MS = 60_000;
+
+    // IDS Cas 2 : Suivi des échecs OTP consécutifs par email
+    private static final Map<String, Integer> otpFailureCount = new ConcurrentHashMap<>();
+    private static final int OTP_SUSPECT_THRESHOLD = 2;
+
+    // IDS Cas 3 : Suivi des lectures massives admin (email -> timestamps)
+    private static final Map<String, List<Long>> adminReadHistory = new ConcurrentHashMap<>();
+    private static final int ADMIN_MASSIVE_READ_THRESHOLD = 5;
 
     static {
         // Initialisation de la persistance au chargement de la classe
@@ -52,12 +61,32 @@ public final class SecurityLogger {
         // S'assurer que l'IP n'est pas "inconnue"
         String displayIp = (ip == null || ip.isEmpty()) ? "127.0.0.1" : ip;
 
-        if (type.contains("FAILED") || type.contains("REFUSE") || type.contains("SPOOF") || type.contains("BLOQUE")) {
+        // ── IDS : Alimenter le flux d'événements récents pour le Dashboard ──
+        addRecentEvent(type, displayIp, email + " | " + context);
+
+        if (type.contains("FAILED") || type.contains("REFUSE") || type.contains("SPOOF") || type.contains("BLOQUE") || type.contains("ALERT")) {
             LOG.warn(logEntry);
             checkThreshold(displayIp, type);
         } else {
             LOG.info(logEntry);
         }
+    }
+
+    /**
+     * Ajoute un événement dans la liste mémoire consultable par le dashboard admin.
+     */
+    private static void addRecentEvent(String type, String ip, String context) {
+        recentEvents.add(0, new com.chrionline.shared.models.SecurityEvent(type, ip, context));
+        if (recentEvents.size() > MAX_RECENT_EVENTS) {
+            recentEvents.remove(recentEvents.size() - 1);
+        }
+    }
+
+    /**
+     * Retourne les événements récents pour l'interface de supervision admin.
+     */
+    public static List<com.chrionline.shared.models.SecurityEvent> getRecentEvents() {
+        return new ArrayList<>(recentEvents);
     }
 
     private static void checkThreshold(String ip, String type) {
@@ -81,6 +110,15 @@ public final class SecurityLogger {
     private static void sendSecurityAlert(String ip, String type, int count) {
         LOG.error("!!! ALERTE SÉCURITÉ !!! IP {} a déclenché {} alertes de type '{}' en moins d'une minute.",
                 ip, count, type);
+        addRecentEvent("IDS_ALERT_BRUTE_FORCE", ip, "Seuil dépassé : " + count + " événements '" + type + "' en 60s");
+
+        // ── IPS : Blocage automatique temporaire (15 min) ──
+        if (!blacklistedIPs.contains(ip)) {
+            com.chrionline.server.dao.SecurityBlacklistDAO.addIp(ip, "IDS", "IDS Auto-Ban : " + count + " alertes '" + type + "'", 15);
+            blacklistedIPs.add(ip);
+            LOG.error("[IPS] IP {} bloquée automatiquement pour 15 minutes suite à l'alerte IDS.", ip);
+            addRecentEvent("IPS_AUTO_BAN", ip, "Blocage automatique 15min (" + type + ")");
+        }
     }
 
     // --- Wrappers pour la compatibilité existante (Log simple uniquement) ---
@@ -106,7 +144,7 @@ public final class SecurityLogger {
     }
 
     public static void changementMotDePasse(int userId) {
-        LOG.warn("[MAJ_MDP] Mot de passe réinitialisé pour userId={}", userId);
+        logSecurityEvent("MAJ_MDP", "ID:" + userId, "serveur", "Mot de passe réinitialisé");
     }
 
     public static void rawSecurityAlert(String type, String ip, String context) {
@@ -118,12 +156,63 @@ public final class SecurityLogger {
     }
 
     public static void changementStatutCompte(int adminId, int cibleId, String nouveauStatut) {
-        LOG.warn("[STATUT_COMPTE] adminId={} a modifié le statut du compte userId={} → {}",
-                adminId, cibleId, nouveauStatut);
+        logSecurityEvent("STATUT_COMPTE", "adminId:" + adminId, "serveur",
+                "cibleId=" + cibleId + " nouveauStatut=" + nouveauStatut);
     }
 
     public static void accesNonAutorise(String commande, int userId, String role, String ip) {
         logSecurityEvent("ACCES_REFUSE", "ID:" + userId, ip, "commande=" + commande + " role=" + role);
+    }
+
+    // ─── IDS Cas 2 : Détection OTP suspects ──────────────────────────────────
+
+    /**
+     * Enregistre un échec de validation OTP.
+     * Si > 2 échecs consécutifs, lève une alerte IDS_ALERT_OTP_SUSPECT.
+     */
+    public static void otpEchec(String email, String ip) {
+        int count = otpFailureCount.merge(email, 1, Integer::sum);
+        logSecurityEvent("OTP_FAILED", email, ip, "Échec OTP consécutif #" + count);
+        if (count >= OTP_SUSPECT_THRESHOLD) {
+            logSecurityEvent("IDS_ALERT_OTP_SUSPECT", email, ip,
+                    "ALERTE : " + count + " OTP invalides consécutifs");
+        }
+    }
+
+    /** Réinitialise le compteur OTP après un succès. */
+    public static void otpSucces(String email, String ip) {
+        otpFailureCount.remove(email);
+        logSecurityEvent("OTP_SUCCESS", email, ip, "Validation OTP réussie");
+    }
+
+    // ─── IDS Cas 3 : Détection activité admin anormale ───────────────────────
+
+    /**
+     * Vérifie si la connexion admin se fait à une heure inhabituelle (21h-6h).
+     */
+    public static void checkAdminOffHours(String email, String ip) {
+        int hour = java.time.LocalTime.now().getHour();
+        if (hour >= 21 || hour < 6) {
+            logSecurityEvent("IDS_ALERT_ADMIN_OFF_HOURS", email, ip,
+                    "Connexion admin à une heure inhabituelle (" + hour + "h)");
+        }
+    }
+
+    /**
+     * Enregistre un accès admin à des données utilisateurs.
+     * Si > 5 lectures en < 1 minute, lève une alerte de consultation massive.
+     */
+    public static void trackAdminDataAccess(String email, String ip) {
+        long now = System.currentTimeMillis();
+        List<Long> timestamps = adminReadHistory.computeIfAbsent(email, k -> new ArrayList<>());
+        synchronized (timestamps) {
+            timestamps.removeIf(t -> now - t > THRESHOLD_WINDOW_MS);
+            timestamps.add(now);
+            if (timestamps.size() >= ADMIN_MASSIVE_READ_THRESHOLD) {
+                logSecurityEvent("IDS_ALERT_ADMIN_MASSIVE_READ", email, ip,
+                        "Consultation massive : " + timestamps.size() + " accès données en 60s");
+            }
+        }
     }
 
     public static void blockIP(String ip) {
@@ -186,6 +275,13 @@ public final class SecurityLogger {
 
     public static boolean isBlacklisted(String ip) {
         return blacklistedIPs.contains(ip);
+    }
+
+    /** Retire une IP de la blacklist mémoire (le DAO gère la BDD). */
+    public static void unblockIP(String ip) {
+        blacklistedIPs.remove(ip);
+        LOG.info("[IPS] IP {} retirée de la blacklist mémoire.", ip);
+        addRecentEvent("IPS_UNBLOCK", ip, "IP débloquée manuellement par admin");
     }
 
     public static void erreurServeur(String contexte, String message) {

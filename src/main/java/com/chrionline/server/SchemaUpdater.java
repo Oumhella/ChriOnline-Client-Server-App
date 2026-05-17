@@ -61,6 +61,25 @@ public class SchemaUpdater {
                 System.out.println("La colonne 'public_key' n'existe peut-être plus ou erreur: " + e.getMessage());
             }
 
+            // 6. Création de la table sessions pour la persistance des sessions TCP
+            try {
+                String sql = "CREATE TABLE IF NOT EXISTS sessions (" +
+                             "session_id VARCHAR(100) NOT NULL PRIMARY KEY, " +
+                             "user_id INT NOT NULL, " +
+                             "ip_address VARCHAR(45), " +
+                             "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+                             "last_activity TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+                             "expires_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+                             "actif BOOLEAN NOT NULL DEFAULT TRUE, " +
+                             "INDEX idx_sessions_user (user_id), " +
+                             "INDEX idx_sessions_actif (actif, expires_at), " +
+                             "FOREIGN KEY (user_id) REFERENCES utilisateur(idUtilisateur) ON DELETE CASCADE)";
+                stmt.execute(sql);
+                System.out.println("Table 'sessions' créée avec succès.");
+            } catch (Exception e) {
+                System.out.println("Erreur lors de la création de la table 'sessions' : " + e.getMessage());
+            }
+
             System.out.println("Mise à jour terminée !");
             System.exit(0);
         } catch (Exception e) {

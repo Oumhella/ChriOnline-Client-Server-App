@@ -81,6 +81,7 @@ public class ClientHandler implements Runnable {
     private int userId = -1;
     private String userEmail = null;
     private String userRole      = null;
+    private boolean isAdminMtlsConnection = false;
 
     // ─── Commandes réservées aux administrateurs ─────────────────────────────
     private static final Set<String> ADMIN_COMMANDS = Set.of(
@@ -102,6 +103,19 @@ public class ClientHandler implements Runnable {
         this.produitService = new ProduitService();
         this.authService = new AuthenticationService();
         this.panierService = new PanierService();
+    }
+
+    /**
+     * Constructeur pour les connexions sur le port mTLS admin (9445).
+     * Le rôle admin est pré-assigné car l'authentification est assurée par le certificat mTLS.
+     */
+    public ClientHandler(Socket socket, Server server, boolean isAdminMtlsConnection) {
+        this(socket, server);
+        this.isAdminMtlsConnection = isAdminMtlsConnection;
+        if (isAdminMtlsConnection) {
+            this.userRole = "admin";
+            AppLogger.info("[HANDLER-mTLS] Connexion admin mTLS acceptée — rôle admin pré-assigné.");
+        }
     }
 
     // ─── Gestion de la Connexion TCP ──────────────────────────────────────────
@@ -151,7 +165,7 @@ public class ClientHandler implements Runnable {
 
         // ─── SÉCURITÉ : Firewall Token ──────────────────────────────────────────
         String clientFirewallToken = (String) req.get("firewallToken");
-        if (firewallToken != null && !firewallToken.equals(clientFirewallToken)) {
+        if (!isAdminMtlsConnection && firewallToken != null && !firewallToken.equals(clientFirewallToken)) {
             AppLogger.warn("[SECURITY] Firewall Token invalide de " + socketIp);
             envoyerMessage(creerReponse("ERREUR_SECURITE", "Accès refusé par le pare-feu."));
             return;
@@ -177,19 +191,30 @@ public class ClientHandler implements Runnable {
         }
 
         if (!COMMANDES_PUBLIQUES.contains(commande)) {
-            String jwt = (String) req.get("jwt");
-            com.chrionline.server.session.Session session =
-                    com.chrionline.server.session.SessionManager.validateSession(jwt, clientIp, dynamicTimeoutMs);
-            if (session == null) {
-                rejeterSessionInvalide(clientIp, commande, jwt);
-                return;
-            }
-            appliquerIdentiteDepuisSession(session);
-            injecterUtilisateurDansRequete(req);
+            if (isAdminMtlsConnection) {
+                // Pour les connexions admin mTLS sécurisées par certificat, on pré-assigne l'identité admin
+                if (this.userId == -1) {
+                    this.userId = 1; // Default admin user ID
+                }
+                if (this.userRole == null) {
+                    this.userRole = "admin";
+                }
+                injecterUtilisateurDansRequete(req);
+            } else {
+                String jwt = (String) req.get("jwt");
+                com.chrionline.server.session.Session session =
+                        com.chrionline.server.session.SessionManager.validateSession(jwt, clientIp, dynamicTimeoutMs);
+                if (session == null) {
+                    rejeterSessionInvalide(clientIp, commande, jwt);
+                    return;
+                }
+                appliquerIdentiteDepuisSession(session);
+                injecterUtilisateurDansRequete(req);
 
-            // 2. Régénération automatique et constante ("roulement") de l'ID après chaque transaction valide
-            this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(jwt, clientIp);
-            req.put("jwt", this.nextSessionIdToInject);
+                // 2. Régénération automatique et constante ("roulement") de l'ID après chaque transaction valide
+                this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(jwt, clientIp);
+                req.put("jwt", this.nextSessionIdToInject);
+            }
         } else {
             this.nextSessionIdToInject = null;
         }
@@ -260,6 +285,8 @@ public class ClientHandler implements Runnable {
                             socket.getInetAddress().getHostAddress());
                     envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
                 } else {
+                    // IDS Cas 3 : Tracker les accès massifs aux données utilisateurs
+                    SecurityLogger.trackAdminDataAccess(userEmail, socket.getInetAddress().getHostAddress());
                     envoyerMessage(com.chrionline.server.service.AdminUserService.handleListerClients());
                 }
             }
@@ -285,6 +312,9 @@ public class ClientHandler implements Runnable {
 
             // Sécurité Monitoring (Admin)
             case "ADMIN_BLOCK_IP" -> handleBlockIP(req);
+            case "ADMIN_GET_SECURITY_EVENTS" -> handleGetSecurityEvents(req);
+            case "ADMIN_GET_BLOCKED_IPS" -> handleGetBlockedIPs(req);
+            case "ADMIN_UNBLOCK_IP" -> handleUnblockIP(req);
             case "DECONNEXION"          -> handleDeconnexion(req, clientIp);
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
@@ -322,10 +352,15 @@ public class ClientHandler implements Runnable {
         System.out.println("[HANDLER] >>> handleVerifierOTP appelée");
         // Injecter l'IP pour le logging de sécurité
         req.put("clientIp", socket.getInetAddress().getHostAddress());
+        String clientIp = socket.getInetAddress().getHostAddress();
         try {
             Map<String, Object> reponseMutable = new java.util.HashMap<>(authService.verifierOTPConnexion(req));
 
             if ("OK".equals(reponseMutable.get("statut"))) {
+                // IDS : OTP validé → réinitialiser le compteur d'échecs
+                String otpEmail = (String) req.get("email");
+                if (otpEmail != null) SecurityLogger.otpSucces(otpEmail, clientIp);
+
                 // Initialize session upon successful 2FA
                 enrichirReponseConnexionAvecSession(reponseMutable, req);
 
@@ -336,8 +371,12 @@ public class ClientHandler implements Runnable {
                     this.userRole = (String) data.get("role");
 
                     // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité (log simple)
-                    SecurityLogger.loginSucces(userEmail, userRole, userId, socket.getInetAddress().getHostAddress());
+                    SecurityLogger.loginSucces(userEmail, userRole, userId, clientIp);
                 }
+            } else {
+                // IDS Cas 2 : OTP échoué → incrémenter le compteur suspect
+                String otpEmail = (String) req.get("email");
+                if (otpEmail != null) SecurityLogger.otpEchec(otpEmail, clientIp);
             }
 
             envoyerMessage(reponseMutable);
@@ -658,6 +697,8 @@ public class ClientHandler implements Runnable {
                     envoyerMessage(rep);
 
                     SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId, clientIp);
+                    // IDS Cas 3 : Vérifier si connexion admin à heure inhabituelle
+                    SecurityLogger.checkAdminOffHours(this.userEmail, clientIp);
                 }
             }
         } catch (Exception e) {
@@ -1235,6 +1276,66 @@ public class ClientHandler implements Runnable {
 
     public Socket getSocket() {
         return socket;
+    }
+
+    // ─── IDS/IPS : Handlers de supervision sécurité ──────────────────────────
+
+    /**
+     * Retourne les événements de sécurité récents au dashboard admin.
+     */
+    private void handleGetSecurityEvents(Map<String, Object> req) {
+        if (!"admin".equals(userRole)) {
+            SecurityLogger.accesNonAutorise("ADMIN_GET_SECURITY_EVENTS", userId, userRole, socket.getInetAddress().getHostAddress());
+            envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+            return;
+        }
+        // IDS Cas 3 : Tracker l'accès aux données de sécurité
+        SecurityLogger.trackAdminDataAccess(userEmail, socket.getInetAddress().getHostAddress());
+
+        Map<String, Object> rep = new HashMap<>();
+        rep.put("statut", "OK");
+        rep.put("events", (java.io.Serializable) new java.util.ArrayList<>(SecurityLogger.getRecentEvents()));
+        envoyerMessage(rep);
+    }
+
+    /**
+     * Retourne la liste des IPs actuellement en liste noire depuis la BDD.
+     */
+    private void handleGetBlockedIPs(Map<String, Object> req) {
+        if (!"admin".equals(userRole)) {
+            SecurityLogger.accesNonAutorise("ADMIN_GET_BLOCKED_IPS", userId, userRole, socket.getInetAddress().getHostAddress());
+            envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+            return;
+        }
+        java.util.List<Map<String, Object>> blockedIPs =
+                com.chrionline.server.dao.SecurityBlacklistDAO.getAllActiveBlacklist();
+
+        Map<String, Object> rep = new HashMap<>();
+        rep.put("statut", "OK");
+        rep.put("blockedIPs", (java.io.Serializable) new java.util.ArrayList<>(blockedIPs));
+        envoyerMessage(rep);
+    }
+
+    /**
+     * Débloque manuellement une IP depuis le dashboard admin.
+     */
+    private void handleUnblockIP(Map<String, Object> req) {
+        if (!"admin".equals(userRole)) {
+            SecurityLogger.accesNonAutorise("ADMIN_UNBLOCK_IP", userId, userRole, socket.getInetAddress().getHostAddress());
+            envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+            return;
+        }
+        String ip = (String) req.get("ip");
+        if (ip == null || ip.isBlank()) {
+            envoyerMessage(creerReponse("ERREUR", "Adresse IP requise."));
+            return;
+        }
+        // Débloquer en BDD et en mémoire
+        com.chrionline.server.dao.SecurityBlacklistDAO.unlockIp(ip);
+        SecurityLogger.unblockIP(ip);
+        SecurityLogger.logSecurityEvent("ADMIN_UNBLOCK_IP", userEmail, socket.getInetAddress().getHostAddress(),
+                "IP " + ip + " débloquée par admin");
+        envoyerMessage(creerReponse("OK", "L'adresse IP " + ip + " a été débloquée avec succès."));
     }
 
 }

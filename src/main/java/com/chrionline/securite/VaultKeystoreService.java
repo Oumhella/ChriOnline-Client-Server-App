@@ -19,7 +19,7 @@ public class VaultKeystoreService {
 
     private static final String VAULT_ADDR = "http://127.0.0.1:8200";
     private static final String SECRET_PATH = "secret/admin/keystore";
-    private static final String FALLBACK_PASSWORD = "testPass123";
+    private static final String FALLBACK_PASSWORD = "admin123"; // Aligné avec AdminCommandeClient et Server
 
     /**
      * Récupère le mot de passe du Keystore depuis Vault.

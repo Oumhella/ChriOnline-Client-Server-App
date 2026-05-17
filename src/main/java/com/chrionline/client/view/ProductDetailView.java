@@ -180,10 +180,38 @@ public class ProductDetailView {
 
         // ── Prix affiché depuis le format sélectionné ──────────
         if (formatSelectionne != null && formatSelectionne.getPrix() != null) {
-            Text priceLabel = new Text(String.format("%.2f MAD", formatSelectionne.getPrix()));
+            double currentPrice = formatSelectionne.getPrix();
+            double discount = (produit.getCategorie() != null) ? produit.getCategorie().getDiscount() : 0.0;
+            
+            HBox priceBox = new HBox(10);
+            priceBox.setAlignment(Pos.BOTTOM_LEFT);
+            
+            Text priceLabel = new Text(String.format("%.2f MAD", currentPrice));
             priceLabel.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
             priceLabel.setFill(Color.web(TERRACOTTA));
-            info.getChildren().add(priceLabel);
+            
+            if (discount > 0) {
+                double oldPrice = currentPrice / (1.0 - discount / 100.0);
+                Text oldPriceLabel = new Text(String.format("%.2f MAD", oldPrice));
+                oldPriceLabel.setFont(Font.font("Georgia", FontWeight.NORMAL, 16));
+                oldPriceLabel.setFill(Color.web(BRUN_LIGHT));
+                oldPriceLabel.setStrikethrough(true);
+                
+                Text badgeTxt = new Text(String.format(" -%.0f%% ", discount));
+                badgeTxt.setFont(Font.font("Georgia", FontWeight.BOLD, 12));
+                badgeTxt.setFill(Color.WHITE);
+                
+                StackPane badge = new StackPane();
+                Rectangle bg = new Rectangle(50, 20, Color.web(TERRACOTTA));
+                bg.setArcWidth(8); bg.setArcHeight(8);
+                badge.getChildren().addAll(bg, badgeTxt);
+                
+                priceBox.getChildren().addAll(oldPriceLabel, priceLabel, badge);
+            } else {
+                priceBox.getChildren().add(priceLabel);
+            }
+            
+            info.getChildren().add(priceBox);
         }
 
         // ── Description ───────────────────────────────────────
@@ -393,10 +421,28 @@ public class ProductDetailView {
         prixStockRow.setAlignment(Pos.CENTER_LEFT);
 
         if (format.getPrix() != null) {
-            Text prixText = new Text(String.format("%.2f MAD", format.getPrix()));
-            prixText.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-            prixText.setFill(Color.web(TERRACOTTA));
-            prixStockRow.getChildren().add(prixText);
+            double discount = (produit.getCategorie() != null) ? produit.getCategorie().getDiscount() : 0.0;
+            if (discount > 0) {
+                double oldPrice = format.getPrix() / (1.0 - discount / 100.0);
+                Text oldText = new Text(String.format("%.2f MAD", oldPrice));
+                oldText.setFont(Font.font("Georgia", FontWeight.NORMAL, 12));
+                oldText.setFill(Color.web(BRUN_LIGHT));
+                oldText.setStrikethrough(true);
+                
+                Text prixText = new Text(String.format("%.2f MAD", format.getPrix()));
+                prixText.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
+                prixText.setFill(Color.web(TERRACOTTA));
+                
+                VBox priceGrp = new VBox(0);
+                priceGrp.setAlignment(Pos.CENTER_LEFT);
+                priceGrp.getChildren().addAll(oldText, prixText);
+                prixStockRow.getChildren().add(priceGrp);
+            } else {
+                Text prixText = new Text(String.format("%.2f MAD", format.getPrix()));
+                prixText.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
+                prixText.setFill(Color.web(TERRACOTTA));
+                prixStockRow.getChildren().add(prixText);
+            }
         }
 
         String stockLabel;
