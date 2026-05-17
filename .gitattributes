@@ -1,0 +1,3 @@
+# Force les scripts shell à toujours utiliser des fins de ligne Unix (LF)
+# même sur Windows, pour éviter les erreurs dans Docker
+*.sh text eol=lf
