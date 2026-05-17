@@ -196,8 +196,7 @@ public class ClientHandler implements Runnable {
 
         // ─── Contrôle d'accès : Autorisation Admin (Command Injection Prevention) ──
         if (ADMIN_COMMANDS.contains(commande) && !"admin".equals(userRole)) {
-            System.out.println("[SECURITY] Commande admin '" + commande + "' rejetée : rôle='"
-                    + userRole + "' userId=" + userId + " (" + clientIp + ")");
+            SecurityLogger.accesNonAutorise(commande, userId, userRole, clientIp);
             envoyerMessage(creerReponse("ERREUR", "Accès refusé. Droits administrateur requis."));
             return;
         }
@@ -668,6 +667,7 @@ public class ClientHandler implements Runnable {
 
     private void handleBlockIP(Map<String, Object> req) {
         if (!"admin".equals(userRole)) {
+            SecurityLogger.accesNonAutorise("ADMIN_BLOCK_IP", userId, userRole, socket.getInetAddress().getHostAddress());
             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
             return;
         }
@@ -710,6 +710,17 @@ public class ClientHandler implements Runnable {
     private void handleCommandeConfirmer(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleCommandeConfirmer");
         try {
+            // [MEMBRE 4] Déchiffrement applicatif du numéro de carte bancaire
+            String numeroChiffre = (String) req.get("numeroCarteChiffre");
+            if (numeroChiffre != null && !numeroChiffre.isEmpty()) {
+                String numeroCarte = com.chrionline.securite.PaymentCrypto.decrypt(numeroChiffre);
+                req.put("numeroCarte", numeroCarte);
+                req.remove("numeroCarteChiffre"); // Ne pas propager la version chiffrée
+                System.out.println("[PAIEMENT] Numéro de carte déchiffré côté serveur (AES-256/GCM).");
+                SecurityLogger.logSecurityEvent("PAYMENT_DECRYPT", 
+                        String.valueOf(userId), socket.getInetAddress().getHostAddress(), "SUCCESS");
+            }
+
             Map<String, Object> reponse = panierService.confirmerCommande(req);
 
             // Si la commande est validée avec succès, on notifie les administrateurs via
