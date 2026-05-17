@@ -65,13 +65,29 @@ Ce rapport présente l'état d'avancement actuel du projet **ChriOnline**, en id
 
 ---
 
-## ✅ 3. Toutes les Tâches ont été Implémentées
+## 🛠️ 3. Correctifs Majeurs et Optimisations Post-Intégration
 
-L'ensemble des modules décrits dans le cahier des charges du Mini-Projet 3 (IDS/IPS) sont désormais pleinement opérationnels.
+### A. Résolution du bug de liaison JDBC (Catégories)
+*   **Problème :** Inversion des indices de liaison des paramètres 4 (`discount`) et 5 (`id_categorie`) dans la méthode SQL `ProduitDAO.updateCategorie()`. Cela bloquait l'enregistrement des remises de catégories ou corrompait la BDD.
+*   **Correction :** Rétablissement de l'ordre exact et re-compilation réussie. De plus, `handleApplyDiscountCategorie()` a été optimisée pour tolérer et sauvegarder les remises sur les catégories vides.
+
+### B. Synchronisation du Jeton de Session Tournant (Security Core)
+*   **Problème :** Le serveur faisait correctement tourner l'ID de session à chaque transaction (mécanisme anti-rejeu), mais le client réseau `Client.java` ne mettait pas à jour son jeton JWT privé. Les requêtes suivantes réutilisaient l'ancien jeton expiré, provoquant des rejets systématiques de type `SESSION_INVALID`.
+*   **Correction :** Intégration d'un écouteur automatique dans `Client.lireReponse()` pour synchroniser instantanément le JWT lors de la rotation de session.
+
+### C. Refactorisation Ergonomique de la Sidebar Admin
+*   **Problème :** Présence d'onglets inactifs ("Paiements" et "Paramètres") encombrant la barre latérale de l'administration.
+*   **Correction :** Suppression permanente et propre de ces onglets de l'interface `AdminDashboardView.java` pour un design épuré, premium et 100% opérationnel.
 
 ---
 
-## ⚠️ 4. Problèmes Techniques, Risques et Solutions Prévues
+## ✅ 4. Toutes les Tâches ont été Implémentées
+
+L'ensemble des modules décrits dans le cahier des charges du Mini-Projet 3 (IDS/IPS) et les correctifs de stabilisation post-intégration sont désormais pleinement opérationnels.
+
+---
+
+## ⚠️ 5. Problèmes Techniques, Risques et Solutions Prévues
 
 Dans le cadre du déploiement de cette architecture, trois risques majeurs ont été identifiés avec leurs solutions de remédiation :
 
