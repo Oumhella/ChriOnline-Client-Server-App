@@ -1173,7 +1173,6 @@ public class ClientHandler implements Runnable {
 
     private void injecterUtilisateurDansRequete(Map<String, Object> req) {
         req.put("userId", this.userId);
-        req.put("idUtilisateur", this.userId);
     }
 
     private Map<String, Object> creerReponseSessionExpiree() {
