@@ -23,6 +23,7 @@ public class RecaptchaWidget extends HBox {
     private final WebView webView;
     private final WebEngine webEngine;
     private final JSBridge bridge = new JSBridge(); // RÉTABLI : Référence forte obligatoire contre le Garbage Collector !
+    private javafx.stage.Stage popupStage = null;
 
     // ── Serveur HTTP local statique pour tromper reCAPTCHA ──
     private static HttpServer server;
@@ -64,17 +65,16 @@ public class RecaptchaWidget extends HBox {
 
     public RecaptchaWidget() {
         super();
-        setAlignment(Pos.CENTER);
-        setPrefHeight(80);
-        setMaxWidth(300);
-        setStyle("-fx-background-color: transparent;");
+        setAlignment(Pos.TOP_CENTER);
+        setPrefSize(440, 600);
+        setStyle("-fx-background-color: #FAF7F2; -fx-padding: 15 10 10 10;");
 
         webView = new WebView();
         webEngine = webView.getEngine();
 
         webView.setContextMenuEnabled(false);
-        webView.setPrefSize(300, 80);
-        webView.setMaxSize(300, 80);
+        webView.setPrefSize(420, 580);
+        webView.setMaxSize(420, 580);
 
         // Pont JS <-> JavaFX
         webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
@@ -96,12 +96,45 @@ public class RecaptchaWidget extends HBox {
         getChildren().add(webView);
     }
 
+    public void afficherEnPopup(javafx.stage.Window owner) {
+        if (valide) {
+            return; // Déjà validé, rien à faire
+        }
+        
+        if (popupStage == null) {
+            popupStage = new javafx.stage.Stage();
+            popupStage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+            popupStage.initOwner(owner);
+            popupStage.setTitle("Vérification de sécurité");
+            
+            // Retirer le webview de son parent s'il y est déjà pour éviter l'erreur de double parent
+            if (this.getParent() != null) {
+                ((javafx.scene.layout.Pane) this.getParent()).getChildren().remove(this);
+            }
+            
+            javafx.scene.Scene scene = new javafx.scene.Scene(this, 440, 600);
+            popupStage.setScene(scene);
+            popupStage.setResizable(false);
+            
+            // Reset à la fermeture manuelle si non validé
+            popupStage.setOnCloseRequest(e -> {
+                if (!valide) {
+                    reset();
+                }
+            });
+        }
+        popupStage.showAndWait();
+    }
+
     public class JSBridge {
         public void captchaResolved(String t) {
             javafx.application.Platform.runLater(() -> {
                 valide = true;
                 token = t;
                 System.out.println("[reCAPTCHA] Vérifié avec succès.");
+                if (popupStage != null && popupStage.isShowing()) {
+                    popupStage.close();
+                }
             });
         }
 

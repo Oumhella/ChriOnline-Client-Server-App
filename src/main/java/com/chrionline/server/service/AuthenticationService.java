@@ -55,6 +55,11 @@ public class AuthenticationService {
         sanitizedReq.put("prenom", InputValidator.sanitizeString(prenom, 50));
         sanitizedReq.put("email", email.trim());
 
+        // ─── Vérification de l'existence réelle de la boîte mail (ex: sur Gmail, Yahoo...) ───
+        if (!EmailService.verifierExistenceBoiteMail(email.trim())) {
+            return Map.of("statut", "ERREUR", "message", "Cette adresse email n'existe pas ou n'est pas active sur son serveur de messagerie (ex: Gmail).");
+        }
+
         Map<String, Object> result = UserDAO.inscrire(sanitizedReq);
         if (!"OK".equals(result.get("statut"))) return result;
 

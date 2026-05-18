@@ -343,7 +343,7 @@ public class InscriptionView extends Application {
 
         // ── Widget reCAPTCHA (pixel-perfect) ────────────────────
         captchaWidget = new RecaptchaWidget();
-        form.getChildren().addAll(captchaWidget, btnInscrire, lienBox, mentionsBox);
+        form.getChildren().addAll(btnInscrire, lienBox, mentionsBox);
 
         // ── Contrôleur ────────────────────────────────────────
         InscriptionController ctrl = new InscriptionController(
@@ -354,11 +354,19 @@ public class InscriptionView extends Application {
         );
         btnInscrire.setOnAction(e -> {
             if (!captchaWidget.estValide()) {
-                msgLabel.setText("✗ Veuillez cocher \"Je ne suis pas un robot\".");
-                msgLabel.setStyle("-fx-text-fill: " + TERRACOTTA + ";");
-                return;
+                msgLabel.setText("⌛ Veuillez valider la vérification de sécurité dans le pop-up...");
+                msgLabel.setStyle("-fx-text-fill: " + BRUN_LIGHT + ";");
+                captchaWidget.afficherEnPopup(stage);
             }
-            ctrl.inscrire(captchaWidget.getToken());
+            
+            if (captchaWidget.estValide()) {
+                msgLabel.setText("✓ Vérification réussie.");
+                msgLabel.setStyle("-fx-text-fill: " + SAUGE_DARK + ";");
+                ctrl.inscrire(captchaWidget.getToken());
+            } else {
+                msgLabel.setText("✗ Échec de la vérification CAPTCHA.");
+                msgLabel.setStyle("-fx-text-fill: " + TERRACOTTA + ";");
+            }
         });
         lienCnx.setOnAction(e -> {
             try {
