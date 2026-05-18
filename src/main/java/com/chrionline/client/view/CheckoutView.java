@@ -201,7 +201,11 @@ public class CheckoutView extends Application {
 
         carteDetailsBox = new VBox(10);
         txtNomCarte = new TextField(); txtNomCarte.setPromptText("Nom sur la carte");
-        txtNumeroCarte = new TextField(); txtNumeroCarte.setPromptText("4 derniers chiffres");
+        txtNumeroCarte = new TextField(); txtNumeroCarte.setPromptText("Numéro de carte (16 chiffres)");
+        txtNumeroCarte.textProperty().addListener((obs, oldVal, newVal) -> {
+            // Accepter uniquement les chiffres et espaces, max 19 caractères (16 + 3 espaces)
+            if (!newVal.matches("[0-9 ]{0,19}")) txtNumeroCarte.setText(oldVal);
+        });
         carteDetailsBox.getChildren().addAll(txtNomCarte, txtNumeroCarte);
         carteDetailsBox.setVisible(false); carteDetailsBox.setManaged(false);
 
@@ -210,6 +214,13 @@ public class CheckoutView extends Application {
             boolean isLivraison = "livraison".equals(newV.getUserData().toString());
             carteDetailsBox.setVisible(isCarte); carteDetailsBox.setManaged(isCarte);
             livraisonDetailsBox.setVisible(isLivraison); livraisonDetailsBox.setManaged(isLivraison);
+            
+            // Afficher le champ TOTP systématiquement dès qu'on choisit un mode de paiement
+            if (box2faSection != null) {
+                box2faSection.setVisible(true);
+                box2faSection.setManaged(true);
+                enAttente2fa = true; // Force la saisie du code avant de cliquer sur confirmer
+            }
         });
 
         box.getChildren().addAll(new Label("Méthode de Paiement"), rbLivraison, livraisonDetailsBox, rbCarte, carteDetailsBox);
@@ -284,9 +295,14 @@ public class CheckoutView extends Application {
             methode = livraisonSousGroup.getSelectedToggle().getUserData().toString();
         }
 
-        if ("carte".equals(methode) && (txtNomCarte.getText().isEmpty() || txtNumeroCarte.getText().isEmpty())) {
-            msgLabel.setText("⚠ Veuillez remplir les informations de la carte.");
-            return;
+        if ("carte".equals(methode)) {
+            String digits = txtNumeroCarte.getText().replaceAll(" ", "");
+            if (txtNomCarte.getText().isBlank()) {
+                msgLabel.setText("⚠ Veuillez saisir le nom sur la carte."); return;
+            }
+            if (digits.length() < 13 || digits.length() > 19) {
+                msgLabel.setText("⚠ Numéro de carte invalide (13 à 19 chiffres requis)."); return;
+            }
         }
 
         if (enAttente2fa) {
@@ -302,11 +318,12 @@ public class CheckoutView extends Application {
         final String methodeFinale = methode;
         final String code2fa = enAttente2fa ? txtCode2fa.getText().trim() : null;
 
-        // [Memory Cleaning] Récupération sous forme de char[] et effacement immédiat de l'UI
-        final char[] numeroCarteChars = "carte".equals(methodeFinale) 
-                ? txtNumeroCarte.getText().toCharArray() 
+        // [Tokenisation] Récupération sous forme de char[] sans espaces, effacement immédiat de l'UI
+        final char[] numeroCarteChars = "carte".equals(methodeFinale)
+                ? txtNumeroCarte.getText().replaceAll(" ", "").toCharArray()
                 : new char[0];
         final String nomCarteStr = txtNomCarte.getText();
+        // Effacement immédiat des champs sensibles de l'affichage
         txtNumeroCarte.clear();
         txtNomCarte.clear();
 

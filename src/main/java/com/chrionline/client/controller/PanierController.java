@@ -118,37 +118,37 @@ public class PanierController {
     public Map<String, Object> confirmerCommandeEtape(String methodePaiement, String nomCarte, char[] numeroCarte,
                                                       String payment2faCode) {
         try {
-            // [ZKP RSA] Récupérer la clé publique du serveur si non définie
-            if (!com.chrionline.securite.PaymentCrypto.hasPublicKey()) {
-                try {
-                    Map<String, Object> keyReq = new HashMap<>();
-                    keyReq.put("commande", "PAYMENT_GET_PUBLIC_KEY");
-                    client.connecter();
-                    client.envoyerRequete(keyReq);
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> keyRep = (Map<String, Object>) client.lireReponse();
-                    if (keyRep != null && "OK".equals(keyRep.get("statut"))) {
-                        String pubKeyBase64 = (String) keyRep.get("publicKey");
-                        com.chrionline.securite.PaymentCrypto.setServerPublicKey(pubKeyBase64);
-                    }
-                } catch (Exception ex) {
-                    System.err.println("[PanierController] Échec récupération clé publique de paiement : " + ex.getMessage());
-                }
-            }
-
             Map<String, Object> req = new HashMap<>();
             req.put("commande", "COMMANDE_CONFIRMER");
             req.put("idUtilisateur", idUtilisateur);
             req.put("methodePaiement", methodePaiement);
             req.put("nomCarte", nomCarte != null ? nomCarte : "");
 
-            // [ZKP RSA & Memory Cleaning] Chiffrement RSA et écrasement immédiat de la RAM
+            // ── Tokenisation simulée (stratégie PCI-DSS Zero-Storage) ──────────────────
+            // Le vrai numéro de carte ne QUITTE JAMAIS la machine client.
+            // On génère un token éphémère et on masque la carte avant tout envoi réseau.
             if (numeroCarte != null && numeroCarte.length > 0) {
-                String numeroChiffre = com.chrionline.securite.PaymentCrypto.encrypt(numeroCarte);
-                req.put("numeroCarteChiffre", numeroChiffre);
-                System.out.println("[PAIEMENT] Numéro de carte chiffré asymétriquement avec RSA-256 (OAEP) avant envoi.");
+                // 1. Extraire les 4 derniers chiffres
+                String lastFour = "0000";
+                if (numeroCarte.length >= 4) {
+                    lastFour = new String(numeroCarte, numeroCarte.length - 4, 4);
+                }
+
+                // 1. Générer un token éphémère cryptographiquement aléatoire
+                String paymentToken = "tok_simulated_" + java.util.UUID.randomUUID();
+
+                // 2. Détruire IMMÉDIATEMENT le numéro brut de la mémoire (Heap Wiping)
+                java.util.Arrays.fill(numeroCarte, '\0');
+
+                // 3. N'envoyer QUE le token — jamais le vrai numéro ni même une carte masquée
+                req.put("paymentToken", paymentToken);
+
+                // Logs sécurisés et chiffrés avec RSA (Token uniquement)
+                String encryptedTokenLog = com.chrionline.securite.PaymentCrypto.encrypt(paymentToken);
+                System.out.println("[PAIEMENT-TOKENISATION] Token généré (chiffré) : " + encryptedTokenLog);
+                System.out.println("[PAIEMENT-TOKENISATION] ✓ Numéro brut détruit de la RAM. Zéro donnée bancaire ne quitte le client.");
             } else {
-                req.put("numeroCarte", "");
+                req.put("paymentToken", "");
             }
 
             if (payment2faCode != null && !payment2faCode.isBlank()) {

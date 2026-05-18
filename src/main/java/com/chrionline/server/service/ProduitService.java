@@ -29,7 +29,12 @@ public class ProduitService {
     }
 
     public Map<String, Object> handleGetProduitById(Map<String, Object> req) {
-        System.out.println("[ProduitService] Reçu handleGetProduitById : " + req);
+        // [SÉCURITÉ] Priorité 2 : Ne pas logguer les jetons et identifiants de session
+        Map<String, Object> safeLogReq = new HashMap<>(req);
+        safeLogReq.remove("firewallToken");
+        safeLogReq.remove("jwt");
+        safeLogReq.remove("sessionId");
+        System.out.println("[ProduitService] Reçu handleGetProduitById : " + safeLogReq);
         Map<String, Object> reponse = new HashMap<>();
 
         try {

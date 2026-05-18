@@ -30,6 +30,7 @@ public class DatabaseConnection {
             Class.forName("com.mysql.cj.jdbc.Driver");
             this.connection = DriverManager.getConnection(URL, USER, PASSWORD);
             System.out.println("[DB] Connexion à 'chrionline' établie avec succès.");
+            appliquerMigrations(this.connection);
         } catch (ClassNotFoundException e) {
             System.err.println("[DB] Driver MySQL introuvable.");
             e.printStackTrace();
@@ -38,6 +39,32 @@ public class DatabaseConnection {
             System.err.println("[DB] Échec de connexion à la base 'chrionline'. Vérifiez que MySQL est lancé et que la base existe.");
             e.printStackTrace();
             throw e;
+        }
+    }
+
+    /**
+     * Migrations automatiques PCI-DSS.
+     * Supprime les colonnes de données bancaires si elles existent encore.
+     * Idempotent : safe à exécuter plusieurs fois.
+     */
+    private static void appliquerMigrations(Connection conn) {
+        // Migration : supprimer nom_carte et numero_carte de la table paiement (PCI-DSS Zero-Storage)
+        String[] colonnesASupprimer = { "nom_carte", "numero_carte" };
+        for (String colonne : colonnesASupprimer) {
+            try {
+                // Vérifier si la colonne existe avant de tenter de la supprimer
+                java.sql.DatabaseMetaData meta = conn.getMetaData();
+                try (java.sql.ResultSet rs = meta.getColumns(null, null, "paiement", colonne)) {
+                    if (rs.next()) {
+                        try (java.sql.Statement stmt = conn.createStatement()) {
+                            stmt.executeUpdate("ALTER TABLE paiement DROP COLUMN " + colonne);
+                            System.out.println("[DB-MIGRATION] Colonne '" + colonne + "' supprimée de la table 'paiement' (conformité PCI-DSS).");
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                System.err.println("[DB-MIGRATION] Avertissement migration '" + colonne + "' : " + e.getMessage());
+            }
         }
     }
 

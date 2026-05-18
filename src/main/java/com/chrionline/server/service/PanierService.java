@@ -118,16 +118,32 @@ public class PanierService {
     public Map<String, Object> confirmerCommande(Map<String, Object> req) {
         int idUtilisateur = getInt(req, "idUtilisateur");
         String methodePaiement = (String) req.get("methodePaiement");
-        String nomCarte = (String) req.get("nomCarte");
-        String numeroCarte = (String) req.get("numeroCarte");
-        String code2fa = (String) req.get("payment2faCode");
+        String nomCarte       = (String) req.get("nomCarte");
+        String code2fa        = (String) req.get("payment2faCode");
+
+        // ── Lecture des données tokenisées (jamais de vrai numéro) ────────────────
+        String paymentToken  = (String) req.getOrDefault("paymentToken",  "");
 
         if (idUtilisateur == -1 || methodePaiement == null) {
             logger.warn("Tentative de paiement échouée : paramètres manquants pour l'utilisateur ID: {}", idUtilisateur);
             return erreur("Parametres manquants.");
         }
 
-        // ── 2FA TOTP (Google Authenticator) : 1re requête sans code → enrôlement/demande ; 2e requête avec code → validation ──
+        // ── Validation du token simulé (si paiement par carte en ligne) ──────────
+        boolean isPaiementCarte = "carte".equals(methodePaiement);
+        if (isPaiementCarte) {
+            if (paymentToken == null || !paymentToken.startsWith("tok_simulated_")) {
+                logger.warn("[TOKENISATION] Jeton de paiement invalide ou absent pour l'utilisateur ID: {}", idUtilisateur);
+                return erreur("Jeton de paiement invalide. Veuillez recommencer.");
+            }
+            // Simulation d'un appel à une passerelle de paiement externe
+            String chargeId = "ch_simulated_" + java.util.UUID.randomUUID().toString().substring(0, 8);
+            String encryptedTokenLog = com.chrionline.securite.PaymentCrypto.encrypt(paymentToken);
+            logger.info("[TOKENISATION] Token (chiffré) {} validé → Charge simulée ID: {}",
+                    encryptedTokenLog, chargeId);
+        }
+
+        // ── 2FA TOTP (Microsoft Authenticator) ───────────────────────────────────
         if (code2fa == null || code2fa.isBlank()) {
             return PaymentTwoFactorService.initiateVerification(idUtilisateur);
         }
@@ -137,9 +153,13 @@ public class PanierService {
             return erreur2faInvalide();
         }
 
+        // ── Enregistrement en BDD : AUCUNE donnée bancaire stockée (PCI-DSS) ─────
+        // nom_carte et numero_carte sont volontairement NULL en base de données.
+        // Seul le chargeId (identifiant de transaction simulé) est traçable.
         try {
-            CommandeDTO recap = PanierDAO.confirmerCommande(idUtilisateur, methodePaiement, nomCarte, numeroCarte);
-            logger.info("Paiement réussi pour l'utilisateur ID: {} avec la méthode: {}. Référence commande: {}", idUtilisateur, methodePaiement, recap.getReference());
+            CommandeDTO recap = PanierDAO.confirmerCommande(idUtilisateur, methodePaiement, null, null);
+            logger.info("Paiement réussi pour l'utilisateur ID: {} avec la méthode: {}. Référence commande: {}",
+                    idUtilisateur, methodePaiement, recap.getReference());
             return Map.of(
                     "statut", "OK",
                     "message", "Commande confirmee avec succes !",

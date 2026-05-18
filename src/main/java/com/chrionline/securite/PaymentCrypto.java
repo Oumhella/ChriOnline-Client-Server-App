@@ -57,14 +57,8 @@ public class PaymentCrypto {
             }
         } catch (Exception e) {
             System.err.println("[PaymentCrypto-RSA] Erreur d'initialisation : " + e.getMessage());
-            // Fallback de sécurité : générer une paire temporaire pour que l'application ne plante pas
-            try {
-                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
-                kpg.initialize(2048);
-                KeyPair kp = kpg.generateKeyPair();
-                serverPrivateKey = kp.getPrivate();
-                serverPublicKey = kp.getPublic();
-            } catch (Exception ignored) {}
+            // SUPPRESSION DU FALLBACK CLIENT : Le client ne doit JAMAIS générer sa propre paire RSA.
+            // Il doit obligatoirement recevoir la clé publique du serveur.
         }
     }
 

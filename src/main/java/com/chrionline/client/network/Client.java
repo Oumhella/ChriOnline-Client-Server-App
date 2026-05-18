@@ -9,7 +9,8 @@ import java.net.*;
  * contrôleurs JavaFX.
  *
  * Sécurité :
- * - [Membre 1] TLS avec vérification du certificat serveur via vault-ca.pem (Anti-MITM)
+ * - [Membre 1] TLS avec vérification du certificat serveur via vault-ca.pem
+ * (Anti-MITM)
  * - [Membre 4] Vérification HMAC-SHA256 des notifications UDP (Anti-injection)
  */
 public class Client {
@@ -68,7 +69,7 @@ public class Client {
                 caInputStream = new java.io.FileInputStream(caFile);
             } else {
                 throw new Exception("Certificat CA introuvable (vault-ca.pem). " +
-                    "Impossible de vérifier l'identité du serveur.");
+                        "Impossible de vérifier l'identité du serveur.");
             }
         }
 
@@ -99,7 +100,8 @@ public class Client {
 
     /**
      * Établit la connexion TCP sécurisée (SSL/TLS) avec le serveur.
-     * [MEMBRE 1] Utilise le certificat CA de Vault pour vérifier l'identité du serveur.
+     * [MEMBRE 1] Utilise le certificat CA de Vault pour vérifier l'identité du
+     * serveur.
      */
     public void connecter() throws IOException {
         if (socket == null || socket.isClosed()) {
@@ -117,12 +119,28 @@ public class Client {
                 this.out.flush();
                 this.in = new ObjectInputStream(socket.getInputStream());
 
-                System.out.println("[CLIENT-SSL] Connexion sécurisée établie (certificat serveur vérifié via Vault CA).");
+                System.out
+                        .println("[CLIENT-SSL] Connexion sécurisée établie (certificat serveur vérifié via Vault CA).");
 
                 // Démarrage de l'écouteur UDP
                 Thread udpThread = new Thread(this::ecouterNotificationsUDP);
                 udpThread.setDaemon(true);
                 udpThread.start();
+
+                // [SÉCURITÉ] Priorité 1 : Le client demande explicitement la clé publique RSA du serveur
+                if (!com.chrionline.securite.PaymentCrypto.hasPublicKey()) {
+                    java.util.Map<String, Object> reqRsa = new java.util.HashMap<>();
+                    reqRsa.put("commande", "PAYMENT_GET_PUBLIC_KEY");
+                    this.out.writeObject(reqRsa);
+                    this.out.flush();
+                    Object repObj = this.in.readObject();
+                    if (repObj instanceof java.util.Map) {
+                        java.util.Map<String, Object> rep = (java.util.Map<String, Object>) repObj;
+                        if ("OK".equals(rep.get("statut"))) {
+                            com.chrionline.securite.PaymentCrypto.setServerPublicKey((String) rep.get("publicKey"));
+                        }
+                    }
+                }
             } catch (javax.net.ssl.SSLHandshakeException e) {
                 throw new IOException("[SÉCURITÉ] Le certificat du serveur n'est pas signé par le CA de Vault. " +
                         "Connexion refusée (possible attaque MITM). Détail : " + e.getMessage(), e);
@@ -134,7 +152,8 @@ public class Client {
 
     /**
      * Envoie une requête au serveur.
-     * Ajoute automatiquement {@code sessionId} si l'utilisateur possède une session serveur.
+     * Ajoute automatiquement {@code sessionId} si l'utilisateur possède une session
+     * serveur.
      */
     public synchronized void envoyerRequete(Object requete) throws IOException {
         if (requete instanceof java.util.Map) {
@@ -217,8 +236,8 @@ public class Client {
             if (o instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
                 java.util.Map<String, Object> m = (java.util.Map<String, Object>) o;
-                com.chrionline.client.session.SessionManager sm =
-                        com.chrionline.client.session.SessionManager.getInstance();
+                com.chrionline.client.session.SessionManager sm = com.chrionline.client.session.SessionManager
+                        .getInstance();
                 // Vérif session expirée
                 sm.handleServerResponseIfSessionExpired(m);
                 // Rotation automatique du sessionId après action critique (paiement, profil)
