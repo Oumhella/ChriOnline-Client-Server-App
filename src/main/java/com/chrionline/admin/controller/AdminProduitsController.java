@@ -48,12 +48,13 @@ public class AdminProduitsController {
         return null;
     }
 
-    public int ajouterProduit(Produit p) {
+    public int ajouterProduit(Produit p, String totpCode) {
         Map<String, Object> req = new HashMap<>();
         req.put("commande", "AJOUTER_PRODUIT");
         req.put("nom", p.getNom());
         req.put("description", p.getDescription());
         req.put("id_categorie", p.getIdCategorie());
+        req.put("totpCode", totpCode);
         
         List<Map<String, Object>> fmts = new ArrayList<>();
         for (var f : p.getFormats()) {

@@ -480,15 +480,39 @@ public class AdminProduitsView extends Application {
             btnSave.setText("Enregistrement...");
             btnSave.setDisable(true);
 
-            int result = (p == null) ? controller.ajouterProduit(toSave) : (controller.modifierProduit(toSave) ? 1 : -1);
-
-            if (result > 0) {
-                chargerDonnees();
-                modal.close();
+            if (p == null) {
+                TextInputDialog totpDialog = new TextInputDialog();
+                totpDialog.setTitle("Validation TOTP Requise");
+                totpDialog.setHeaderText("Action Sensible : Ajout de produit");
+                totpDialog.setContentText("Veuillez saisir votre code TOTP à 6 chiffres pour valider cette action :");
+                
+                java.util.Optional<String> totpRes = totpDialog.showAndWait();
+                if (totpRes.isPresent() && !totpRes.get().isBlank()) {
+                    String code = totpRes.get().trim();
+                    int result = controller.ajouterProduit(toSave, code);
+                    if (result > 0) {
+                        chargerDonnees();
+                        modal.close();
+                    } else {
+                        btnSave.setText(origText);
+                        btnSave.setDisable(false);
+                        errLabel.setText("❌ Échec : Code TOTP invalide ou rejeté par le serveur.");
+                    }
+                } else {
+                    btnSave.setText(origText);
+                    btnSave.setDisable(false);
+                    errLabel.setText("⚠ Action annulée : Code TOTP obligatoire.");
+                }
             } else {
-                btnSave.setText(origText);
-                btnSave.setDisable(false);
-                errLabel.setText("❌ Échec. Vérifiez la console serveur pour les détails.");
+                boolean result = controller.modifierProduit(toSave);
+                if (result) {
+                    chargerDonnees();
+                    modal.close();
+                } else {
+                    btnSave.setText(origText);
+                    btnSave.setDisable(false);
+                    errLabel.setText("❌ Échec de la modification.");
+                }
             }
         });
 

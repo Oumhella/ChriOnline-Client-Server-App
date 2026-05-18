@@ -58,17 +58,31 @@ public final class SecurityLogger {
         String logEntry = String.format("[%s] email=%s ip=%s context=%s timestamp=%s",
                 type, email, ip, context, Instant.now());
 
+        // Chiffrement sélectif pour les événements de sécurité/sensibles
+        String finalLogToStore = logEntry;
+        if (type.contains("FAILED") || type.contains("REFUSE") || type.contains("SPOOF") 
+                || type.contains("BLOQUE") || type.contains("ALERT") || type.contains("SUCCESS")) {
+            
+            // Appel de Vault Transit
+            String ciphertext = com.chrionline.securite.VaultServerService.transitEncrypt(logEntry);
+            
+            // Si le chiffrement a réussi, on préfixe pour identifier le log chiffré
+            if (ciphertext != null && ciphertext.startsWith("vault:")) {
+                finalLogToStore = "[SECURE_ENCRYPTED] " + ciphertext;
+            }
+        }
+
         // S'assurer que l'IP n'est pas "inconnue"
         String displayIp = (ip == null || ip.isEmpty()) ? "127.0.0.1" : ip;
 
-        // ── IDS : Alimenter le flux d'événements récents pour le Dashboard ──
+        // ── IDS : Alimenter le flux d'événements récents pour le Dashboard (en clair dans la RAM admin) ──
         addRecentEvent(type, displayIp, email + " | " + context);
 
         if (type.contains("FAILED") || type.contains("REFUSE") || type.contains("SPOOF") || type.contains("BLOQUE") || type.contains("ALERT")) {
-            LOG.warn(logEntry);
+            LOG.warn(finalLogToStore);
             checkThreshold(displayIp, type);
         } else {
-            LOG.info(logEntry);
+            LOG.info(finalLogToStore);
         }
     }
 

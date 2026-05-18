@@ -235,11 +235,23 @@ public class AdminUsersView {
             
             confirm.showAndWait().ifPresent(res -> {
                 if (res == ButtonType.YES) {
-                    boolean ok = controller.changerStatut(idUtilisateur, targetStatus);
-                    if (ok) {
-                        chargerClients(); // Recharge la liste pour mettre à jour l'UI
+                    TextInputDialog totpDialog = new TextInputDialog();
+                    totpDialog.setTitle("Validation TOTP Requise");
+                    totpDialog.setHeaderText("Action Sensible : " + (actionEstBloquer ? "Bannissement" : "Débannissement") + " client");
+                    totpDialog.setContentText("Veuillez saisir votre code TOTP à 6 chiffres pour valider cette action :");
+                    
+                    java.util.Optional<String> totpRes = totpDialog.showAndWait();
+                    if (totpRes.isPresent() && !totpRes.get().isBlank()) {
+                        String code = totpRes.get().trim();
+                        boolean ok = controller.changerStatut(idUtilisateur, targetStatus, code);
+                        if (ok) {
+                            chargerClients(); // Recharge la liste pour mettre à jour l'UI
+                        } else {
+                            Alert err = new Alert(Alert.AlertType.ERROR, "Erreur : Code TOTP invalide ou rejeté par le serveur.", ButtonType.OK);
+                            err.show();
+                        }
                     } else {
-                        Alert err = new Alert(Alert.AlertType.ERROR, "Erreur lors du changement de statut.", ButtonType.OK);
+                        Alert err = new Alert(Alert.AlertType.WARNING, "Action annulée : Code TOTP obligatoire.", ButtonType.OK);
                         err.show();
                     }
                 }
