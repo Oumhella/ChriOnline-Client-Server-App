@@ -241,10 +241,17 @@ public final class SecurityLogger {
                 "raison VARCHAR(255), " +
                 "date_ajout TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
                 "expire_le TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
-                "actif BOOLEAN NOT NULL DEFAULT TRUE)";
+                "actif BOOLEAN NOT NULL DEFAULT TRUE, " +
+                "offense_count INT DEFAULT 1)";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
                 Statement stmt = conn.createStatement()) {
             stmt.execute(sql);
+            // Ajouter dynamiquement la colonne offense_count si elle n'existe pas (migration)
+            try {
+                stmt.execute("ALTER TABLE security_blacklist ADD COLUMN offense_count INT DEFAULT 1");
+            } catch (SQLException ignored) {
+                // Déjà existante
+            }
         } catch (SQLException e) {
             LOG.error("Erreur création table blacklist : {}", e.getMessage());
         }
@@ -264,13 +271,45 @@ public final class SecurityLogger {
         }
     }
 
+    public static long getBanDurationDays(int offenseCount) {
+        return switch (offenseCount) {
+            case 1  -> 1;    // 24h — 1ère détection
+            case 2  -> 7;    // 7 jours — récidive
+            case 3  -> 30;   // 30 jours
+            default -> 90;   // 90 jours — plafond, jamais permanent
+        };
+    }
+
+    private static int getOffenseCount(String ip) {
+        String sql = "SELECT COUNT(*) FROM security_blacklist WHERE ip_address = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, ip);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) + 1; // Le prochain ban est le count + 1
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("Erreur comptage récidives pour IP {} : {}", ip, e.getMessage());
+        }
+        return 1;
+    }
+
     private static void persistBan(String ip, String reason) {
-        String sql = "INSERT INTO security_blacklist (ip_address, raison, expire_le, actif) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 365 DAY), TRUE)";
+        int offenseCount = getOffenseCount(ip);
+        long days = getBanDurationDays(offenseCount);
+        
+        String sql = "INSERT INTO security_blacklist (ip_address, raison, expire_le, actif, offense_count) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? DAY), TRUE, ?)";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, ip);
             ps.setString(2, reason);
+            ps.setLong(3, days);
+            ps.setInt(4, offenseCount);
             ps.executeUpdate();
+            LOG.info("[SECURITY] IP {} bannie pour {} jours (Palier récidive : #{}). Raison : {}", 
+                    ip, days, offenseCount, reason);
         } catch (SQLException e) {
             LOG.error("Erreur persistance ban IP {} : {}", ip, e.getMessage());
         }
