@@ -1,4 +1,4 @@
-package com.chrionline.client.view;
+package com.chrionline.admin.view;
 
 import com.chrionline.client.network.Client;
 import com.chrionline.shared.models.SecurityEvent;
