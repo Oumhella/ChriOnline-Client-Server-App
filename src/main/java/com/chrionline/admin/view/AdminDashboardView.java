@@ -236,7 +236,7 @@ public class AdminDashboardView extends Application {
                 navSection("SYSTÈME"),
                 navItem("🛡️", "Sécurité", false, () -> {
                     try {
-                        rootPane.getChildren().set(1, new com.chrionline.client.view.SecurityDashboardView().getView());
+                        rootPane.getChildren().set(1, new SecurityDashboardView().getView());
                     } catch (Exception ex) {
                         System.err.println("[DASHBOARD] Erreur ouverture Sécurité : " + ex.getMessage());
                         ex.printStackTrace();
