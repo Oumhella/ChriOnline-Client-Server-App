@@ -21,12 +21,13 @@ import java.util.Map;
 /**
  * Service centralisé pour le serveur ChriOnline utilisant HashiCorp Vault.
  * 
- * Authentification : AppRole (RoleID + SecretID) — Plus sécurisé qu'un token statique.
+ * Authentification : AppRole (RoleID + SecretID) — Plus sécurisé qu'un token
+ * statique.
  * 
  * Moteurs gérés :
- * - KV v2     (secret/)   — Stockage des clés publiques RSA des admins
- * - PKI       (pki/)      — Certificats SSL dynamiques
- * - Transit   (transit/)  — Chiffrement/déchiffrement des données sensibles
+ * - KV v2 (secret/) — Stockage des clés publiques RSA des admins
+ * - PKI (pki/) — Certificats SSL dynamiques
+ * - Transit (transit/) — Chiffrement/déchiffrement des données sensibles
  */
 public class VaultServerService {
 
@@ -97,7 +98,8 @@ public class VaultServerService {
                 // 2. Chercher le fichier unseal_key.txt dans vault/data/
                 Path unsealKeyPath = Paths.get("vault", "data", "unseal_key.txt");
                 if (!Files.exists(unsealKeyPath)) {
-                    System.err.println("[VaultServerService] Fichier unseal_key.txt introuvable. Impossible d'auto-unseal.");
+                    System.err.println(
+                            "[VaultServerService] Fichier unseal_key.txt introuvable. Impossible d'auto-unseal.");
                     return;
                 }
 
@@ -132,7 +134,8 @@ public class VaultServerService {
                     if (response.toString().contains("\"sealed\":false")) {
                         System.out.println("[VaultServerService] ✓ Vault déverrouillé automatiquement avec succès !");
                     } else {
-                        System.out.println("[VaultServerService] Unseal envoyé, mais Vault nécessite peut-être d'autres clés.");
+                        System.out.println(
+                                "[VaultServerService] Unseal envoyé, mais Vault nécessite peut-être d'autres clés.");
                     }
                 } else {
                     System.err.println("[VaultServerService] Échec auto-unseal (HTTP " + unsealStatus + ")");
@@ -144,7 +147,8 @@ public class VaultServerService {
         } catch (java.net.ConnectException e) {
             System.out.println("[VaultServerService] Vault non accessible à " + VAULT_ADDR + " — mode dégradé.");
         } catch (Exception e) {
-            System.err.println("[VaultServerService] Erreur lors de la vérification du statut Vault : " + e.getMessage());
+            System.err
+                    .println("[VaultServerService] Erreur lors de la vérification du statut Vault : " + e.getMessage());
         }
     }
 
@@ -276,12 +280,10 @@ public class VaultServerService {
         return null;
     }
 
-    /**
-     * Récupère la configuration globale du serveur (Secrets partagés).
-     */
     public static Map<String, String> getServerConfig() {
         Map<String, String> config = new HashMap<>();
-        if (!isVaultAvailable) return config;
+        if (!isVaultAvailable)
+            return config;
         try {
             LogicalResponse response = vaultKV.logical().read("secret/" + KV_CONFIG_PATH);
             if (response.getRestResponse().getStatus() == 200) {
@@ -293,16 +295,48 @@ public class VaultServerService {
         return config;
     }
 
+    /**
+     * Récupère une valeur secrète spécifique depuis un chemin Vault complet (ex: secret/keystore-password)
+     */
+    public static String getSecret(String path) {
+        if (!isVaultAvailable) {
+            System.err.println("[VaultServerService] Vault est indisponible. Impossible de lire : " + path);
+            return null;
+        }
+        try {
+            // Vault v2 structure data inside a 'data' object, bettercloud Vault driver handles this mostly,
+            // but if the path is explicitly 'secret/keystore-password', let's read it.
+            LogicalResponse response = vaultKV.logical().read(path);
+            if (response.getRestResponse().getStatus() == 200) {
+                Map<String, String> data = response.getData();
+                if (data != null && !data.isEmpty()) {
+                    // Usually secrets in KV are key-value. If it's a single value, maybe under 'value' or the key name itself
+                    // Let's assume it's stored under the key 'value' or we return the first value.
+                    if (data.containsKey("value")) {
+                        return data.get("value");
+                    }
+                    if (data.containsKey("password")) {
+                        return data.get("password");
+                    }
+                    return data.values().iterator().next(); // Return the first value found
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[VaultServerService] Erreur lecture secret " + path + " : " + e.getMessage());
+        }
+        return null;
+    }
+
     // ─── GESTION SSL / PKI ──────────────────────────────────────────────────────
 
     /**
      * Récupère le certificat du Root CA pour le TrustStore.
      */
     public static String getRootCA() throws Exception {
-        if (!isVaultAvailable) return null;
+        if (!isVaultAvailable)
+            return null;
         LogicalResponse response = vaultPKI.logical().read("pki/ca/pem");
-        return response.getRestResponse().getBody() != null ?
-               new String(response.getRestResponse().getBody()) : null;
+        return response.getRestResponse().getBody() != null ? new String(response.getRestResponse().getBody()) : null;
     }
 
     public static Map<String, String> generateServerCertificate() throws Exception {
@@ -343,11 +377,11 @@ public class VaultServerService {
     private static Map<String, String> getFallbackCertificate() {
         Map<String, String> certData = new HashMap<>();
         certData.put("certificate",
-            "-----BEGIN CERTIFICATE-----\n" +
-            "MIICpDCCAYwCCQDU5m1Kz9uGzTANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAls\n" +
-            "b2NhbGhvc3QwHhcNMjQwMTAxMDAwMDAwWhcNMzQwMTAxMDAwMDAwWjAUMRIwEAYD\n" +
-            "VQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDC\n" +
-            "-----END CERTIFICATE-----");
+                "-----BEGIN CERTIFICATE-----\n" +
+                        "MIICpDCCAYwCCQDU5m1Kz9uGzTANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAls\n" +
+                        "b2NhbGhvc3QwHhcNMjQwMTAxMDAwMDAwWhcNMzQwMTAxMDAwMDAwWjAUMRIwEAYD\n" +
+                        "VQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDC\n" +
+                        "-----END CERTIFICATE-----");
         return certData;
     }
 
@@ -358,7 +392,8 @@ public class VaultServerService {
      * Exemple : chiffrer un email ou une adresse avant de le stocker en BDD.
      *
      * @param plaintext Le texte en clair à chiffrer
-     * @return Le texte chiffré (format vault:v1:xxxxx), ou le texte original si Vault est indisponible
+     * @return Le texte chiffré (format vault:v1:xxxxx), ou le texte original si
+     *         Vault est indisponible
      */
     public static String transitEncrypt(String plaintext) {
         if (!isVaultAvailable || vaultTransit == null) {
@@ -387,7 +422,8 @@ public class VaultServerService {
      * Déchiffre une donnée chiffrée par le moteur Transit.
      *
      * @param ciphertext Le texte chiffré (format vault:v1:xxxxx)
-     * @return Le texte en clair, ou le texte chiffré tel quel si Vault est indisponible
+     * @return Le texte en clair, ou le texte chiffré tel quel si Vault est
+     *         indisponible
      */
     public static String transitDecrypt(String ciphertext) {
         if (!isVaultAvailable || vaultTransit == null) {

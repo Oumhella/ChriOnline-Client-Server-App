@@ -12,6 +12,7 @@ import javafx.application.Application;
  * C'est le même pattern que ClientMain → HomeView.
  *
  * Lancement :
+ *
  *   java -cp ChriOnline-Admin.jar com.chrionline.admin.AdminMain
  */
 public class AdminMain {

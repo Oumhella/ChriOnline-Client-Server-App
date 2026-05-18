@@ -223,11 +223,19 @@ public class ConnexionView extends Application {
         ConnexionController ctrl = new ConnexionController(emailField, mdpField, msgLabel, stage, btnLogin);
         btnLogin.setOnAction(e -> {
             if (!captchaWidget.estValide()) {
-                msgLabel.setText("✗ Veuillez cocher \"Je ne suis pas un robot\".");
-                msgLabel.setStyle("-fx-text-fill: #C96B4A;");
-                return;
+                msgLabel.setText("⌛ Veuillez valider la vérification de sécurité dans le pop-up...");
+                msgLabel.setStyle("-fx-text-fill: " + BRUN_LIGHT + ";");
+                captchaWidget.afficherEnPopup(stage);
             }
-            ctrl.connecter(captchaWidget.getToken());
+            
+            if (captchaWidget.estValide()) {
+                msgLabel.setText("✓ Vérification réussie.");
+                msgLabel.setStyle("-fx-text-fill: " + SAUGE_DARK + ";");
+                ctrl.connecter(captchaWidget.getToken());
+            } else {
+                msgLabel.setText("✗ Échec de la vérification CAPTCHA.");
+                msgLabel.setStyle("-fx-text-fill: #C96B4A;");
+            }
         });
 
         link.setOnAction(e -> {
@@ -239,7 +247,7 @@ public class ConnexionView extends Application {
             catch (Exception ex) { ex.printStackTrace(); }
         });
 
-        right.getChildren().addAll(btnRetour, title, emailBox, mdpBox, linkOublie, captchaWidget, msgLabel, btnLogin, footer);
+        right.getChildren().addAll(btnRetour, title, emailBox, mdpBox, linkOublie, msgLabel, captchaWidget, btnLogin, footer);
         return right;
     }
 

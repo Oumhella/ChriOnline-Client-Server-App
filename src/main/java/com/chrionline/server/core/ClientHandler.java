@@ -31,7 +31,8 @@ import java.util.*;
 public class ClientHandler implements Runnable {
 
     /**
-     * Commandes TCP ne nécessitant pas de session (LOGIN/REGISTER + parcours invité + déconnexion).
+     * Commandes TCP ne nécessitant pas de session (LOGIN/REGISTER + parcours invité
+     * + déconnexion).
      */
     private static final Set<String> COMMANDES_PUBLIQUES = Set.of(
             "CONNEXION",
@@ -55,8 +56,8 @@ public class ClientHandler implements Runnable {
             "DECONNEXION",
             "UDP_REGISTER",
             "REGISTER_UDP",
-            "INCONNUE"
-    );
+            "PAYMENT_GET_PUBLIC_KEY",
+            "INCONNUE");
 
     private final Socket socket;
     private final Server server;
@@ -80,19 +81,18 @@ public class ClientHandler implements Runnable {
     // État de la session client
     private int userId = -1;
     private String userEmail = null;
-    private String userRole      = null;
+    private String userRole = null;
     private boolean isAdminMtlsConnection = false;
 
     // ─── Commandes réservées aux administrateurs ─────────────────────────────
     private static final Set<String> ADMIN_COMMANDS = Set.of(
-        "AJOUTER_PRODUIT", "MODIFIER_PRODUIT", "SUPPRIMER_PRODUIT",
-        "UPLOAD_IMAGE",
-        "AJOUTER_LABEL", "AJOUTER_LABEL_VALUE", "SUPPRIMER_LABEL_VALUE",
-        "AJOUTER_CATEGORIE", "MODIFIER_CATEGORIE", "SUPPRIMER_CATEGORIE",
-        "ADMIN_LISTE_USERS", "ADMIN_CHANGER_STATUT_USER",
-        "ENVOYER_NEWSLETTER",
-        "GET_ALL_ORDERS", "UPDATE_ORDER_STATUS"
-    );
+            "AJOUTER_PRODUIT", "MODIFIER_PRODUIT", "SUPPRIMER_PRODUIT",
+            "UPLOAD_IMAGE",
+            "AJOUTER_LABEL", "AJOUTER_LABEL_VALUE", "SUPPRIMER_LABEL_VALUE",
+            "AJOUTER_CATEGORIE", "MODIFIER_CATEGORIE", "SUPPRIMER_CATEGORIE",
+            "ADMIN_LISTE_USERS", "ADMIN_CHANGER_STATUT_USER",
+            "ENVOYER_NEWSLETTER",
+            "GET_ALL_ORDERS", "UPDATE_ORDER_STATUS");
 
     // Pour injecter le nouveau sessionId après régénération globale
     private String nextSessionIdToInject = null;
@@ -107,7 +107,8 @@ public class ClientHandler implements Runnable {
 
     /**
      * Constructeur pour les connexions sur le port mTLS admin (9445).
-     * Le rôle admin est pré-assigné car l'authentification est assurée par le certificat mTLS.
+     * Le rôle admin est pré-assigné car l'authentification est assurée par le
+     * certificat mTLS.
      */
     public ClientHandler(Socket socket, Server server, boolean isAdminMtlsConnection) {
         this(socket, server);
@@ -186,13 +187,15 @@ public class ClientHandler implements Runnable {
         long dynamicTimeoutMs = 15L * 60 * 1000; // Défaut : 15 min
         if (commande.startsWith("PANIER_") || commande.startsWith("COMMANDE_")) {
             dynamicTimeoutMs = 5L * 60 * 1000; // Transactions critiques : 5 min
-        } else if (commande.startsWith("ADMIN_") || commande.startsWith("AJOUTER_") || commande.startsWith("MODIFIER_") || commande.startsWith("SUPPRIMER_")) {
+        } else if (commande.startsWith("ADMIN_") || commande.startsWith("AJOUTER_") || commande.startsWith("MODIFIER_")
+                || commande.startsWith("SUPPRIMER_")) {
             dynamicTimeoutMs = 10L * 60 * 1000; // Opérations admin : 10 min
         }
 
         if (!COMMANDES_PUBLIQUES.contains(commande)) {
             if (isAdminMtlsConnection) {
-                // Pour les connexions admin mTLS sécurisées par certificat, on pré-assigne l'identité admin
+                // Pour les connexions admin mTLS sécurisées par certificat, on pré-assigne
+                // l'identité admin
                 if (this.userId == -1) {
                     this.userId = 1; // Default admin user ID
                 }
@@ -202,8 +205,8 @@ public class ClientHandler implements Runnable {
                 injecterUtilisateurDansRequete(req);
             } else {
                 String jwt = (String) req.get("jwt");
-                com.chrionline.server.session.Session session =
-                        com.chrionline.server.session.SessionManager.validateSession(jwt, clientIp, dynamicTimeoutMs);
+                com.chrionline.server.session.Session session = com.chrionline.server.session.SessionManager
+                        .validateSession(jwt, clientIp, dynamicTimeoutMs);
                 if (session == null) {
                     rejeterSessionInvalide(clientIp, commande, jwt);
                     return;
@@ -211,8 +214,10 @@ public class ClientHandler implements Runnable {
                 appliquerIdentiteDepuisSession(session);
                 injecterUtilisateurDansRequete(req);
 
-                // 2. Régénération automatique et constante ("roulement") de l'ID après chaque transaction valide
-                this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(jwt, clientIp);
+                // 2. Régénération automatique et constante ("roulement") de l'ID après chaque
+                // transaction valide
+                this.nextSessionIdToInject = com.chrionline.server.session.SessionManager.regenerateSession(jwt,
+                        clientIp);
                 req.put("jwt", this.nextSessionIdToInject);
             }
         } else {
@@ -245,6 +250,12 @@ public class ClientHandler implements Runnable {
             case "UDP_REGISTER" -> {
                 this.udpPort = (int) req.getOrDefault("port", 9092);
                 System.out.println("[HANDLER] Port UDP enregistré pour client " + userId + " : " + udpPort);
+            }
+            case "PAYMENT_GET_PUBLIC_KEY" -> {
+                Map<String, Object> rep = new java.util.HashMap<>();
+                rep.put("statut", "OK");
+                rep.put("publicKey", com.chrionline.securite.PaymentCrypto.getServerPublicKeyBase64());
+                envoyerMessage(rep);
             }
             case "PANIER_GET" -> envoyerMessage(panierService.getPanier(req));
             case "PANIER_AJOUTER" -> envoyerMessage(panierService.ajouterProduit(req));
@@ -327,7 +338,7 @@ public class ClientHandler implements Runnable {
             case "ADMIN_GET_SECURITY_EVENTS" -> handleGetSecurityEvents(req);
             case "ADMIN_GET_BLOCKED_IPS" -> handleGetBlockedIPs(req);
             case "ADMIN_UNBLOCK_IP" -> handleUnblockIP(req);
-            case "DECONNEXION"          -> handleDeconnexion(req, clientIp);
+            case "DECONNEXION" -> handleDeconnexion(req, clientIp);
             // ... autres commandes ...
             default -> envoyerMessage(creerReponse("ERREUR", "Commande non reconnue : " + commande));
         }
@@ -371,7 +382,8 @@ public class ClientHandler implements Runnable {
             if ("OK".equals(reponseMutable.get("statut"))) {
                 // IDS : OTP validé → réinitialiser le compteur d'échecs
                 String otpEmail = (String) req.get("email");
-                if (otpEmail != null) SecurityLogger.otpSucces(otpEmail, clientIp);
+                if (otpEmail != null)
+                    SecurityLogger.otpSucces(otpEmail, clientIp);
 
                 // Initialize session upon successful 2FA
                 enrichirReponseConnexionAvecSession(reponseMutable, req);
@@ -382,13 +394,15 @@ public class ClientHandler implements Runnable {
                     this.userEmail = (String) data.get("email");
                     this.userRole = (String) data.get("role");
 
-                    // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité (log simple)
+                    // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité
+                    // (log simple)
                     SecurityLogger.loginSucces(userEmail, userRole, userId, clientIp);
                 }
             } else {
                 // IDS Cas 2 : OTP échoué → incrémenter le compteur suspect
                 String otpEmail = (String) req.get("email");
-                if (otpEmail != null) SecurityLogger.otpEchec(otpEmail, clientIp);
+                if (otpEmail != null)
+                    SecurityLogger.otpEchec(otpEmail, clientIp);
             }
 
             envoyerMessage(reponseMutable);
@@ -400,13 +414,13 @@ public class ClientHandler implements Runnable {
     private void handleLoginAdmin(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleLoginAdmin appelée");
         String email = (String) req.get("email");
-        String mdp   = (String) req.get("mdp");
-        
+        String mdp = (String) req.get("mdp");
+
         try {
             String sql = "SELECT u.*, a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
             try (Connection conn = DatabaseConnection.getInstance().getConnection();
-                 java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
-                
+                    java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+
                 ps.setString(1, email);
                 java.sql.ResultSet rs = ps.executeQuery();
 
@@ -416,24 +430,25 @@ public class ClientHandler implements Runnable {
                         this.userId = rs.getInt("idUtilisateur");
                         this.userEmail = rs.getString("email");
                         this.userRole = "admin";
-                        
+
                         Map<String, Object> data = new HashMap<>();
                         data.put("userId", this.userId);
                         data.put("email", this.userEmail);
                         data.put("role", this.userRole);
                         data.put("nom", rs.getString("nom"));
                         data.put("prenom", rs.getString("prenom"));
-                        
+
                         Map<String, Object> rep = new HashMap<>();
                         rep.put("statut", "OK");
                         rep.put("message", "Authentification Admin réussie.");
                         rep.put("data", data);
-                        
+
                         enrichirReponseConnexionAvecSession(rep, req);
                         envoyerMessage(rep);
-                        
+
                         // Sécurité
-                        SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId, socket.getInetAddress().getHostAddress());
+                        SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId,
+                                socket.getInetAddress().getHostAddress());
                         return;
                     }
                 }
@@ -469,29 +484,32 @@ public class ClientHandler implements Runnable {
     private static class ChallengeData {
         String challenge;
         long timestamp;
+
         ChallengeData(String challenge) {
             this.challenge = challenge;
             this.timestamp = System.currentTimeMillis();
         }
+
         boolean isExpired() {
             return (System.currentTimeMillis() - timestamp) > 30_000; // 30 secondes
         }
     }
 
     private static final Map<String, ChallengeData> pendingChallenges = new java.util.concurrent.ConcurrentHashMap<>();
-    // Sessions admin en attente de vérification TOTP (email → timestamp de validation RSA)
+    // Sessions admin en attente de vérification TOTP (email → timestamp de
+    // validation RSA)
     private static final Map<String, Long> pendingTotpSessions = new java.util.concurrent.ConcurrentHashMap<>();
 
     private void handleAdminInitSecurity(Map<String, Object> req) {
-        String email  = (String) req.get("email");
-        String mdp    = (String) req.get("mdp");
+        String email = (String) req.get("email");
+        String mdp = (String) req.get("mdp");
         String pubKey = (String) req.get("publicKey");
 
         try {
             // 1. Vérifier que l'email appartient à un administrateur
             String sql = "SELECT a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
             try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
-                 java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+                    java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, email);
                 java.sql.ResultSet rs = ps.executeQuery();
                 if (!rs.next()) {
@@ -501,17 +519,18 @@ public class ClientHandler implements Runnable {
                 }
             }
 
-            // 2. Mettre à jour le mot de passe (BCrypt), stocker la clé publique ET générer le secret TOTP
+            // 2. Mettre à jour le mot de passe (BCrypt), stocker la clé publique ET générer
+            // le secret TOTP
             String totpSecret = com.chrionline.server.dao.UserDAO.initAdminSecurity(email, mdp, pubKey);
             if (totpSecret != null) {
                 // Générer l'URI otpauth pour le QR Code
                 String otpauthUri = com.chrionline.securite.TOTPService.generateOtpAuthUri(totpSecret, email);
-                
+
                 Map<String, Object> resp = creerReponse("OK", "Sécurité Admin initialisée avec succès.");
                 resp.put("totpSecret", totpSecret);
                 resp.put("otpauthUri", otpauthUri);
                 envoyerMessage(resp);
-                
+
                 SecurityLogger.logSecurityEvent("ADMIN_INIT_SECURITY", email,
                         socket.getInetAddress().getHostAddress(), "SUCCESS");
             } else {
@@ -531,7 +550,8 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        // 1. Protection Brute Force : Vérifier si le compte est bloqué (même sans mot de passe, on protège l'email)
+        // 1. Protection Brute Force : Vérifier si le compte est bloqué (même sans mot
+        // de passe, on protège l'email)
         Map<String, Object> lockStatus = com.chrionline.server.dao.UserDAO.checkAccountLock(email, clientIp);
         if (lockStatus != null) {
             envoyerMessage(lockStatus);
@@ -542,7 +562,7 @@ public class ClientHandler implements Runnable {
         try {
             String sqlCheck = "SELECT a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
             try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
-                 java.sql.PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
+                    java.sql.PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
                 ps.setString(1, email);
                 if (!ps.executeQuery().next()) {
                     envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
@@ -561,10 +581,10 @@ public class ClientHandler implements Runnable {
             envoyerMessage(creerReponse("ERREUR_NO_KEY", "Sécurité RSA non initialisée pour cet admin."));
             return;
         }
-        
+
         String challenge = com.chrionline.securite.ChallengeGenerator.generateChallenge();
         pendingChallenges.put(email, new ChallengeData(challenge));
-        
+
         Map<String, Object> resp = creerReponse("OK", "Challenge généré");
         resp.put("challenge", challenge);
         envoyerMessage(resp);
@@ -574,7 +594,7 @@ public class ClientHandler implements Runnable {
         String email = (String) req.get("email");
         String signatureBase64 = (String) req.get("signature");
         String clientIp = socket.getInetAddress().getHostAddress();
-        
+
         // 1. Protection Brute Force : Vérifier si le compte est bloqué
         Map<String, Object> lockStatus = com.chrionline.server.dao.UserDAO.checkAccountLock(email, clientIp);
         if (lockStatus != null) {
@@ -591,12 +611,13 @@ public class ClientHandler implements Runnable {
         // 2. Vérification de l'expiration du challenge (30s)
         if (challengeData.isExpired()) {
             pendingChallenges.remove(email);
-            envoyerMessage(creerReponse("ERREUR", "Le challenge a expiré (limite de 30 secondes). Veuillez en redemander un."));
+            envoyerMessage(creerReponse("ERREUR",
+                    "Le challenge a expiré (limite de 30 secondes). Veuillez en redemander un."));
             return;
         }
-        
+
         String challenge = challengeData.challenge;
-        
+
         try {
             // 1. Récupérer la clé publique
             String pubKeyBase64 = com.chrionline.server.dao.UserDAO.getPublicKey(email);
@@ -604,28 +625,28 @@ public class ClientHandler implements Runnable {
                 envoyerMessage(creerReponse("ERREUR_NO_KEY", "Sécurité RSA non initialisée pour cet admin."));
                 return;
             }
-            
+
             // 2. Décoder la clé publique et la signature
             byte[] pubKeyBytes = java.util.Base64.getDecoder().decode(pubKeyBase64);
             byte[] sigBytes = java.util.Base64.getDecoder().decode(signatureBase64);
-            
+
             java.security.spec.X509EncodedKeySpec spec = new java.security.spec.X509EncodedKeySpec(pubKeyBytes);
             java.security.KeyFactory kf = java.security.KeyFactory.getInstance("RSA");
             java.security.PublicKey publicKey = kf.generatePublic(spec);
-            
+
             // 3. Vérifier la signature
             if (com.chrionline.securite.Verifier.verify(challenge, sigBytes, publicKey)) {
                 // Signature RSA valide → demander le code TOTP (2ème facteur)
                 pendingChallenges.remove(email);
                 com.chrionline.server.dao.UserDAO.resetFailedAttempts(email);
-                
+
                 // Stocker l'email dans les sessions en attente de TOTP
                 pendingTotpSessions.put(email, System.currentTimeMillis());
-                
-                Map<String, Object> rep = creerReponse("REQUIRES_TOTP", 
-                    "Signature RSA valide. Entrez le code de votre application Authenticator.");
+
+                Map<String, Object> rep = creerReponse("REQUIRES_TOTP",
+                        "Signature RSA valide. Entrez le code de votre application Authenticator.");
                 envoyerMessage(rep);
-                
+
                 SecurityLogger.logSecurityEvent("ADMIN_RSA_OK", email,
                         socket.getInetAddress().getHostAddress(), "AWAITING_TOTP");
             } else {
@@ -659,7 +680,8 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        // 2. Vérifier que la session TOTP n'a pas expiré (2 minutes après la validation RSA)
+        // 2. Vérifier que la session TOTP n'a pas expiré (2 minutes après la validation
+        // RSA)
         if (System.currentTimeMillis() - rsaTimestamp > 120_000) {
             pendingTotpSessions.remove(email);
             envoyerMessage(creerReponse("ERREUR", "Session TOTP expirée. Recommencez la connexion."));
@@ -686,7 +708,7 @@ public class ClientHandler implements Runnable {
         try {
             String sql = "SELECT u.*, a.idAdmin FROM utilisateur u JOIN admin a ON u.idUtilisateur = a.idAdmin WHERE u.email = ?";
             try (Connection conn = com.chrionline.database.DatabaseConnection.getInstance().getConnection();
-                 java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+                    java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, email);
                 java.sql.ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
@@ -710,8 +732,6 @@ public class ClientHandler implements Runnable {
                     envoyerMessage(rep);
 
                     SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId, clientIp);
-                    // IDS Cas 3 : Vérifier si connexion admin à heure inhabituelle
-                    SecurityLogger.checkAdminOffHours(this.userEmail, clientIp);
                 }
             }
         } catch (Exception e) {
@@ -721,7 +741,8 @@ public class ClientHandler implements Runnable {
 
     private void handleBlockIP(Map<String, Object> req) {
         if (!"admin".equals(userRole)) {
-            SecurityLogger.accesNonAutorise("ADMIN_BLOCK_IP", userId, userRole, socket.getInetAddress().getHostAddress());
+            SecurityLogger.accesNonAutorise("ADMIN_BLOCK_IP", userId, userRole,
+                    socket.getInetAddress().getHostAddress());
             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
             return;
         }
@@ -760,10 +781,24 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Paiement : 2FA simulé géré dans {@link com.chrionline.server.service.PanierService#confirmerCommande(Map)} (clé {@code payment2faCode}). */
+    /**
+     * Paiement : 2FA simulé géré dans
+     * {@link com.chrionline.server.service.PanierService#confirmerCommande(Map)}
+     * (clé {@code payment2faCode}).
+     */
     private void handleCommandeConfirmer(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleCommandeConfirmer");
         try {
+            // [Session Hardening] Vérification de la cohérence de l'idUtilisateur de la
+            // session
+            int reqUserId = req.containsKey("idUtilisateur") ? ((Number) req.get("idUtilisateur")).intValue() : -1;
+            if (reqUserId != this.userId && !isAdminMtlsConnection) {
+                SecurityLogger.logSecurityEvent("PAYMENT_ABUSE", String.valueOf(this.userId),
+                        socket.getInetAddress().getHostAddress(), "FAILURE: user id mismatch");
+                envoyerMessage(creerReponse("ERREUR", "Transaction non autorisée : Session incohérente."));
+                return;
+            }
+
             // [MEMBRE 4] Déchiffrement applicatif du numéro de carte bancaire
             String numeroChiffre = (String) req.get("numeroCarteChiffre");
             if (numeroChiffre != null && !numeroChiffre.isEmpty()) {
@@ -771,7 +806,7 @@ public class ClientHandler implements Runnable {
                 req.put("numeroCarte", numeroCarte);
                 req.remove("numeroCarteChiffre"); // Ne pas propager la version chiffrée
                 System.out.println("[PAIEMENT] Numéro de carte déchiffré côté serveur (AES-256/GCM).");
-                SecurityLogger.logSecurityEvent("PAYMENT_DECRYPT", 
+                SecurityLogger.logSecurityEvent("PAYMENT_DECRYPT",
                         String.valueOf(userId), socket.getInetAddress().getHostAddress(), "SUCCESS");
             }
 
@@ -1224,12 +1259,14 @@ public class ClientHandler implements Runnable {
     // ─── Sessions TCP (anti détournement) ─────────────────────────────────────
 
     private void rejeterSessionInvalide(String clientIp, String commande, String sessionId) {
-        com.chrionline.server.session.SessionManager.LastValidationFailure kind =
-                com.chrionline.server.session.SessionManager.getLastValidationFailure();
+        com.chrionline.server.session.SessionManager.LastValidationFailure kind = com.chrionline.server.session.SessionManager
+                .getLastValidationFailure();
         if (kind == com.chrionline.server.session.SessionManager.LastValidationFailure.EXPIRED) {
-            SecurityLogger.logSecurityEvent("SESSION_EXPIRED", "UNKNOWN", clientIp, "commande=" + commande + " sessionId=" + sessionId);
+            SecurityLogger.logSecurityEvent("SESSION_EXPIRED", "UNKNOWN", clientIp,
+                    "commande=" + commande + " sessionId=" + sessionId);
         } else {
-            SecurityLogger.logSecurityEvent("SESSION_INVALID", "UNKNOWN", clientIp, "commande=" + commande + " sessionId=" + sessionId);
+            SecurityLogger.logSecurityEvent("SESSION_INVALID", "UNKNOWN", clientIp,
+                    "commande=" + commande + " sessionId=" + sessionId);
         }
         envoyerMessage(creerReponseSessionExpiree());
     }
@@ -1258,14 +1295,17 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Après LOGIN réussi : régénère ou crée un sessionId serveur et l'ajoute à {@code data}.
+     * Après LOGIN réussi : régénère ou crée un sessionId serveur et l'ajoute à
+     * {@code data}.
      */
     @SuppressWarnings("unchecked")
     private void enrichirReponseConnexionAvecSession(Map<String, Object> reponse, Map<String, Object> req) {
         Map<String, Object> data = (Map<String, Object>) reponse.get("data");
-        if (data == null) return;
+        if (data == null)
+            return;
         Object uidObj = data.get("userId");
-        if (!(uidObj instanceof Integer) && !(uidObj instanceof Long)) return;
+        if (!(uidObj instanceof Integer) && !(uidObj instanceof Long))
+            return;
         int uid = uidObj instanceof Integer ? (Integer) uidObj : ((Long) uidObj).intValue();
 
         String ip = socket.getInetAddress().getHostAddress();
@@ -1280,14 +1320,16 @@ public class ClientHandler implements Runnable {
         this.userEmail = (String) data.get("email");
         this.userRole = (String) data.get("role");
 
-        SecurityLogger.logSecurityEvent("SESSION_CREATED", this.userEmail != null ? this.userEmail : "UNKNOWN", ip, "sessionId=" + newSid);
+        SecurityLogger.logSecurityEvent("SESSION_CREATED", this.userEmail != null ? this.userEmail : "UNKNOWN", ip,
+                "sessionId=" + newSid);
     }
 
     private void handleDeconnexion(Map<String, Object> req, String clientIp) {
         String sid = (String) req.get("jwt");
         if (sid != null && !sid.isBlank()) {
             com.chrionline.server.session.SessionManager.invalidateSession(sid);
-            SecurityLogger.logSecurityEvent("LOGOUT", this.userEmail != null ? this.userEmail : "UNKNOWN", clientIp, "sessionId=" + sid);
+            SecurityLogger.logSecurityEvent("LOGOUT", this.userEmail != null ? this.userEmail : "UNKNOWN", clientIp,
+                    "sessionId=" + sid);
         }
         this.userId = -1;
         this.userEmail = null;
@@ -1319,7 +1361,8 @@ public class ClientHandler implements Runnable {
      */
     private void handleGetSecurityEvents(Map<String, Object> req) {
         if (!"admin".equals(userRole)) {
-            SecurityLogger.accesNonAutorise("ADMIN_GET_SECURITY_EVENTS", userId, userRole, socket.getInetAddress().getHostAddress());
+            SecurityLogger.accesNonAutorise("ADMIN_GET_SECURITY_EVENTS", userId, userRole,
+                    socket.getInetAddress().getHostAddress());
             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
             return;
         }
@@ -1337,12 +1380,13 @@ public class ClientHandler implements Runnable {
      */
     private void handleGetBlockedIPs(Map<String, Object> req) {
         if (!"admin".equals(userRole)) {
-            SecurityLogger.accesNonAutorise("ADMIN_GET_BLOCKED_IPS", userId, userRole, socket.getInetAddress().getHostAddress());
+            SecurityLogger.accesNonAutorise("ADMIN_GET_BLOCKED_IPS", userId, userRole,
+                    socket.getInetAddress().getHostAddress());
             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
             return;
         }
-        java.util.List<Map<String, Object>> blockedIPs =
-                com.chrionline.server.dao.SecurityBlacklistDAO.getAllActiveBlacklist();
+        java.util.List<Map<String, Object>> blockedIPs = com.chrionline.server.dao.SecurityBlacklistDAO
+                .getAllActiveBlacklist();
 
         Map<String, Object> rep = new HashMap<>();
         rep.put("statut", "OK");
@@ -1355,7 +1399,8 @@ public class ClientHandler implements Runnable {
      */
     private void handleUnblockIP(Map<String, Object> req) {
         if (!"admin".equals(userRole)) {
-            SecurityLogger.accesNonAutorise("ADMIN_UNBLOCK_IP", userId, userRole, socket.getInetAddress().getHostAddress());
+            SecurityLogger.accesNonAutorise("ADMIN_UNBLOCK_IP", userId, userRole,
+                    socket.getInetAddress().getHostAddress());
             envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
             return;
         }

@@ -552,13 +552,23 @@ public class Server {
             kmf.init(keyStore, "password".toCharArray());
 
             // [MEMBRE 2] Mais pour vérifier le client Admin, il doit faire confiance à
-            // admin.jks (format PKCS12, mot de passe testPass123 — généré par KeyStoreManager)
+            // admin.jks (format PKCS12)
             java.security.KeyStore adminTrustStore = java.security.KeyStore.getInstance("PKCS12");
+            
+            // Récupération dynamique du mot de passe depuis Vault
+            String keystorePassword = com.chrionline.securite.VaultServerService.getSecret("secret/keystore-password");
+            if (keystorePassword == null || keystorePassword.isEmpty()) {
+                AppLogger.warn("[SERVER-mTLS] Mot de passe admin.jks introuvable dans Vault, utilisation du fallback.");
+                keystorePassword = "testPass123"; // Fallback uniquement si Vault échoue
+            } else {
+                AppLogger.info("[SERVER-mTLS] ✓ Mot de passe admin.jks récupéré depuis Vault avec succès.");
+            }
+
             try (java.io.FileInputStream fis = new java.io.FileInputStream("admin.jks")) {
-                adminTrustStore.load(fis, "testPass123".toCharArray());
+                adminTrustStore.load(fis, keystorePassword.toCharArray());
             } catch (Exception e) {
                 AppLogger.error("[SERVER-mTLS] Impossible de charger admin.jks comme TrustStore : " + e.getMessage());
-                // Fallback sur le trustStore par défaut si admin.jks n'est pas trouvé
+                // Fallback sur le trustStore par défaut si admin.jks n'est pas trouvé ou si le mot de passe est incorrect
                 adminTrustStore = trustStore;
             }
 
@@ -572,7 +582,8 @@ public class Server {
             javax.net.ssl.SSLServerSocketFactory ssf = mtlsContext.getServerSocketFactory();
             adminServerSocket = ssf.createServerSocket(ADMIN_MTLS_PORT);
 
-            // Demander (sans exiger) le certificat client — la sécurité est assurée par le rôle admin pré-assigné
+            // Demander (sans exiger) le certificat client — la sécurité est assurée par le
+            // rôle admin pré-assigné
             ((javax.net.ssl.SSLServerSocket) adminServerSocket).setWantClientAuth(true);
 
             AppLogger.info("[SERVER-mTLS] Port Admin " + ADMIN_MTLS_PORT

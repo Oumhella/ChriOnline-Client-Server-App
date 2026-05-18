@@ -199,18 +199,7 @@ public final class SecurityLogger {
         logSecurityEvent("OTP_SUCCESS", email, ip, "Validation OTP réussie");
     }
 
-    // ─── IDS Cas 3 : Détection activité admin anormale ───────────────────────
 
-    /**
-     * Vérifie si la connexion admin se fait à une heure inhabituelle (21h-6h).
-     */
-    public static void checkAdminOffHours(String email, String ip) {
-        int hour = java.time.LocalTime.now().getHour();
-        if (hour >= 21 || hour < 6) {
-            logSecurityEvent("IDS_ALERT_ADMIN_OFF_HOURS", email, ip,
-                    "Connexion admin à une heure inhabituelle (" + hour + "h)");
-        }
-    }
 
     /**
      * Enregistre un accès admin à des données utilisateurs.

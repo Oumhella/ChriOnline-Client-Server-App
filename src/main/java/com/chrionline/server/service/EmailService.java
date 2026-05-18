@@ -7,6 +7,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
+import javax.naming.directory.Attribute;
+import javax.naming.directory.Attributes;
+import javax.naming.directory.DirContext;
+import javax.naming.directory.InitialDirContext;
+import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.ArrayList;
+
 /**
  * Service d'envoi d'emails via SMTP.
  * La configuration est chargée depuis email.properties (classpath serveur).
@@ -315,5 +329,110 @@ public class EmailService {
         msg.setContent(corpsHtml, "text/html; charset=utf-8");
         Transport.send(msg);
         AppLogger.info("[EMAIL] Envoyé à " + destinataire + " — " + sujet);
+    }
+
+    /**
+     * Recherche les serveurs de messagerie (enregistrements MX) pour un domaine DNS.
+     */
+    public static List<String> getMXRecords(String domain) {
+        List<String> mxList = new ArrayList<>();
+        try {
+            Hashtable<String, String> env = new Hashtable<>();
+            env.put("java.naming.factory.initial", "com.sun.jndi.dns.DnsContextFactory");
+            DirContext ictx = new InitialDirContext(env);
+            Attributes attrs = ictx.getAttributes(domain, new String[] { "MX" });
+            Attribute attr = attrs.get("MX");
+            if (attr != null) {
+                for (int i = 0; i < attr.size(); i++) {
+                    String mx = (String) attr.get(i);
+                    String[] parts = mx.split("\\s+");
+                    if (parts.length > 1) {
+                        mxList.add(parts[1]);
+                    } else {
+                        mxList.add(parts[0]);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            AppLogger.warn("[EMAIL-VERIF] Recherche DNS MX échouée pour : " + domain + " (" + e.getMessage() + ")");
+        }
+        return mxList;
+    }
+
+    /**
+     * Vérifie si une boîte email existe réellement sur son serveur cible (ex: Gmail, Yahoo)
+     * sans lui envoyer de mail, en utilisant un probe SMTP (port 25).
+     * Si la connexion ou le DNS échoue (ex: port 25 sortant bloqué par le FAI), autorise par défaut.
+     */
+    public static boolean verifierExistenceBoiteMail(String email) {
+        if (email == null || !email.contains("@")) return false;
+        String[] parts = email.split("@");
+        if (parts.length < 2) return false;
+        String domain = parts[1].trim();
+        
+        List<String> mxList = getMXRecords(domain);
+        if (mxList.isEmpty()) {
+            AppLogger.warn("[EMAIL-VERIF] Aucun serveur MX trouvé pour le domaine : " + domain);
+            return false;
+        }
+        
+        // Prendre le premier serveur mail disponible
+        String mxHost = mxList.get(0);
+        if (mxHost.endsWith(".")) {
+            mxHost = mxHost.substring(0, mxHost.length() - 1);
+        }
+        
+        AppLogger.info("[EMAIL-VERIF] Tentative de connexion SMTP sur " + mxHost + ":25 pour tester " + email);
+        
+        try (Socket socket = new Socket()) {
+            // Timeout court (2.5s) pour ne pas bloquer l'interface utilisateur
+            socket.connect(new InetSocketAddress(mxHost, 25), 2500);
+            
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
+            
+            String line = reader.readLine();
+            if (line == null || !line.startsWith("220")) {
+                return true; 
+            }
+            
+            // HELO
+            writer.write("HELO chri-online.com\r\n");
+            writer.flush();
+            line = reader.readLine();
+            if (line == null || !line.startsWith("250")) return true;
+            
+            // MAIL FROM
+            writer.write("MAIL FROM:<noreply@chri-online.com>\r\n");
+            writer.flush();
+            line = reader.readLine();
+            if (line == null || !line.startsWith("250")) return true;
+            
+            // RCPT TO
+            writer.write("RCPT TO:<" + email + ">\r\n");
+            writer.flush();
+            line = reader.readLine();
+            
+            // QUIT
+            writer.write("QUIT\r\n");
+            writer.flush();
+            
+            AppLogger.info("[EMAIL-VERIF] Réponse RCPT TO du serveur de " + domain + " : " + line);
+            
+            if (line != null) {
+                // Code 550, 551, 552, 553, 554 indiquent que la boîte mail n'existe pas ou est bloquée
+                if (line.startsWith("550") || line.startsWith("551") || line.startsWith("552") || line.startsWith("553") || line.startsWith("554")) {
+                    AppLogger.warn("[EMAIL-VERIF] L'adresse email " + email + " n'existe pas d'après le serveur de messagerie.");
+                    return false;
+                }
+            }
+            return true;
+            
+        } catch (Exception e) {
+            // Si le FAI local ou l'hébergeur bloque le port 25 sortant (très fréquent),
+            // on autorise par défaut pour ne pas pénaliser un vrai utilisateur.
+            AppLogger.warn("[EMAIL-VERIF] Port 25 injoignable ou bloqué vers " + mxHost + " (" + e.getMessage() + "). Autorisé par défaut.");
+            return true;
+        }
     }
 }
