@@ -217,9 +217,39 @@ public class CheckoutView extends Application {
             
             // Afficher le champ TOTP systématiquement dès qu'on choisit un mode de paiement
             if (box2faSection != null) {
-                box2faSection.setVisible(true);
-                box2faSection.setManaged(true);
-                enAttente2fa = true; // Force la saisie du code avant de cliquer sur confirmer
+                new Thread(() -> {
+                    java.util.Map<String, Object> req = new java.util.HashMap<>();
+                    req.put("commande", "CHECK_TOTP_SETUP");
+                    try {
+                        com.chrionline.client.network.Client c = com.chrionline.client.network.Client.getInstance();
+                        c.envoyerRequete(req);
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> rep = (java.util.Map<String, Object>) c.lireReponse();
+                        javafx.application.Platform.runLater(() -> {
+                            box2faSection.setVisible(true);
+                            box2faSection.setManaged(true);
+                            if ("REQUIRES_TOTP_SETUP".equals(rep.get("statut"))) {
+                                String otpauthUri = (String) rep.get("otpauthUri");
+                                try {
+                                    String qrUrl = "https://quickchart.io/qr?size=180&text=" + java.net.URLEncoder.encode(otpauthUri, java.nio.charset.StandardCharsets.UTF_8.toString());
+                                    imgQrCode.setImage(new javafx.scene.image.Image(qrUrl, true));
+                                } catch (Exception ex) {
+                                    System.err.println("[CheckoutView] Échec QR Code : " + ex.getMessage());
+                                }
+                                setupTotpBox.setVisible(true);
+                                setupTotpBox.setManaged(true);
+                                lbl2faTitle.setText("1. Liaison Microsoft Authenticator");
+                            } else {
+                                setupTotpBox.setVisible(false);
+                                setupTotpBox.setManaged(false);
+                                lbl2faTitle.setText("Code Microsoft Authenticator");
+                            }
+                            enAttente2fa = true; // Force la saisie du code avant de cliquer sur confirmer
+                        });
+                    } catch (Exception ex) {
+                        System.err.println("[CheckoutView] Erreur CHECK_TOTP_SETUP: " + ex.getMessage());
+                    }
+                }).start();
             }
         });
 

@@ -257,6 +257,10 @@ public class ClientHandler implements Runnable {
                 rep.put("publicKey", com.chrionline.securite.PaymentCrypto.getServerPublicKeyBase64());
                 envoyerMessage(rep);
             }
+            case "CHECK_TOTP_SETUP" -> {
+                Map<String, Object> resp = com.chrionline.server.service.PaymentTwoFactorService.initiateVerification(this.userId);
+                envoyerMessage(resp);
+            }
             case "PANIER_GET" -> envoyerMessage(panierService.getPanier(req));
             case "PANIER_AJOUTER" -> envoyerMessage(panierService.ajouterProduit(req));
             case "PANIER_MODIFIER_QTE" -> envoyerMessage(panierService.modifierQuantite(req));
