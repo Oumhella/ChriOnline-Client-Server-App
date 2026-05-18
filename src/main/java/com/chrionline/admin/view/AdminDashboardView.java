@@ -199,7 +199,6 @@ public class AdminDashboardView extends Application {
         HBox itemProduits = navItem("📦", "Produits", false);
         HBox itemCategories = navItem("🏷️", "Catégories", false);
         HBox itemCommandes = navItem("🛒", "Commandes", false);
-        HBox itemLivraisons = navItem("🚚", "Livraisons", false);
         HBox itemClients = navItem("👥", "Clients", false);
 
         // Actions de navigation
@@ -232,7 +231,6 @@ public class AdminDashboardView extends Application {
                 }),
                 navSection("VENTES"),
                 itemCommandes,
-                itemLivraisons,
                 navSection("UTILISATEURS"),
                 itemClients,
                 navSection("SYSTÈME"),

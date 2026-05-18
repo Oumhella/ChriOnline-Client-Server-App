@@ -115,7 +115,7 @@ public class PanierController {
      * </ul>
      */
     @SuppressWarnings("unchecked")
-    public Map<String, Object> confirmerCommandeEtape(String methodePaiement, String nomCarte, String numeroCarte,
+    public Map<String, Object> confirmerCommandeEtape(String methodePaiement, String nomCarte, char[] numeroCarte,
                                                       String payment2faCode) {
         try {
             Map<String, Object> req = new HashMap<>();
@@ -124,14 +124,31 @@ public class PanierController {
             req.put("methodePaiement", methodePaiement);
             req.put("nomCarte", nomCarte != null ? nomCarte : "");
 
-            // [MEMBRE 4] Chiffrement applicatif AES-256/GCM du numéro de carte
-            // Même si le tunnel TLS est compromis, la carte reste illisible
-            if (numeroCarte != null && !numeroCarte.isEmpty()) {
-                String numeroChiffre = com.chrionline.securite.PaymentCrypto.encrypt(numeroCarte);
-                req.put("numeroCarteChiffre", numeroChiffre);
-                System.out.println("[PAIEMENT] Numéro de carte chiffré avec AES-256/GCM avant envoi.");
+            // ── Tokenisation simulée (stratégie PCI-DSS Zero-Storage) ──────────────────
+            // Le vrai numéro de carte ne QUITTE JAMAIS la machine client.
+            // On génère un token éphémère et on masque la carte avant tout envoi réseau.
+            if (numeroCarte != null && numeroCarte.length > 0) {
+                // 1. Extraire les 4 derniers chiffres
+                String lastFour = "0000";
+                if (numeroCarte.length >= 4) {
+                    lastFour = new String(numeroCarte, numeroCarte.length - 4, 4);
+                }
+
+                // 1. Générer un token éphémère cryptographiquement aléatoire
+                String paymentToken = "tok_simulated_" + java.util.UUID.randomUUID();
+
+                // 2. Détruire IMMÉDIATEMENT le numéro brut de la mémoire (Heap Wiping)
+                java.util.Arrays.fill(numeroCarte, '\0');
+
+                // 3. N'envoyer QUE le token — jamais le vrai numéro ni même une carte masquée
+                req.put("paymentToken", paymentToken);
+
+                // Logs sécurisés et chiffrés avec RSA (Token uniquement)
+                String encryptedTokenLog = com.chrionline.securite.PaymentCrypto.encrypt(paymentToken);
+                System.out.println("[PAIEMENT-TOKENISATION] Token généré (chiffré) : " + encryptedTokenLog);
+                System.out.println("[PAIEMENT-TOKENISATION] ✓ Numéro brut détruit de la RAM. Zéro donnée bancaire ne quitte le client.");
             } else {
-                req.put("numeroCarte", "");
+                req.put("paymentToken", "");
             }
 
             if (payment2faCode != null && !payment2faCode.isBlank()) {
@@ -157,7 +174,8 @@ public class PanierController {
      */
     @Deprecated
     public CommandeDTO confirmerCommande(String methodePaiement, String nomCarte, String numeroCarte) {
-        Map<String, Object> rep = confirmerCommandeEtape(methodePaiement, nomCarte, numeroCarte, null);
+        char[] cardChars = numeroCarte != null ? numeroCarte.toCharArray() : new char[0];
+        Map<String, Object> rep = confirmerCommandeEtape(methodePaiement, nomCarte, cardChars, null);
         if ("OK".equals(rep.get("statut"))) {
             return (CommandeDTO) rep.get("commandeResult");
         }

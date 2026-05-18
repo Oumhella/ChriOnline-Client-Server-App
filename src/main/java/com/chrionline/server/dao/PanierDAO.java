@@ -335,14 +335,13 @@ public class PanierDAO {
             String cheminFacture = "factures/" + reference + ".pdf";
             genererFacturePDF(cheminFacture, reference, panier, methodePaiement, idUtilisateur, conn);
 
-            String sqlPaiement = "INSERT INTO paiement (id_commande, methode_paiement, statut_paiement, montant, date_paiement, chemin_facture, nom_carte, numero_carte) VALUES (?, ?, 'paye', ?, NOW(), ?, ?, ?)";
+            String sqlPaiement = "INSERT INTO paiement (id_commande, methode_paiement, statut_paiement, montant, date_paiement, chemin_facture) VALUES (?, ?, 'paye', ?, NOW(), ?)";
             try (PreparedStatement psPaiement = conn.prepareStatement(sqlPaiement)) {
                 psPaiement.setInt(1, idCommande);
                 psPaiement.setString(2, methodePaiement);
                 psPaiement.setBigDecimal(3, panier.getMontantTotal());
                 psPaiement.setString(4, cheminFacture);
-                psPaiement.setString(5, nomCarte);
-                psPaiement.setString(6, numeroCarte);
+                // PCI-DSS : nom_carte et numero_carte supprimés de la table — aucune donnée bancaire en BDD
                 psPaiement.executeUpdate();
             }
 

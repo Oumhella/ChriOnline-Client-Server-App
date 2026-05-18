@@ -70,8 +70,8 @@ public class TOTPService {
         byte[] secretBytes = decodeBase32(secret);
         long currentTimeStep = System.currentTimeMillis() / 1000 / TIME_STEP_SECONDS;
 
-        // Vérifier la période actuelle ± 1 (tolérance de 30 secondes)
-        for (int i = -1; i <= 1; i++) {
+        // Vérifier avec une tolérance élargie à ±5 pas (±150 secondes / 2.5 minutes) pour corriger les décalages d'horloge
+        for (int i = -5; i <= 5; i++) {
             String generatedCode = generateCode(secretBytes, currentTimeStep + i);
             if (generatedCode.equals(code)) {
                 return true;
