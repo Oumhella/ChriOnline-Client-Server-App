@@ -35,13 +35,14 @@ public class AdminUsersController {
     }
 
     @SuppressWarnings("unchecked")
-    public boolean changerStatut(int idUtilisateur, String nouveauStatut) {
+    public boolean changerStatut(int idUtilisateur, String nouveauStatut, String totpCode) {
         try {
             client.connecter();
             Map<String, Object> req = new HashMap<>();
             req.put("commande", "ADMIN_CHANGER_STATUT_USER");
             req.put("idUtilisateur", idUtilisateur);
             req.put("statut", nouveauStatut);
+            req.put("totpCode", totpCode);
 
             client.envoyerRequete(req);
 

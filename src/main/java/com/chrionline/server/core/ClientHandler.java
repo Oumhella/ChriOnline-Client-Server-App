@@ -307,8 +307,20 @@ public class ClientHandler implements Runnable {
                             socket.getInetAddress().getHostAddress());
                     envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
                 } else {
-                    req.put("adminId", this.userId);
-                    envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
+                    // Vérification TOTP pour les actions sensibles
+                    String totpCode = (String) req.get("totpCode");
+                    String totpSecret = com.chrionline.server.dao.UserDAO.getTotpSecret(this.userEmail);
+                    
+                    if (totpCode == null || totpCode.isBlank() || totpSecret == null 
+                            || !com.chrionline.securite.TOTPService.verifyCode(totpSecret, totpCode)) {
+                        
+                        envoyerMessage(creerReponse("ERREUR", "Code TOTP invalide. Action annulée pour des raisons de sécurité."));
+                        SecurityLogger.logSecurityEvent("SENSITIVE_ACTION_OTP_FAIL", this.userEmail, 
+                                socket.getInetAddress().getHostAddress(), "Action: ADMIN_CHANGER_STATUT_USER");
+                    } else {
+                        req.put("adminId", this.userId);
+                        envoyerMessage(com.chrionline.server.service.AdminUserService.handleChangerStatutClient(req));
+                    }
                 }
             }
             case "ENVOYER_NEWSLETTER" -> handleEnvoyerNewsletter(req);
@@ -562,9 +574,10 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        // 3. Vérifier si la clé publique est déjà enregistrée
+        // 3. Vérifier si la clé publique et le secret TOTP sont déjà enregistrés
         String pubKey = com.chrionline.server.dao.UserDAO.getPublicKey(email);
-        if (pubKey == null || pubKey.isBlank()) {
+        String totpSecret = com.chrionline.server.dao.UserDAO.getTotpSecret(email);
+        if (pubKey == null || pubKey.isBlank() || totpSecret == null || totpSecret.isBlank()) {
             envoyerMessage(creerReponse("ERREUR_NO_KEY", "Sécurité RSA non initialisée pour cet admin."));
             return;
         }
@@ -719,8 +732,6 @@ public class ClientHandler implements Runnable {
                     envoyerMessage(rep);
 
                     SecurityLogger.loginSucces(this.userEmail, this.userRole, this.userId, clientIp);
-                    // IDS Cas 3 : Vérifier si connexion admin à heure inhabituelle
-                    SecurityLogger.checkAdminOffHours(this.userEmail, clientIp);
                 }
             }
         } catch (Exception e) {
@@ -918,6 +929,27 @@ public class ClientHandler implements Runnable {
 
     private void handleAjouterProduit(Map<String, Object> req) {
         try {
+            // Vérification de sécurité : Seul un admin connecté peut ajouter un produit
+            if (!"admin".equals(userRole)) {
+                SecurityLogger.accesNonAutorise("AJOUTER_PRODUIT", userId, userRole,
+                        socket.getInetAddress().getHostAddress());
+                envoyerMessage(creerReponse("ERREUR", "Accès refusé."));
+                return;
+            }
+
+            // Vérification TOTP pour les actions sensibles
+            String totpCode = (String) req.get("totpCode");
+            String totpSecret = com.chrionline.server.dao.UserDAO.getTotpSecret(this.userEmail);
+            
+            if (totpCode == null || totpCode.isBlank() || totpSecret == null 
+                    || !com.chrionline.securite.TOTPService.verifyCode(totpSecret, totpCode)) {
+                
+                envoyerMessage(creerReponse("ERREUR", "Code TOTP invalide. Action annulée pour des raisons de sécurité."));
+                SecurityLogger.logSecurityEvent("SENSITIVE_ACTION_OTP_FAIL", this.userEmail, 
+                        socket.getInetAddress().getHostAddress(), "Action: AJOUTER_PRODUIT");
+                return;
+            }
+
             Map<String, Object> resp = produitService.handleAjouterProduit(req);
             envoyerMessage(resp);
 

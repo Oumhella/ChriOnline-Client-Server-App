@@ -234,14 +234,6 @@ public class AdminDashboardView extends Application {
                 navSection("UTILISATEURS"),
                 itemClients,
                 navSection("SYSTÈME"),
-                navItem("🛡️", "Sécurité", false, () -> {
-                    try {
-                        rootPane.getChildren().set(1, new SecurityDashboardView().getView());
-                    } catch (Exception ex) {
-                        System.err.println("[DASHBOARD] Erreur ouverture Sécurité : " + ex.getMessage());
-                        ex.printStackTrace();
-                    }
-                }),
                 navItem("📧", "Newsletter", false, () -> {
                     afficherVue(new AdminNewsletterView().getView());
                 }),

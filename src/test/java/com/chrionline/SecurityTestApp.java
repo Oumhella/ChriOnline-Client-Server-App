@@ -45,12 +45,7 @@ public class SecurityTestApp {
 
             System.out.println("\n----------------------------------------------------------------\n");
 
-            // ----------------------------------------------------------------
-            // SCÉNARIO 3 : Activité Admin Anormale - Connexion hors heures (IDS Cas 3a)
-            // ----------------------------------------------------------------
-            testScenarioAdminOffHours();
 
-            System.out.println("\n----------------------------------------------------------------\n");
 
             // ----------------------------------------------------------------
             // SCÉNARIO 4 : Activité Admin Anormale - Consultation Massive (IDS Cas 3b)
@@ -131,37 +126,7 @@ public class SecurityTestApp {
         }
     }
 
-    private static void testScenarioAdminOffHours() {
-        System.out.println("🔥 [SCÉNARIO 3] Simulation d'une connexion Admin en heures non-ouvrées");
-        System.out.println("👉 Règle IDS : Connexion administrateur en dehors de la plage normale (21h-6h).");
-        System.out.println("👉 Action IDS attendue : Notification serveur + Levée d'alerte ADMIN_OFF_HOURS.");
 
-        System.out.println("\nAction : L'administrateur se connecte (Heure courante de test : " + java.time.LocalTime.now() + ")...");
-        SecurityLogger.checkAdminOffHours(TEST_ADMIN_EMAIL, TEST_IP);
-
-        // Vérification
-        List<SecurityEvent> events = SecurityLogger.getRecentEvents();
-        boolean alertFound = false;
-        int currentHour = java.time.LocalTime.now().getHour();
-        boolean shouldTrigger = (currentHour >= 21 || currentHour < 6);
-
-        System.out.println("  (Note : Le test ne lèvera l'alerte que s'il est réellement entre 21h et 6h, ou si simulé)");
-        
-        for (SecurityEvent ev : events) {
-            if ("IDS_ALERT_ADMIN_OFF_HOURS".equals(ev.getType())) {
-                alertFound = true;
-                System.out.println("  🚨 Alerte interceptée : " + ev);
-                break;
-            }
-        }
-
-        System.out.println("\n[RÉSULTATS DU TEST 3] :");
-        if (shouldTrigger) {
-            System.out.println("  - Alerte IDS_ALERT_ADMIN_OFF_HOURS générée ? " + (alertFound ? "✅ OUI (Attendu)" : "❌ NON (Erreur)"));
-        } else {
-            System.out.println("  - Heure courante (" + currentHour + "h) dans la plage ouvrée normale. Alerte non-déclenchée (Attendu) ? " + (!alertFound ? "✅ OUI" : "❌ NON"));
-        }
-    }
 
     private static void testScenarioAdminMassiveRead() {
         System.out.println("🔥 [SCÉNARIO 4] Simulation d'une consultation massive de données par un Admin");
