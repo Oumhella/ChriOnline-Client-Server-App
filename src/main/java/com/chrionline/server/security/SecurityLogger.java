@@ -265,7 +265,7 @@ public final class SecurityLogger {
     }
 
     private static void persistBan(String ip, String reason) {
-        String sql = "INSERT INTO security_blacklist (ip_address, raison, expire_le, actif) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 3650 DAY), TRUE)";
+        String sql = "INSERT INTO security_blacklist (ip_address, raison, expire_le, actif) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 365 DAY), TRUE)";
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, ip);
