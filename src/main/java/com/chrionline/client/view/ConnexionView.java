@@ -247,7 +247,7 @@ public class ConnexionView extends Application {
             catch (Exception ex) { ex.printStackTrace(); }
         });
 
-        right.getChildren().addAll(btnRetour, title, emailBox, mdpBox, linkOublie, msgLabel, btnLogin, footer);
+        right.getChildren().addAll(btnRetour, title, emailBox, mdpBox, linkOublie, msgLabel, captchaWidget, btnLogin, footer);
         return right;
     }
 

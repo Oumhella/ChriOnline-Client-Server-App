@@ -343,7 +343,7 @@ public class InscriptionView extends Application {
 
         // ── Widget reCAPTCHA (pixel-perfect) ────────────────────
         captchaWidget = new RecaptchaWidget();
-        form.getChildren().addAll(btnInscrire, lienBox, mentionsBox);
+        form.getChildren().addAll(captchaWidget, btnInscrire, lienBox, mentionsBox);
 
         // ── Contrôleur ────────────────────────────────────────
         InscriptionController ctrl = new InscriptionController(

@@ -6,7 +6,7 @@
     <title>reCAPTCHA Verification</title>
     <script src="https://www.google.com/recaptcha/api.js"></script>
     <style>
-        body { margin: 15px 0 0 0; padding: 0; display: flex; justify-content: center; align-items: flex-start; background-color: transparent; overflow: hidden; }
+        body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: flex-start; background-color: transparent; overflow: hidden; }
         .g-recaptcha { transform: scale(1.0); transform-origin: top center; border: 1px solid #eee; }
     </style>
     <script type="text/javascript">
@@ -29,6 +29,41 @@
                 try { window.jsConnector.captchaExpired(); } catch (e) { }
             }
         }
+
+        // Observateur de mutations pour détecter l'apparition du défi d'images Google
+        window.addEventListener('DOMContentLoaded', () => {
+            let wasChallengeOpen = false;
+            const observer = new MutationObserver(() => {
+                const iframes = document.getElementsByTagName('iframe');
+                let challengeOpened = false;
+                for (let i = 0; i < iframes.length; i++) {
+                    const iframe = iframes[i];
+                    if (iframe.src && iframe.src.includes('bframe')) {
+                        let parent = iframe.parentElement;
+                        while (parent && parent !== document.body) {
+                            if (parent.style.visibility === 'visible' || parent.style.opacity === '1') {
+                                challengeOpened = true;
+                                break;
+                            }
+                            parent = parent.parentElement;
+                        }
+                    }
+                }
+                
+                if (challengeOpened && !wasChallengeOpen) {
+                    wasChallengeOpen = true;
+                    if (window.jsConnector) {
+                        try { window.jsConnector.showChallengePopup(); } catch(e) {}
+                    }
+                } else if (!challengeOpened && wasChallengeOpen) {
+                    wasChallengeOpen = false;
+                    if (window.jsConnector) {
+                        try { window.jsConnector.hideChallengePopup(); } catch(e) {}
+                    }
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+        });
     </script>
 </head>
 
