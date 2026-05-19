@@ -45,7 +45,6 @@ public class ClientHandler implements Runnable {
             "CONFIRMER_EMAIL",
             "OUBLIER_MOT_DE_PASSE",
             "REINITIALISER_MDP",
-            "VERIFIER_OTP",
             "LISTE_PRODUITS",
             "DETAIL_PRODUIT",
             "GET_PRODUIT_BY_ID",
@@ -335,7 +334,6 @@ public class ClientHandler implements Runnable {
                         "[HANDLER] Port UDP enregistré pour " + (userId != -1 ? userId : "guest") + " : " + udpPort);
             }
 
-            case "VERIFIER_OTP" -> handleVerifierOTP(req);
 
             // Sécurité Monitoring (Admin)
             case "ADMIN_BLOCK_IP" -> handleBlockIP(req);
@@ -352,8 +350,6 @@ public class ClientHandler implements Runnable {
 
     private void handleConnexion(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleConnexion appelée");
-        // Injecter l'IP client pour que UserDAO puisse la journaliser
-        req.put("clientIp", socket.getInetAddress().getHostAddress());
         try {
             // Injecter l'IP cliente pour la liste noire et le logging
             req.put("clientIp", socket.getInetAddress().getHostAddress());
@@ -361,9 +357,16 @@ public class ClientHandler implements Runnable {
 
             System.out.println("[HANDLER] Login statut = " + reponse.get("statut"));
 
-            // Note: On n'établit pas la session (userId, etc.) tant que le 2FA n'est pas OK
+            // On établit la session directement après le succès (plus de 2FA)
             if ("OK".equals(reponse.get("statut"))) {
                 enrichirReponseConnexionAvecSession(reponse, req);
+                
+                Map<String, Object> data = (Map<String, Object>) reponse.get("data");
+                if (data != null && data.containsKey("userId")) {
+                    this.userId = (int) data.get("userId");
+                    this.userEmail = (String) data.get("email");
+                    this.userRole = (String) data.get("role");
+                }
             }
 
             envoyerMessage(reponse);
@@ -375,45 +378,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void handleVerifierOTP(Map<String, Object> req) {
-        System.out.println("[HANDLER] >>> handleVerifierOTP appelée");
-        // Injecter l'IP pour le logging de sécurité
-        req.put("clientIp", socket.getInetAddress().getHostAddress());
-        String clientIp = socket.getInetAddress().getHostAddress();
-        try {
-            Map<String, Object> reponseMutable = new java.util.HashMap<>(authService.verifierOTPConnexion(req));
 
-            if ("OK".equals(reponseMutable.get("statut"))) {
-                // IDS : OTP validé → réinitialiser le compteur d'échecs
-                String otpEmail = (String) req.get("email");
-                if (otpEmail != null)
-                    SecurityLogger.otpSucces(otpEmail, clientIp);
-
-                // Initialize session upon successful 2FA
-                enrichirReponseConnexionAvecSession(reponseMutable, req);
-
-                Map<String, Object> data = (Map<String, Object>) reponseMutable.get("data");
-                if (data != null && data.containsKey("userId")) {
-                    this.userId = (int) data.get("userId");
-                    this.userEmail = (String) data.get("email");
-                    this.userRole = (String) data.get("role");
-
-                    // RESTAURATION : Enregistrement du succès dans le tableau de bord de sécurité
-                    // (log simple)
-                    SecurityLogger.loginSucces(userEmail, userRole, userId, clientIp);
-                }
-            } else {
-                // IDS Cas 2 : OTP échoué → incrémenter le compteur suspect
-                String otpEmail = (String) req.get("email");
-                if (otpEmail != null)
-                    SecurityLogger.otpEchec(otpEmail, clientIp);
-            }
-
-            envoyerMessage(reponseMutable);
-        } catch (Exception e) {
-            envoyerMessage(creerReponse("ERREUR", "Erreur verification OTP : " + e.getMessage()));
-        }
-    }
 
     private void handleLoginAdmin(Map<String, Object> req) {
         System.out.println("[HANDLER] >>> handleLoginAdmin appelée");

@@ -83,7 +83,7 @@ L'intégralité des clés de sécurité, certificats SSL et opérations cryptogr
 ## 📊 7. Journalisation d'Audit & Collecte
 
 *   **7.1 Structure standardisée des logs :** Enregistrement d'une trace d'audit complète contenant la date/heure, l'utilisateur, l'adresse IP, le type d'action et le statut.
-*   **7.2 Traçabilité des accès initiaux :** Enregistrement systématique des tentatives de connexion, des échecs d'authentification et des validations OTP.
+*   **7.2 Traçabilité des accès initiaux :** Enregistrement systématique des tentatives de connexion et des échecs d'authentification.
     *   **Connexions réussies/échouées :** [server/security/SecurityLogger.java](src/main/java/com/chrionline/server/security/SecurityLogger.java#L140) ➔ Méthodes `loginSucces()` et `loginEchec()`
 *   **7.3 Surveillance des privilèges & données :** Journalisation des accès administrateurs, des changements de mots de passe et des consultations de données sensibles.
     *   **Accès non autorisés (RBAC) :** [server/security/SecurityLogger.java](src/main/java/com/chrionline/server/security/SecurityLogger.java#L177) ➔ Méthode `accesNonAutorise()`
@@ -93,7 +93,7 @@ L'intégralité des clés de sécurité, certificats SSL et opérations cryptogr
 
 ## 🔍 8. Module IDS : Détection d'Intrusions
 
-*   **8.1 Détection de Force Brute (Connexion/OTP) :** Alerte automatique si plus de 3 échecs de connexion surviennent en moins d'une minute, ou en cas de codes OTP invalides successifs.
+*   **8.1 Détection de Force Brute (Connexion) :** Alerte automatique si plus de 3 échecs de connexion surviennent en moins d'une minute.
     *   **Détecteur Réseau TCP :** [server/core/ConnectionSecurityManager.java](src/main/java/com/chrionline/server/core/ConnectionSecurityManager.java#L11)
 *   **8.2 Analyse d'activité admin anormale :** Détection des connexions administrateurs à des heures inhabituelles ou de requêtes massives de données utilisateurs.
 *   **8.3 Détection de Flood de requêtes :** Identification immédiate des volumes anormaux et trop rapides de requêtes envoyées par une même adresse IP.

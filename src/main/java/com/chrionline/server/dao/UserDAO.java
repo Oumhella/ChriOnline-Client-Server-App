@@ -94,8 +94,7 @@ public class UserDAO {
     }
 
     /**
-     * Authentifie un utilisateur (Etape 1: Verification + OTP).
-     * Retourne REQUIRES_2FA pour déclencher l'authentification à deux facteurs.
+     * Authentifie un utilisateur.
      */
     public static Map<String, Object> connexion(Map<String, Object> data) {
         String email = (String) data.get("email");
@@ -198,25 +197,32 @@ public class UserDAO {
                 return Map.of("statut", "ERREUR", "message", "Accès refusé. Utilisez le raccourci administrateur.");
             }
 
-            // ── 4. Succès : réinitialisation + OTP ───────────────────────────
+            // ── 4. Succès : réinitialisation + Validation directe ────────────────────
             reinitialiserTentatives(conn, idUtilisateur);
             SecurityBlacklistDAO.unlockIp(clientIp); // débloquer l'IP si nécessaire
 
-            // 5. Génération et sauvegarde du code OTP (6 chiffres)
-            String otpCode = genererOTP();
-            sauvegarderOTP(conn, idUtilisateur, otpCode);
+            // Récupérer le nom et prénom (déjà disponibles ou nécessitent une jointure supplémentaire)
+            // On a besoin du nom/prenom pour le retour "OK".
+            // Heureusement, ils sont dans "u.*".
+            String nom = rs.getString("nom");
+            String prenom = rs.getString("prenom");
 
-            // 6. Envoi de l'OTP par email
-            try {
-                com.chrionline.server.service.EmailService.envoyerOTP2FA(email, otpCode);
-                AppLogger.info("[AUTH] Identification réussie, OTP envoyé à : " + email);
-            } catch (Exception e) {
-                AppLogger.error("[AUTH] Échec envoi OTP à " + email + " : " + e.getMessage());
-                return Map.of("statut", "ERREUR", "message", "Erreur lors de l'envoi de l'email OTP. Veuillez réessayer.");
-            }
+            // Audit de sécurité
+            SecurityLogger.loginSucces(email, role, idUtilisateur, clientIp);
 
-            return Map.of("statut", "REQUIRES_2FA",
-                    "message", "Un code à 6 chiffres vous a été envoyé par email.");
+            // On construit l'objet de connexion finale
+            Map<String, Object> innerData = new java.util.HashMap<>();
+            innerData.put("userId", idUtilisateur);
+            innerData.put("nom", nom);
+            innerData.put("prenom", prenom);
+            innerData.put("email", email);
+            innerData.put("role", role);
+
+            return Map.of(
+                "statut", "OK",
+                "message", "Authentification validée !",
+                "data", innerData
+            );
 
         } catch (Exception e) {
             SecurityLogger.erreurServeur("connexion", e.getMessage());
@@ -224,100 +230,7 @@ public class UserDAO {
         }
     }
 
-    /**
-     * ÉTAPE 2 : Vérification du code OTP pour finaliser la connexion
-     */
-    public static Map<String, Object> verifierOTP(String email, String otpCodeSaisi) {
-        return verifierOTP(email, otpCodeSaisi, "inconnue");
-    }
 
-    public static Map<String, Object> verifierOTP(String email, String otpCodeSaisi, String clientIp) {
-        String sql = """
-            SELECT u.*, 
-                   CASE WHEN a.idAdmin IS NOT NULL THEN 'admin' ELSE 'client' END as role
-            FROM utilisateur u
-            LEFT JOIN client c ON u.idUtilisateur = c.idUtilisateur
-            LEFT JOIN admin a ON u.idUtilisateur = a.idAdmin
-            WHERE u.email = ?
-        """;
-
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            
-            ps.setString(1, email);
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                String dbOtpCode = rs.getString("otp_code");
-                Timestamp otpExpiry = rs.getTimestamp("otp_expiry");
-
-                // Vérifier si le code correspond et n'est pas expiré
-                if (dbOtpCode != null && dbOtpCode.equals(otpCodeSaisi)) {
-                    if (otpExpiry != null && otpExpiry.getTime() > System.currentTimeMillis()) {
-                        
-                        int userId = rs.getInt("idUtilisateur");
-                        String role = rs.getString("role");
-                        String nom = rs.getString("nom");
-                        String prenom = rs.getString("prenom");
-                        String emailFound = rs.getString("email");
-
-                        // OTP Valide : on nettoie les colonnes OTP
-                        nettoyerOTP(conn, userId);
-
-                        // Audit de sécurité final
-                        SecurityLogger.loginSucces(email, role, userId, clientIp);
-
-                        // On construit l'objet de connexion finale
-                        Map<String, Object> innerData = new java.util.HashMap<>();
-                        innerData.put("userId", userId);
-                        innerData.put("nom", nom);
-                        innerData.put("prenom", prenom);
-                        innerData.put("email", emailFound);
-                        innerData.put("role", role);
-
-                        return Map.of(
-                            "statut", "OK", 
-                            "message", "Authentification validée !", 
-                            "data", innerData
-                        );
-                    } else {
-                        return Map.of("statut", "ERREUR", "message", "Le code OTP a expiré (limite de 5 minutes).");
-                    }
-                }
-            }
-            SecurityLogger.loginEchec(email, clientIp);
-            return Map.of("statut", "ERREUR", "message", "Code OTP invalide.");
-
-        } catch (Exception e) {
-            SecurityLogger.erreurServeur("verifierOTP email=" + email, e.getMessage());
-            return Map.of("statut", "ERREUR", "message", "Erreur serveur : " + e.getMessage());
-        }
-    }
-
-    private static String genererOTP() {
-        SecureRandom random = new SecureRandom();
-        int otp = 100000 + random.nextInt(900000); // Génère entre 100000 et 999999
-        return String.valueOf(otp);
-    }
-
-    private static void sauvegarderOTP(Connection conn, int idUtilisateur, String otp) throws Exception {
-        Timestamp expiry = new Timestamp(System.currentTimeMillis() + (5 * 60 * 1000));
-        String sql = "UPDATE utilisateur SET otp_code = ?, otp_expiry = ? WHERE idUtilisateur = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, otp);
-            ps.setTimestamp(2, expiry);
-            ps.setInt(3, idUtilisateur);
-            ps.executeUpdate();
-        }
-    }
-
-    private static void nettoyerOTP(Connection conn, int idUtilisateur) throws Exception {
-        String sql = "UPDATE utilisateur SET otp_code = NULL, otp_expiry = NULL WHERE idUtilisateur = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, idUtilisateur);
-            ps.executeUpdate();
-        }
-    }
 
     private static int calculerDureeBlocage(int failedAttempts) {
         if (failedAttempts >= 12) return 1440; // 24 heures

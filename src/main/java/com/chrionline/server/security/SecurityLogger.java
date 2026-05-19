@@ -34,9 +34,6 @@ public final class SecurityLogger {
     private static final int THRESHOLD_COUNT = 3;
     private static final long THRESHOLD_WINDOW_MS = 60_000;
 
-    // IDS Cas 2 : Suivi des échecs OTP consécutifs par email
-    private static final Map<String, Integer> otpFailureCount = new ConcurrentHashMap<>();
-    private static final int OTP_SUSPECT_THRESHOLD = 2;
 
     // IDS Cas 3 : Suivi des lectures massives admin (email -> timestamps)
     private static final Map<String, List<Long>> adminReadHistory = new ConcurrentHashMap<>();
@@ -177,28 +174,6 @@ public final class SecurityLogger {
     public static void accesNonAutorise(String commande, int userId, String role, String ip) {
         logSecurityEvent("ACCES_REFUSE", "ID:" + userId, ip, "commande=" + commande + " role=" + role);
     }
-
-    // ─── IDS Cas 2 : Détection OTP suspects ──────────────────────────────────
-
-    /**
-     * Enregistre un échec de validation OTP.
-     * Si > 2 échecs consécutifs, lève une alerte IDS_ALERT_OTP_SUSPECT.
-     */
-    public static void otpEchec(String email, String ip) {
-        int count = otpFailureCount.merge(email, 1, Integer::sum);
-        logSecurityEvent("OTP_FAILED", email, ip, "Échec OTP consécutif #" + count);
-        if (count >= OTP_SUSPECT_THRESHOLD) {
-            logSecurityEvent("IDS_ALERT_OTP_SUSPECT", email, ip,
-                    "ALERTE : " + count + " OTP invalides consécutifs");
-        }
-    }
-
-    /** Réinitialise le compteur OTP après un succès. */
-    public static void otpSucces(String email, String ip) {
-        otpFailureCount.remove(email);
-        logSecurityEvent("OTP_SUCCESS", email, ip, "Validation OTP réussie");
-    }
-
 
 
     /**

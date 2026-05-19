@@ -98,17 +98,7 @@ public class AuthenticationService {
         return UserDAO.connexion(req);
     }
 
-    public Map<String, Object> verifierOTPConnexion(Map<String, Object> req) {
-        String email = (String) req.get("email");
-        String otp   = (String) req.get("otp");
 
-        if (email == null || otp == null || otp.isBlank()) {
-            return Map.of("statut", "ERREUR", "message", "L'email ou le code OTP est manquant.");
-        }
-
-        String clientIp = (String) req.getOrDefault("clientIp", "inconnue");
-        return UserDAO.verifierOTP(email, otp, clientIp);
-    }
 
     // ─── Confirmation email ───────────────────────────────────────────────────
 
